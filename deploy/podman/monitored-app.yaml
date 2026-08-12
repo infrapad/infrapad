@@ -1,0 +1,23 @@
+services:
+  monitored-app:
+    build:
+      context: ../example/monitored-app
+    ports:
+      - "8080:8080"
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitored-app/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ./monitored-app/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+    depends_on:
+      - monitored-app
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitored-app/alertmanager.yaml:/etc/alertmanager/alertmanager.yml:ro

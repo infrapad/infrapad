@@ -3,4 +3,8 @@ tasks:
   dev:
     desc: Start in dev mode — builds frontend + backend from source in containers
     cmds:
-      - ./scripts/start.sh -f compose.yaml
+      - ./scripts/start.sh -f postgres.yaml
+  monitored-app:
+    desc: Start the monitored example app with Prometheus and Alertmanager
+    cmds:
+      - ./scripts/start.sh -f monitored-app.yaml

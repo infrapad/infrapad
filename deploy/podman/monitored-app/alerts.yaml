@@ -1,0 +1,11 @@
+groups:
+  - name: monitored-app
+    rules:
+      - alert: MonitoredAppEndpointDown
+        expr: monitored_app_up == 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Endpoint {{ $labels.endpoint }} is down"
+          description: "monitored_app_up{endpoint=\"{{ $labels.endpoint }}\"} is 0"
