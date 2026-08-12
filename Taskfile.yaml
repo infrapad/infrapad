@@ -7,6 +7,9 @@ includes:
     taskfile: ./deploy/podman/Taskfile.yaml
     dir: ./deploy/podman
     aliases: [pd]
+  cli:
+    taskfile: ./cli/Taskfile.yaml
+    dir: ./cli
   server:
     taskfile: ./server/Taskfile.yaml
     dir: ./server

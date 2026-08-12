@@ -1,0 +1,26 @@
+version: '3'
+
+vars:
+  BINARY: infrapad
+  GRPC_ADDR: '{{.GRPC_ADDR | default "localhost:50051"}}'
+
+tasks:
+  build:
+    desc: Build the CLI binary
+    cmds:
+      - go build -o {{.BINARY}} .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BINARY}}"
+
+  test:e2e:
+    desc: "Run CLI e2e tests (requires running server)"
+    deps: [build]
+    cmds:
+      - ./test/e2e/incident_investigation_test.sh
+    env:
+      INFRAPAD_CLI: ./{{.BINARY}}
+      GRPC_ADDR: "{{.GRPC_ADDR}}"
