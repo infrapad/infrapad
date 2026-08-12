@@ -1,9 +1,10 @@
 package grpc
 
 import (
+	"encoding/json"
 	"fmt"
-	"time"
 
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
@@ -43,35 +44,19 @@ func blockToProto(b model.Block, docUID model.DocUID) *pb.Block {
 		out.CreatedAt = timestamppb.New(b.CreatedAt)
 	}
 
+	// Convert model.BlockContent → structpb.Struct via SerializedContent.
+	// The serialized JSON is the canonical representation that gets
+	// exposed as the generic Struct in the API.
 	if b.Content != nil {
-		switch c := b.Content.(type) {
-		case model.MarkdownBC:
-			out.Content = &pb.Block_Markdown{
-				Markdown: &pb.MarkdownContent{Text: c.Render()},
-			}
-		case model.AlertsMatcherBC:
-			out.Content = &pb.Block_AlertsMatcher{
-				AlertsMatcher: alertsMatcherToProto(c),
+		sc, err := b.Content.Serialize()
+		if err == nil {
+			var m map[string]any
+			if err := json.Unmarshal(sc.Data, &m); err == nil {
+				if s, err := structpb.NewStruct(m); err == nil {
+					out.Content = s
+				}
 			}
 		}
-	}
-	return out
-}
-
-func alertsMatcherToProto(am model.AlertsMatcherBC) *pb.AlertsMatcherContent {
-	out := &pb.AlertsMatcherContent{}
-	for _, m := range am.LabelsMatchers {
-		lm := &pb.LabelsMatcher{Labels: make(map[string]*pb.LabelValues)}
-		for k, vals := range m {
-			lm.Labels[k] = &pb.LabelValues{Values: vals}
-		}
-		out.LabelsMatchers = append(out.LabelsMatchers, lm)
-	}
-	if !am.Since.IsZero() {
-		out.Since = timestamppb.New(am.Since)
-	}
-	if !am.Until.IsZero() {
-		out.Until = timestamppb.New(am.Until)
 	}
 	return out
 }
@@ -95,36 +80,19 @@ func blockFromProto(b *pb.Block) model.Block {
 		out.CreatedAt = b.CreatedAt.AsTime()
 	}
 
-	switch c := b.Content.(type) {
-	case *pb.Block_Markdown:
-		out.Type = "markdown"
-		out.Content = model.NewMarkdownBC(c.Markdown.GetText())
-	case *pb.Block_AlertsMatcher:
-		out.Type = "alerts_matcher"
-		out.Content = alertsMatcherFromProto(c.AlertsMatcher)
-	}
-	return out
-}
-
-func alertsMatcherFromProto(am *pb.AlertsMatcherContent) model.AlertsMatcherBC {
-	if am == nil {
-		return model.AlertsMatcherBC{}
-	}
-	out := model.AlertsMatcherBC{}
-	for _, lm := range am.LabelsMatchers {
-		m := make(map[string][]string)
-		for k, lv := range lm.Labels {
-			m[k] = lv.Values
+	// Convert structpb.Struct → model.SerializedContent, then deserialize
+	// into the registered BlockContent type via the model's deserializer
+	// registry.
+	if b.Content != nil && b.Type != "" {
+		data, err := json.Marshal(b.Content.AsMap())
+		if err == nil {
+			sc := model.SerializedContent{Type: b.Type, Data: data}
+			content, err := model.DeserializeBlockContent(sc)
+			if err == nil {
+				out.Content = content
+				out.SerializedContent = sc
+			}
 		}
-		out.LabelsMatchers = append(out.LabelsMatchers, m)
-	}
-	if am.Since != nil {
-		out.Since = am.Since.AsTime()
-	}
-	if am.Until != nil {
-		out.Until = am.Until.AsTime()
-	} else {
-		out.Until = time.Time{}
 	}
 	return out
 }

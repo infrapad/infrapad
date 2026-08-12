@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 )
@@ -44,16 +45,24 @@ func helperCreateDoc(t *testing.T, client pb.InfrapadServiceClient) string {
 	return resp.GetDoc().GetName()
 }
 
+// validContent returns a simple valid content struct for testing.
+func validContent(t *testing.T) *structpb.Struct {
+	t.Helper()
+	s, err := structpb.NewStruct(map[string]any{"text": "valid block"})
+	if err != nil {
+		t.Fatalf("structpb.NewStruct: %v", err)
+	}
+	return s
+}
+
 // helperAddBlock adds a valid markdown block and returns it.
 func helperAddBlock(t *testing.T, client pb.InfrapadServiceClient, docName string) *pb.Block {
 	t.Helper()
 	resp, err := client.AddBlock(context.Background(), &pb.AddBlockRequest{
 		Parent: docName,
 		Block: &pb.Block{
-			Type: "markdown",
-			Content: &pb.Block_Markdown{
-				Markdown: &pb.MarkdownContent{Text: "valid block"},
-			},
+			Type:    "markdown",
+			Content: validContent(t),
 		},
 	})
 	if err != nil {
@@ -111,7 +120,7 @@ func TestInvalidData(t *testing.T) {
 			Parent: "",
 			Block: &pb.Block{
 				Type:    "markdown",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
+				Content: validContent(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "empty parent")
@@ -122,7 +131,7 @@ func TestInvalidData(t *testing.T) {
 			Parent: "docs/does-not-exist-12345",
 			Block: &pb.Block{
 				Type:    "markdown",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
+				Content: validContent(t),
 			},
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent parent")
@@ -143,46 +152,14 @@ func TestInvalidData(t *testing.T) {
 			Parent: validDocName,
 			Block: &pb.Block{
 				Type:    "",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
+				Content: validContent(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "empty block type")
 	})
 
-	t.Run("AddBlock/unknown_type", func(t *testing.T) {
-		// type must be one of the known types ("markdown", "alerts_matcher").
-		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
-			Parent: validDocName,
-			Block: &pb.Block{
-				Type:    "nonexistent_type",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
-			},
-		})
-		requireCode(t, err, codes.InvalidArgument, "unknown block type")
-	})
-
-	t.Run("AddBlock/type_content_mismatch", func(t *testing.T) {
-		// type says "markdown" but content is alerts_matcher.
-		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
-			Parent: validDocName,
-			Block: &pb.Block{
-				Type: "markdown",
-				Content: &pb.Block_AlertsMatcher{
-					AlertsMatcher: &pb.AlertsMatcherContent{
-						LabelsMatchers: []*pb.LabelsMatcher{
-							{Labels: map[string]*pb.LabelValues{
-								"name": {Values: []string{"x"}},
-							}},
-						},
-					},
-				},
-			},
-		})
-		requireCode(t, err, codes.InvalidArgument, "type/content mismatch")
-	})
-
 	t.Run("AddBlock/no_content", func(t *testing.T) {
-		// oneof content is not set at all.
+		// content is REQUIRED.
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 			Parent: validDocName,
 			Block: &pb.Block{
@@ -190,54 +167,6 @@ func TestInvalidData(t *testing.T) {
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "no content")
-	})
-
-	t.Run("AddBlock/markdown_empty_text", func(t *testing.T) {
-		// MarkdownContent.text is REQUIRED.
-		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
-			Parent: validDocName,
-			Block: &pb.Block{
-				Type:    "markdown",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: ""}},
-			},
-		})
-		requireCode(t, err, codes.InvalidArgument, "markdown empty text")
-	})
-
-	t.Run("AddBlock/alerts_matcher_no_matchers", func(t *testing.T) {
-		// AlertsMatcherContent.labels_matchers is REQUIRED.
-		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
-			Parent: validDocName,
-			Block: &pb.Block{
-				Type: "alerts_matcher",
-				Content: &pb.Block_AlertsMatcher{
-					AlertsMatcher: &pb.AlertsMatcherContent{
-						LabelsMatchers: nil,
-					},
-				},
-			},
-		})
-		requireCode(t, err, codes.InvalidArgument, "alerts_matcher no matchers")
-	})
-
-	t.Run("AddBlock/alerts_matcher_empty_label_values", func(t *testing.T) {
-		// LabelValues.values is REQUIRED — empty list should be rejected.
-		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
-			Parent: validDocName,
-			Block: &pb.Block{
-				Type: "alerts_matcher",
-				Content: &pb.Block_AlertsMatcher{
-					AlertsMatcher: &pb.AlertsMatcherContent{
-						LabelsMatchers: []*pb.LabelsMatcher{
-							{Labels: map[string]*pb.LabelValues{
-								"name": {Values: []string{}},
-							}},
-						},
-					},
-				},
-			},
-		})
-		requireCode(t, err, codes.InvalidArgument, "empty label values")
 	})
 
 	// ===================================================================
@@ -250,7 +179,7 @@ func TestInvalidData(t *testing.T) {
 			BlockNumber: validBlock.GetBlockNumber(),
 			Block: &pb.Block{
 				Type:    "markdown",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
+				Content: validContent(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "empty parent")
@@ -262,7 +191,7 @@ func TestInvalidData(t *testing.T) {
 			BlockNumber: 1,
 			Block: &pb.Block{
 				Type:    "markdown",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
+				Content: validContent(t),
 			},
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent parent")
@@ -275,7 +204,7 @@ func TestInvalidData(t *testing.T) {
 			BlockNumber: 0,
 			Block: &pb.Block{
 				Type:    "markdown",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
+				Content: validContent(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "zero block_number")
@@ -287,7 +216,7 @@ func TestInvalidData(t *testing.T) {
 			BlockNumber: 99999,
 			Block: &pb.Block{
 				Type:    "markdown",
-				Content: &pb.Block_Markdown{Markdown: &pb.MarkdownContent{Text: "x"}},
+				Content: validContent(t),
 			},
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent block_number")

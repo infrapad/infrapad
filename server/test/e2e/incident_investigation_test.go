@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 )
@@ -16,6 +17,16 @@ func grpcAddr() string {
 		return s
 	}
 	return "localhost:50051"
+}
+
+// mustStruct is a test helper that creates a structpb.Struct from a map.
+func mustStruct(t *testing.T, m map[string]any) *structpb.Struct {
+	t.Helper()
+	s, err := structpb.NewStruct(m)
+	if err != nil {
+		t.Fatalf("structpb.NewStruct: %v", err)
+	}
+	return s
 }
 
 func TestIncidentInvestigation(t *testing.T) {
@@ -57,15 +68,13 @@ func TestIncidentInvestigation(t *testing.T) {
 		Parent: docName,
 		Block: &pb.Block{
 			Type: "alerts_matcher",
-			Content: &pb.Block_AlertsMatcher{
-				AlertsMatcher: &pb.AlertsMatcherContent{
-					LabelsMatchers: []*pb.LabelsMatcher{
-						{Labels: map[string]*pb.LabelValues{
-							"name": {Values: []string{"CrashLoopBackOff"}},
-						}},
+			Content: mustStruct(t, map[string]any{
+				"LabelsMatchers": []any{
+					map[string]any{
+						"name": []any{"CrashLoopBackOff"},
 					},
 				},
-			},
+			}),
 		},
 	})
 	if err != nil {
@@ -87,9 +96,9 @@ func TestIncidentInvestigation(t *testing.T) {
 		Parent: docName,
 		Block: &pb.Block{
 			Type: "markdown",
-			Content: &pb.Block_Markdown{
-				Markdown: &pb.MarkdownContent{Text: "initial investigation writeup"},
-			},
+			Content: mustStruct(t, map[string]any{
+				"content": "initial investigation writeup",
+			}),
 		},
 	})
 	if err != nil {
@@ -109,18 +118,16 @@ func TestIncidentInvestigation(t *testing.T) {
 		BlockNumber: alertsBlock.GetBlockNumber(),
 		Block: &pb.Block{
 			Type: "alerts_matcher",
-			Content: &pb.Block_AlertsMatcher{
-				AlertsMatcher: &pb.AlertsMatcherContent{
-					LabelsMatchers: []*pb.LabelsMatcher{
-						{Labels: map[string]*pb.LabelValues{
-							"name": {Values: []string{"CrashLoopBackOff"}},
-						}},
-						{Labels: map[string]*pb.LabelValues{
-							"name": {Values: []string{"KubeNodeNotReady"}},
-						}},
+			Content: mustStruct(t, map[string]any{
+				"LabelsMatchers": []any{
+					map[string]any{
+						"name": []any{"CrashLoopBackOff"},
+					},
+					map[string]any{
+						"name": []any{"KubeNodeNotReady"},
 					},
 				},
-			},
+			}),
 		},
 	})
 	if err != nil {
@@ -140,9 +147,9 @@ func TestIncidentInvestigation(t *testing.T) {
 		BlockNumber: mdBlock.GetBlockNumber(),
 		Block: &pb.Block{
 			Type: "markdown",
-			Content: &pb.Block_Markdown{
-				Markdown: &pb.MarkdownContent{Text: "updated investigation writeup"},
-			},
+			Content: mustStruct(t, map[string]any{
+				"content": "updated investigation writeup",
+			}),
 		},
 	})
 	if err != nil {
@@ -185,13 +192,15 @@ func TestIncidentInvestigation(t *testing.T) {
 	}
 
 	// First revision should have 1 matcher, second should have 2.
-	am1 := alertHistory[0].GetAlertsMatcher()
-	am2 := alertHistory[1].GetAlertsMatcher()
-	if am1 == nil || len(am1.GetLabelsMatchers()) != 1 {
-		t.Errorf("rev 1: expected 1 matcher, got %d", len(am1.GetLabelsMatchers()))
+	am1 := alertHistory[0].GetContent().AsMap()
+	am2 := alertHistory[1].GetContent().AsMap()
+	matchers1, _ := am1["LabelsMatchers"].([]any)
+	matchers2, _ := am2["LabelsMatchers"].([]any)
+	if len(matchers1) != 1 {
+		t.Errorf("rev 1: expected 1 matcher, got %d", len(matchers1))
 	}
-	if am2 == nil || len(am2.GetLabelsMatchers()) != 2 {
-		t.Errorf("rev 2: expected 2 matchers, got %d", len(am2.GetLabelsMatchers()))
+	if len(matchers2) != 2 {
+		t.Errorf("rev 2: expected 2 matchers, got %d", len(matchers2))
 	}
 
 	t.Log("incident investigation e2e test passed")

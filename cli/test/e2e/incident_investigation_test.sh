@@ -92,7 +92,7 @@ echo "Step 2: Add alerts_matcher block"
 ADD_ALERTS_OUT=$($CLI block add \
   --doc "$DOC_NAME" \
   --type alerts_matcher \
-  --matchers '[{"name": ["CrashLoopBackOff"]}]')
+  --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}]}')
 echo "$ADD_ALERTS_OUT"
 
 assert_equals "alerts block_number is 1" "$(table_cell "$ADD_ALERTS_OUT" "BLOCK")" "1"
@@ -111,7 +111,7 @@ echo "Step 3: Add markdown block"
 ADD_MD_OUT=$($CLI block add \
   --doc "$DOC_NAME" \
   --type markdown \
-  --text "initial investigation writeup")
+  --content '{"content": "initial investigation writeup"}')
 echo "$ADD_MD_OUT"
 
 MD_BLOCK_NUM=$(table_cell "$ADD_MD_OUT" "BLOCK")
@@ -132,14 +132,18 @@ UPDATE_ALERTS_OUT=$($CLI block update \
   --doc "$DOC_NAME" \
   --block-number 1 \
   --type alerts_matcher \
-  --matchers '[{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]')
+  --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]}')
 echo "$UPDATE_ALERTS_OUT"
 
 assert_equals "updated alerts revision is 2" "$(table_cell "$UPDATE_ALERTS_OUT" "REV")" "2"
 
 # Verify matchers via JSON
 UPDATE_ALERTS_JSON=$($CLI block get -o json --doc "$DOC_NAME" --block-number 1)
-MATCHERS_COUNT=$(echo "$UPDATE_ALERTS_JSON" | grep -c '"labels"' || true)
+MATCHERS_COUNT=$(echo "$UPDATE_ALERTS_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+print(len(data.get('content', {}).get('LabelsMatchers', [])))
+" 2>/dev/null || echo "?")
 assert_equals "matchers_count is 2" "$MATCHERS_COUNT" "2"
 
 echo ""
@@ -152,7 +156,7 @@ UPDATE_MD_OUT=$($CLI block update \
   --doc "$DOC_NAME" \
   --block-number "$MD_BLOCK_NUM" \
   --type markdown \
-  --text "updated investigation writeup")
+  --content '{"content": "updated investigation writeup"}')
 echo "$UPDATE_MD_OUT"
 
 assert_equals "updated markdown revision is 2" "$(table_cell "$UPDATE_MD_OUT" "REV")" "2"
@@ -191,12 +195,12 @@ HISTORY_JSON=$($CLI block history -o json --doc "$DOC_NAME" --block-number 1)
 REV1_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data[0].get('alertsMatcher', {}).get('labelsMatchers', [])))
+print(len(data[0].get('content', {}).get('LabelsMatchers', [])))
 " 2>/dev/null || echo "?")
 REV2_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data[1].get('alertsMatcher', {}).get('labelsMatchers', [])))
+print(len(data[1].get('content', {}).get('LabelsMatchers', [])))
 " 2>/dev/null || echo "?")
 assert_equals "first revision has 1 matcher" "$REV1_MATCHERS" "1"
 assert_equals "second revision has 2 matchers" "$REV2_MATCHERS" "2"

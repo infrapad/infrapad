@@ -6,6 +6,7 @@ option go_package = "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1;infra
 
 import "google/api/field_behavior.proto";
 import "google/api/resource.proto";
+import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
 // ==========================================================================
@@ -52,51 +53,19 @@ message Block {
     int32 block_number = 2 [ (google.api.field_behavior) = OUTPUT_ONLY ];
     int32 revision_number = 3 [ (google.api.field_behavior) = OUTPUT_ONLY ];
     string author_id = 4 [ (google.api.field_behavior) = OPTIONAL ];
-    string type = 5 [ (google.api.field_behavior) =
-                          REQUIRED ]; // "markdown" | "alerts_matcher" | …
+    string type = 5 [ (google.api.field_behavior) = REQUIRED ];
     string status = 6
         [ (google.api.field_behavior) =
               OPTIONAL ]; // "progressing" | "published" | "deleted"
     google.protobuf.Timestamp created_at = 7
         [ (google.api.field_behavior) = OUTPUT_ONLY ];
 
-    // Exactly one of the typed content fields must be set, matching `type`.
-    oneof content {
-        MarkdownContent markdown = 10;
-        AlertsMatcherContent alerts_matcher = 11;
-    }
+    // Arbitrary content payload; structure is determined by `type`.
+    // E.g. for "markdown": {"text": "…"}
+    // E.g. for "alerts_matcher": {"labels_matchers": [...], "since": "…"}
+    google.protobuf.Struct content = 10 [ (google.api.field_behavior) = REQUIRED ];
 }
 
-// MarkdownContent is the payload for blocks of type "markdown".
-message MarkdownContent {
-    string text = 1 [ (google.api.field_behavior) = REQUIRED ];
-}
-
-// AlertsMatcherContent is the payload for blocks of type "alerts_matcher".
-message AlertsMatcherContent {
-    // Each LabelsMatcher is OR-ed; within a matcher the labels are AND-ed.
-    // For each label the values are OR-ed.
-    // Semantics:  (m1) OR (m2) OR …
-    //   where mi = (label1 IN vals1) AND (label2 IN vals2) AND …
-    repeated LabelsMatcher labels_matchers = 1
-        [ (google.api.field_behavior) = REQUIRED ];
-    google.protobuf.Timestamp since = 2
-        [ (google.api.field_behavior) = OPTIONAL ];
-    google.protobuf.Timestamp until = 3
-        [ (google.api.field_behavior) =
-              OPTIONAL ]; // zero / unset = open interval
-}
-
-// LabelsMatcher is a conjunction of label conditions.
-message LabelsMatcher {
-    // key → list of acceptable values (OR within a key, AND across keys).
-    map<string, LabelValues> labels = 1;
-}
-
-// LabelValues is a simple wrapper so we can have repeated strings inside a map.
-message LabelValues {
-    repeated string values = 1 [ (google.api.field_behavior) = REQUIRED ];
-}
 
 // ==========================================================================
 // Service

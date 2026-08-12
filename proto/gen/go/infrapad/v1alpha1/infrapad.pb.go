@@ -10,6 +10,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -117,16 +118,13 @@ type Block struct {
 	BlockNumber    int32                  `protobuf:"varint,2,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
 	RevisionNumber int32                  `protobuf:"varint,3,opt,name=revision_number,json=revisionNumber,proto3" json:"revision_number,omitempty"`
 	AuthorId       string                 `protobuf:"bytes,4,opt,name=author_id,json=authorId,proto3" json:"author_id,omitempty"`
-	Type           string                 `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`     // "markdown" | "alerts_matcher" | …
+	Type           string                 `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`
 	Status         string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"` // "progressing" | "published" | "deleted"
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// Exactly one of the typed content fields must be set, matching `type`.
-	//
-	// Types that are valid to be assigned to Content:
-	//
-	//	*Block_Markdown
-	//	*Block_AlertsMatcher
-	Content       isBlock_Content `protobuf_oneof:"content"`
+	// Arbitrary content payload; structure is determined by `type`.
+	// E.g. for "markdown": {"text": "…"}
+	// E.g. for "alerts_matcher": {"labels_matchers": [...], "since": "…"}
+	Content       *structpb.Struct `protobuf:"bytes,10,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -210,245 +208,9 @@ func (x *Block) GetCreatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *Block) GetContent() isBlock_Content {
+func (x *Block) GetContent() *structpb.Struct {
 	if x != nil {
 		return x.Content
-	}
-	return nil
-}
-
-func (x *Block) GetMarkdown() *MarkdownContent {
-	if x != nil {
-		if x, ok := x.Content.(*Block_Markdown); ok {
-			return x.Markdown
-		}
-	}
-	return nil
-}
-
-func (x *Block) GetAlertsMatcher() *AlertsMatcherContent {
-	if x != nil {
-		if x, ok := x.Content.(*Block_AlertsMatcher); ok {
-			return x.AlertsMatcher
-		}
-	}
-	return nil
-}
-
-type isBlock_Content interface {
-	isBlock_Content()
-}
-
-type Block_Markdown struct {
-	Markdown *MarkdownContent `protobuf:"bytes,10,opt,name=markdown,proto3,oneof"`
-}
-
-type Block_AlertsMatcher struct {
-	AlertsMatcher *AlertsMatcherContent `protobuf:"bytes,11,opt,name=alerts_matcher,json=alertsMatcher,proto3,oneof"`
-}
-
-func (*Block_Markdown) isBlock_Content() {}
-
-func (*Block_AlertsMatcher) isBlock_Content() {}
-
-// MarkdownContent is the payload for blocks of type "markdown".
-type MarkdownContent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MarkdownContent) Reset() {
-	*x = MarkdownContent{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MarkdownContent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MarkdownContent) ProtoMessage() {}
-
-func (x *MarkdownContent) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MarkdownContent.ProtoReflect.Descriptor instead.
-func (*MarkdownContent) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *MarkdownContent) GetText() string {
-	if x != nil {
-		return x.Text
-	}
-	return ""
-}
-
-// AlertsMatcherContent is the payload for blocks of type "alerts_matcher".
-type AlertsMatcherContent struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Each LabelsMatcher is OR-ed; within a matcher the labels are AND-ed.
-	// For each label the values are OR-ed.
-	// Semantics:  (m1) OR (m2) OR …
-	//
-	//	where mi = (label1 IN vals1) AND (label2 IN vals2) AND …
-	LabelsMatchers []*LabelsMatcher       `protobuf:"bytes,1,rep,name=labels_matchers,json=labelsMatchers,proto3" json:"labels_matchers,omitempty"`
-	Since          *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=since,proto3" json:"since,omitempty"`
-	Until          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=until,proto3" json:"until,omitempty"` // zero / unset = open interval
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *AlertsMatcherContent) Reset() {
-	*x = AlertsMatcherContent{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AlertsMatcherContent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AlertsMatcherContent) ProtoMessage() {}
-
-func (x *AlertsMatcherContent) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AlertsMatcherContent.ProtoReflect.Descriptor instead.
-func (*AlertsMatcherContent) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *AlertsMatcherContent) GetLabelsMatchers() []*LabelsMatcher {
-	if x != nil {
-		return x.LabelsMatchers
-	}
-	return nil
-}
-
-func (x *AlertsMatcherContent) GetSince() *timestamppb.Timestamp {
-	if x != nil {
-		return x.Since
-	}
-	return nil
-}
-
-func (x *AlertsMatcherContent) GetUntil() *timestamppb.Timestamp {
-	if x != nil {
-		return x.Until
-	}
-	return nil
-}
-
-// LabelsMatcher is a conjunction of label conditions.
-type LabelsMatcher struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// key → list of acceptable values (OR within a key, AND across keys).
-	Labels        map[string]*LabelValues `protobuf:"bytes,1,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LabelsMatcher) Reset() {
-	*x = LabelsMatcher{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LabelsMatcher) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LabelsMatcher) ProtoMessage() {}
-
-func (x *LabelsMatcher) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LabelsMatcher.ProtoReflect.Descriptor instead.
-func (*LabelsMatcher) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *LabelsMatcher) GetLabels() map[string]*LabelValues {
-	if x != nil {
-		return x.Labels
-	}
-	return nil
-}
-
-// LabelValues is a simple wrapper so we can have repeated strings inside a map.
-type LabelValues struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Values        []string               `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LabelValues) Reset() {
-	*x = LabelValues{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LabelValues) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LabelValues) ProtoMessage() {}
-
-func (x *LabelValues) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LabelValues.ProtoReflect.Descriptor instead.
-func (*LabelValues) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *LabelValues) GetValues() []string {
-	if x != nil {
-		return x.Values
 	}
 	return nil
 }
@@ -465,7 +227,7 @@ type CreateDocRequest struct {
 
 func (x *CreateDocRequest) Reset() {
 	*x = CreateDocRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -477,7 +239,7 @@ func (x *CreateDocRequest) String() string {
 func (*CreateDocRequest) ProtoMessage() {}
 
 func (x *CreateDocRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -490,7 +252,7 @@ func (x *CreateDocRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDocRequest.ProtoReflect.Descriptor instead.
 func (*CreateDocRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{6}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CreateDocRequest) GetTitle() string {
@@ -523,7 +285,7 @@ type CreateDocResponse struct {
 
 func (x *CreateDocResponse) Reset() {
 	*x = CreateDocResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -535,7 +297,7 @@ func (x *CreateDocResponse) String() string {
 func (*CreateDocResponse) ProtoMessage() {}
 
 func (x *CreateDocResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -548,7 +310,7 @@ func (x *CreateDocResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDocResponse.ProtoReflect.Descriptor instead.
 func (*CreateDocResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{7}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CreateDocResponse) GetDoc() *Doc {
@@ -567,7 +329,7 @@ type GetDocRequest struct {
 
 func (x *GetDocRequest) Reset() {
 	*x = GetDocRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -579,7 +341,7 @@ func (x *GetDocRequest) String() string {
 func (*GetDocRequest) ProtoMessage() {}
 
 func (x *GetDocRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -592,7 +354,7 @@ func (x *GetDocRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDocRequest.ProtoReflect.Descriptor instead.
 func (*GetDocRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{8}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetDocRequest) GetName() string {
@@ -611,7 +373,7 @@ type GetDocResponse struct {
 
 func (x *GetDocResponse) Reset() {
 	*x = GetDocResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -623,7 +385,7 @@ func (x *GetDocResponse) String() string {
 func (*GetDocResponse) ProtoMessage() {}
 
 func (x *GetDocResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,7 +398,7 @@ func (x *GetDocResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDocResponse.ProtoReflect.Descriptor instead.
 func (*GetDocResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{9}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetDocResponse) GetDoc() *Doc {
@@ -654,7 +416,7 @@ type ListDocsRequest struct {
 
 func (x *ListDocsRequest) Reset() {
 	*x = ListDocsRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -666,7 +428,7 @@ func (x *ListDocsRequest) String() string {
 func (*ListDocsRequest) ProtoMessage() {}
 
 func (x *ListDocsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -679,7 +441,7 @@ func (x *ListDocsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocsRequest.ProtoReflect.Descriptor instead.
 func (*ListDocsRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{10}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{6}
 }
 
 type ListDocsResponse struct {
@@ -691,7 +453,7 @@ type ListDocsResponse struct {
 
 func (x *ListDocsResponse) Reset() {
 	*x = ListDocsResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -703,7 +465,7 @@ func (x *ListDocsResponse) String() string {
 func (*ListDocsResponse) ProtoMessage() {}
 
 func (x *ListDocsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -716,7 +478,7 @@ func (x *ListDocsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocsResponse.ProtoReflect.Descriptor instead.
 func (*ListDocsResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{11}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListDocsResponse) GetDocs() []*Doc {
@@ -736,7 +498,7 @@ type AddBlockRequest struct {
 
 func (x *AddBlockRequest) Reset() {
 	*x = AddBlockRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -748,7 +510,7 @@ func (x *AddBlockRequest) String() string {
 func (*AddBlockRequest) ProtoMessage() {}
 
 func (x *AddBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -761,7 +523,7 @@ func (x *AddBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBlockRequest.ProtoReflect.Descriptor instead.
 func (*AddBlockRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{12}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AddBlockRequest) GetParent() string {
@@ -787,7 +549,7 @@ type AddBlockResponse struct {
 
 func (x *AddBlockResponse) Reset() {
 	*x = AddBlockResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -799,7 +561,7 @@ func (x *AddBlockResponse) String() string {
 func (*AddBlockResponse) ProtoMessage() {}
 
 func (x *AddBlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -812,7 +574,7 @@ func (x *AddBlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBlockResponse.ProtoReflect.Descriptor instead.
 func (*AddBlockResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{13}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AddBlockResponse) GetBlock() *Block {
@@ -833,7 +595,7 @@ type UpdateBlockRequest struct {
 
 func (x *UpdateBlockRequest) Reset() {
 	*x = UpdateBlockRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +607,7 @@ func (x *UpdateBlockRequest) String() string {
 func (*UpdateBlockRequest) ProtoMessage() {}
 
 func (x *UpdateBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +620,7 @@ func (x *UpdateBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBlockRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBlockRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{14}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *UpdateBlockRequest) GetParent() string {
@@ -891,7 +653,7 @@ type UpdateBlockResponse struct {
 
 func (x *UpdateBlockResponse) Reset() {
 	*x = UpdateBlockResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -903,7 +665,7 @@ func (x *UpdateBlockResponse) String() string {
 func (*UpdateBlockResponse) ProtoMessage() {}
 
 func (x *UpdateBlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -916,7 +678,7 @@ func (x *UpdateBlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBlockResponse.ProtoReflect.Descriptor instead.
 func (*UpdateBlockResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{15}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *UpdateBlockResponse) GetBlock() *Block {
@@ -938,7 +700,7 @@ type GetBlockRequest struct {
 
 func (x *GetBlockRequest) Reset() {
 	*x = GetBlockRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -950,7 +712,7 @@ func (x *GetBlockRequest) String() string {
 func (*GetBlockRequest) ProtoMessage() {}
 
 func (x *GetBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -963,7 +725,7 @@ func (x *GetBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBlockRequest.ProtoReflect.Descriptor instead.
 func (*GetBlockRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{16}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetBlockRequest) GetParent() string {
@@ -996,7 +758,7 @@ type GetBlockResponse struct {
 
 func (x *GetBlockResponse) Reset() {
 	*x = GetBlockResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1008,7 +770,7 @@ func (x *GetBlockResponse) String() string {
 func (*GetBlockResponse) ProtoMessage() {}
 
 func (x *GetBlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1021,7 +783,7 @@ func (x *GetBlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBlockResponse.ProtoReflect.Descriptor instead.
 func (*GetBlockResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{17}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetBlockResponse) GetBlock() *Block {
@@ -1040,7 +802,7 @@ type ListBlocksRequest struct {
 
 func (x *ListBlocksRequest) Reset() {
 	*x = ListBlocksRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[18]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1052,7 +814,7 @@ func (x *ListBlocksRequest) String() string {
 func (*ListBlocksRequest) ProtoMessage() {}
 
 func (x *ListBlocksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[18]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1065,7 +827,7 @@ func (x *ListBlocksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlocksRequest.ProtoReflect.Descriptor instead.
 func (*ListBlocksRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{18}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ListBlocksRequest) GetParent() string {
@@ -1084,7 +846,7 @@ type ListBlocksResponse struct {
 
 func (x *ListBlocksResponse) Reset() {
 	*x = ListBlocksResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[19]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1096,7 +858,7 @@ func (x *ListBlocksResponse) String() string {
 func (*ListBlocksResponse) ProtoMessage() {}
 
 func (x *ListBlocksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[19]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1109,7 +871,7 @@ func (x *ListBlocksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlocksResponse.ProtoReflect.Descriptor instead.
 func (*ListBlocksResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{19}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListBlocksResponse) GetBlocks() []*Block {
@@ -1129,7 +891,7 @@ type ListBlockHistoryRequest struct {
 
 func (x *ListBlockHistoryRequest) Reset() {
 	*x = ListBlockHistoryRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[20]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1141,7 +903,7 @@ func (x *ListBlockHistoryRequest) String() string {
 func (*ListBlockHistoryRequest) ProtoMessage() {}
 
 func (x *ListBlockHistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[20]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1154,7 +916,7 @@ func (x *ListBlockHistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlockHistoryRequest.ProtoReflect.Descriptor instead.
 func (*ListBlockHistoryRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{20}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListBlockHistoryRequest) GetParent() string {
@@ -1180,7 +942,7 @@ type ListBlockHistoryResponse struct {
 
 func (x *ListBlockHistoryResponse) Reset() {
 	*x = ListBlockHistoryResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[21]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1192,7 +954,7 @@ func (x *ListBlockHistoryResponse) String() string {
 func (*ListBlockHistoryResponse) ProtoMessage() {}
 
 func (x *ListBlockHistoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[21]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1205,7 +967,7 @@ func (x *ListBlockHistoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlockHistoryResponse.ProtoReflect.Descriptor instead.
 func (*ListBlockHistoryResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{21}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListBlockHistoryResponse) GetBlocks() []*Block {
@@ -1219,7 +981,7 @@ var File_infrapad_v1alpha1_infrapad_proto protoreflect.FileDescriptor
 
 const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\n" +
-	" infrapad/v1alpha1/infrapad.proto\x12\vinfrapad.v1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x02\n" +
+	" infrapad/v1alpha1/infrapad.proto\x12\vinfrapad.v1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x02\n" +
 	"\x03Doc\x12\x1a\n" +
 	"\x04name\x18\x01 \x01(\tB\x06\xe0A\b\xe0A\x03R\x04name\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tB\x03\xe0A\x03R\x06status\x12\x19\n" +
@@ -1229,7 +991,7 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x12/\n" +
 	"\x06blocks\x18\x06 \x03(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x03R\x06blocks:+\xeaA(\n" +
 	"\x0finfrapad.io/Doc\x12\n" +
-	"docs/{doc}*\x04docs2\x03doc\"\xe6\x03\n" +
+	"docs/{doc}*\x04docs2\x03doc\"\x8b\x03\n" +
 	"\x05Block\x12\x1a\n" +
 	"\x04name\x18\x01 \x01(\tB\x06\xe0A\b\xe0A\x03R\x04name\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x03R\vblockNumber\x12,\n" +
@@ -1238,25 +1000,10 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\x04type\x18\x05 \x01(\tB\x03\xe0A\x02R\x04type\x12\x1b\n" +
 	"\x06status\x18\x06 \x01(\tB\x03\xe0A\x01R\x06status\x12>\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x12:\n" +
-	"\bmarkdown\x18\n" +
-	" \x01(\v2\x1c.infrapad.v1.MarkdownContentH\x00R\bmarkdown\x12J\n" +
-	"\x0ealerts_matcher\x18\v \x01(\v2!.infrapad.v1.AlertsMatcherContentH\x00R\ralertsMatcher:@\xeaA=\n" +
-	"\x11infrapad.io/Block\x12\x19docs/{doc}/blocks/{block}*\x06blocks2\x05blockB\t\n" +
-	"\acontent\"*\n" +
-	"\x0fMarkdownContent\x12\x17\n" +
-	"\x04text\x18\x01 \x01(\tB\x03\xe0A\x02R\x04text\"\xce\x01\n" +
-	"\x14AlertsMatcherContent\x12H\n" +
-	"\x0flabels_matchers\x18\x01 \x03(\v2\x1a.infrapad.v1.LabelsMatcherB\x03\xe0A\x02R\x0elabelsMatchers\x125\n" +
-	"\x05since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x01R\x05since\x125\n" +
-	"\x05until\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x01R\x05until\"\xa4\x01\n" +
-	"\rLabelsMatcher\x12>\n" +
-	"\x06labels\x18\x01 \x03(\v2&.infrapad.v1.LabelsMatcher.LabelsEntryR\x06labels\x1aS\n" +
-	"\vLabelsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
-	"\x05value\x18\x02 \x01(\v2\x18.infrapad.v1.LabelValuesR\x05value:\x028\x01\"*\n" +
-	"\vLabelValues\x12\x1b\n" +
-	"\x06values\x18\x01 \x03(\tB\x03\xe0A\x02R\x06values\"\x81\x01\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x126\n" +
+	"\acontent\x18\n" +
+	" \x01(\v2\x17.google.protobuf.StructB\x03\xe0A\x02R\acontent:@\xeaA=\n" +
+	"\x11infrapad.io/Block\x12\x19docs/{doc}/blocks/{block}*\x06blocks2\x05block\"\x81\x01\n" +
 	"\x10CreateDocRequest\x12\x19\n" +
 	"\x05title\x18\x01 \x01(\tB\x03\xe0A\x02R\x05title\x12!\n" +
 	"\tnamespace\x18\x02 \x01(\tB\x03\xe0A\x01R\tnamespace\x12/\n" +
@@ -1325,76 +1072,66 @@ func file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP() []byte {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescData
 }
 
-var file_infrapad_v1alpha1_infrapad_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_infrapad_v1alpha1_infrapad_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_infrapad_v1alpha1_infrapad_proto_goTypes = []any{
 	(*Doc)(nil),                      // 0: infrapad.v1.Doc
 	(*Block)(nil),                    // 1: infrapad.v1.Block
-	(*MarkdownContent)(nil),          // 2: infrapad.v1.MarkdownContent
-	(*AlertsMatcherContent)(nil),     // 3: infrapad.v1.AlertsMatcherContent
-	(*LabelsMatcher)(nil),            // 4: infrapad.v1.LabelsMatcher
-	(*LabelValues)(nil),              // 5: infrapad.v1.LabelValues
-	(*CreateDocRequest)(nil),         // 6: infrapad.v1.CreateDocRequest
-	(*CreateDocResponse)(nil),        // 7: infrapad.v1.CreateDocResponse
-	(*GetDocRequest)(nil),            // 8: infrapad.v1.GetDocRequest
-	(*GetDocResponse)(nil),           // 9: infrapad.v1.GetDocResponse
-	(*ListDocsRequest)(nil),          // 10: infrapad.v1.ListDocsRequest
-	(*ListDocsResponse)(nil),         // 11: infrapad.v1.ListDocsResponse
-	(*AddBlockRequest)(nil),          // 12: infrapad.v1.AddBlockRequest
-	(*AddBlockResponse)(nil),         // 13: infrapad.v1.AddBlockResponse
-	(*UpdateBlockRequest)(nil),       // 14: infrapad.v1.UpdateBlockRequest
-	(*UpdateBlockResponse)(nil),      // 15: infrapad.v1.UpdateBlockResponse
-	(*GetBlockRequest)(nil),          // 16: infrapad.v1.GetBlockRequest
-	(*GetBlockResponse)(nil),         // 17: infrapad.v1.GetBlockResponse
-	(*ListBlocksRequest)(nil),        // 18: infrapad.v1.ListBlocksRequest
-	(*ListBlocksResponse)(nil),       // 19: infrapad.v1.ListBlocksResponse
-	(*ListBlockHistoryRequest)(nil),  // 20: infrapad.v1.ListBlockHistoryRequest
-	(*ListBlockHistoryResponse)(nil), // 21: infrapad.v1.ListBlockHistoryResponse
-	nil,                              // 22: infrapad.v1.LabelsMatcher.LabelsEntry
-	(*timestamppb.Timestamp)(nil),    // 23: google.protobuf.Timestamp
+	(*CreateDocRequest)(nil),         // 2: infrapad.v1.CreateDocRequest
+	(*CreateDocResponse)(nil),        // 3: infrapad.v1.CreateDocResponse
+	(*GetDocRequest)(nil),            // 4: infrapad.v1.GetDocRequest
+	(*GetDocResponse)(nil),           // 5: infrapad.v1.GetDocResponse
+	(*ListDocsRequest)(nil),          // 6: infrapad.v1.ListDocsRequest
+	(*ListDocsResponse)(nil),         // 7: infrapad.v1.ListDocsResponse
+	(*AddBlockRequest)(nil),          // 8: infrapad.v1.AddBlockRequest
+	(*AddBlockResponse)(nil),         // 9: infrapad.v1.AddBlockResponse
+	(*UpdateBlockRequest)(nil),       // 10: infrapad.v1.UpdateBlockRequest
+	(*UpdateBlockResponse)(nil),      // 11: infrapad.v1.UpdateBlockResponse
+	(*GetBlockRequest)(nil),          // 12: infrapad.v1.GetBlockRequest
+	(*GetBlockResponse)(nil),         // 13: infrapad.v1.GetBlockResponse
+	(*ListBlocksRequest)(nil),        // 14: infrapad.v1.ListBlocksRequest
+	(*ListBlocksResponse)(nil),       // 15: infrapad.v1.ListBlocksResponse
+	(*ListBlockHistoryRequest)(nil),  // 16: infrapad.v1.ListBlockHistoryRequest
+	(*ListBlockHistoryResponse)(nil), // 17: infrapad.v1.ListBlockHistoryResponse
+	(*timestamppb.Timestamp)(nil),    // 18: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),          // 19: google.protobuf.Struct
 }
 var file_infrapad_v1alpha1_infrapad_proto_depIdxs = []int32{
-	23, // 0: infrapad.v1.Doc.created_at:type_name -> google.protobuf.Timestamp
+	18, // 0: infrapad.v1.Doc.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 1: infrapad.v1.Doc.blocks:type_name -> infrapad.v1.Block
-	23, // 2: infrapad.v1.Block.created_at:type_name -> google.protobuf.Timestamp
-	2,  // 3: infrapad.v1.Block.markdown:type_name -> infrapad.v1.MarkdownContent
-	3,  // 4: infrapad.v1.Block.alerts_matcher:type_name -> infrapad.v1.AlertsMatcherContent
-	4,  // 5: infrapad.v1.AlertsMatcherContent.labels_matchers:type_name -> infrapad.v1.LabelsMatcher
-	23, // 6: infrapad.v1.AlertsMatcherContent.since:type_name -> google.protobuf.Timestamp
-	23, // 7: infrapad.v1.AlertsMatcherContent.until:type_name -> google.protobuf.Timestamp
-	22, // 8: infrapad.v1.LabelsMatcher.labels:type_name -> infrapad.v1.LabelsMatcher.LabelsEntry
-	1,  // 9: infrapad.v1.CreateDocRequest.blocks:type_name -> infrapad.v1.Block
-	0,  // 10: infrapad.v1.CreateDocResponse.doc:type_name -> infrapad.v1.Doc
-	0,  // 11: infrapad.v1.GetDocResponse.doc:type_name -> infrapad.v1.Doc
-	0,  // 12: infrapad.v1.ListDocsResponse.docs:type_name -> infrapad.v1.Doc
-	1,  // 13: infrapad.v1.AddBlockRequest.block:type_name -> infrapad.v1.Block
-	1,  // 14: infrapad.v1.AddBlockResponse.block:type_name -> infrapad.v1.Block
-	1,  // 15: infrapad.v1.UpdateBlockRequest.block:type_name -> infrapad.v1.Block
-	1,  // 16: infrapad.v1.UpdateBlockResponse.block:type_name -> infrapad.v1.Block
-	1,  // 17: infrapad.v1.GetBlockResponse.block:type_name -> infrapad.v1.Block
-	1,  // 18: infrapad.v1.ListBlocksResponse.blocks:type_name -> infrapad.v1.Block
-	1,  // 19: infrapad.v1.ListBlockHistoryResponse.blocks:type_name -> infrapad.v1.Block
-	5,  // 20: infrapad.v1.LabelsMatcher.LabelsEntry.value:type_name -> infrapad.v1.LabelValues
-	6,  // 21: infrapad.v1.InfrapadService.CreateDoc:input_type -> infrapad.v1.CreateDocRequest
-	8,  // 22: infrapad.v1.InfrapadService.GetDoc:input_type -> infrapad.v1.GetDocRequest
-	10, // 23: infrapad.v1.InfrapadService.ListDocs:input_type -> infrapad.v1.ListDocsRequest
-	12, // 24: infrapad.v1.InfrapadService.AddBlock:input_type -> infrapad.v1.AddBlockRequest
-	14, // 25: infrapad.v1.InfrapadService.UpdateBlock:input_type -> infrapad.v1.UpdateBlockRequest
-	16, // 26: infrapad.v1.InfrapadService.GetBlock:input_type -> infrapad.v1.GetBlockRequest
-	18, // 27: infrapad.v1.InfrapadService.ListBlocks:input_type -> infrapad.v1.ListBlocksRequest
-	20, // 28: infrapad.v1.InfrapadService.ListBlockHistory:input_type -> infrapad.v1.ListBlockHistoryRequest
-	7,  // 29: infrapad.v1.InfrapadService.CreateDoc:output_type -> infrapad.v1.CreateDocResponse
-	9,  // 30: infrapad.v1.InfrapadService.GetDoc:output_type -> infrapad.v1.GetDocResponse
-	11, // 31: infrapad.v1.InfrapadService.ListDocs:output_type -> infrapad.v1.ListDocsResponse
-	13, // 32: infrapad.v1.InfrapadService.AddBlock:output_type -> infrapad.v1.AddBlockResponse
-	15, // 33: infrapad.v1.InfrapadService.UpdateBlock:output_type -> infrapad.v1.UpdateBlockResponse
-	17, // 34: infrapad.v1.InfrapadService.GetBlock:output_type -> infrapad.v1.GetBlockResponse
-	19, // 35: infrapad.v1.InfrapadService.ListBlocks:output_type -> infrapad.v1.ListBlocksResponse
-	21, // 36: infrapad.v1.InfrapadService.ListBlockHistory:output_type -> infrapad.v1.ListBlockHistoryResponse
-	29, // [29:37] is the sub-list for method output_type
-	21, // [21:29] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	18, // 2: infrapad.v1.Block.created_at:type_name -> google.protobuf.Timestamp
+	19, // 3: infrapad.v1.Block.content:type_name -> google.protobuf.Struct
+	1,  // 4: infrapad.v1.CreateDocRequest.blocks:type_name -> infrapad.v1.Block
+	0,  // 5: infrapad.v1.CreateDocResponse.doc:type_name -> infrapad.v1.Doc
+	0,  // 6: infrapad.v1.GetDocResponse.doc:type_name -> infrapad.v1.Doc
+	0,  // 7: infrapad.v1.ListDocsResponse.docs:type_name -> infrapad.v1.Doc
+	1,  // 8: infrapad.v1.AddBlockRequest.block:type_name -> infrapad.v1.Block
+	1,  // 9: infrapad.v1.AddBlockResponse.block:type_name -> infrapad.v1.Block
+	1,  // 10: infrapad.v1.UpdateBlockRequest.block:type_name -> infrapad.v1.Block
+	1,  // 11: infrapad.v1.UpdateBlockResponse.block:type_name -> infrapad.v1.Block
+	1,  // 12: infrapad.v1.GetBlockResponse.block:type_name -> infrapad.v1.Block
+	1,  // 13: infrapad.v1.ListBlocksResponse.blocks:type_name -> infrapad.v1.Block
+	1,  // 14: infrapad.v1.ListBlockHistoryResponse.blocks:type_name -> infrapad.v1.Block
+	2,  // 15: infrapad.v1.InfrapadService.CreateDoc:input_type -> infrapad.v1.CreateDocRequest
+	4,  // 16: infrapad.v1.InfrapadService.GetDoc:input_type -> infrapad.v1.GetDocRequest
+	6,  // 17: infrapad.v1.InfrapadService.ListDocs:input_type -> infrapad.v1.ListDocsRequest
+	8,  // 18: infrapad.v1.InfrapadService.AddBlock:input_type -> infrapad.v1.AddBlockRequest
+	10, // 19: infrapad.v1.InfrapadService.UpdateBlock:input_type -> infrapad.v1.UpdateBlockRequest
+	12, // 20: infrapad.v1.InfrapadService.GetBlock:input_type -> infrapad.v1.GetBlockRequest
+	14, // 21: infrapad.v1.InfrapadService.ListBlocks:input_type -> infrapad.v1.ListBlocksRequest
+	16, // 22: infrapad.v1.InfrapadService.ListBlockHistory:input_type -> infrapad.v1.ListBlockHistoryRequest
+	3,  // 23: infrapad.v1.InfrapadService.CreateDoc:output_type -> infrapad.v1.CreateDocResponse
+	5,  // 24: infrapad.v1.InfrapadService.GetDoc:output_type -> infrapad.v1.GetDocResponse
+	7,  // 25: infrapad.v1.InfrapadService.ListDocs:output_type -> infrapad.v1.ListDocsResponse
+	9,  // 26: infrapad.v1.InfrapadService.AddBlock:output_type -> infrapad.v1.AddBlockResponse
+	11, // 27: infrapad.v1.InfrapadService.UpdateBlock:output_type -> infrapad.v1.UpdateBlockResponse
+	13, // 28: infrapad.v1.InfrapadService.GetBlock:output_type -> infrapad.v1.GetBlockResponse
+	15, // 29: infrapad.v1.InfrapadService.ListBlocks:output_type -> infrapad.v1.ListBlocksResponse
+	17, // 30: infrapad.v1.InfrapadService.ListBlockHistory:output_type -> infrapad.v1.ListBlockHistoryResponse
+	23, // [23:31] is the sub-list for method output_type
+	15, // [15:23] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_infrapad_v1alpha1_infrapad_proto_init() }
@@ -1402,17 +1139,13 @@ func file_infrapad_v1alpha1_infrapad_proto_init() {
 	if File_infrapad_v1alpha1_infrapad_proto != nil {
 		return
 	}
-	file_infrapad_v1alpha1_infrapad_proto_msgTypes[1].OneofWrappers = []any{
-		(*Block_Markdown)(nil),
-		(*Block_AlertsMatcher)(nil),
-	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_infrapad_v1alpha1_infrapad_proto_rawDesc), len(file_infrapad_v1alpha1_infrapad_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -9,6 +9,7 @@ import (
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var blockCmd = &cobra.Command{
@@ -24,10 +25,9 @@ var blockAddCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		parent, _ := cmd.Flags().GetString("doc")
 		blockType, _ := cmd.Flags().GetString("type")
-		text, _ := cmd.Flags().GetString("text")
-		matchersJSON, _ := cmd.Flags().GetString("matchers")
+		contentJSON, _ := cmd.Flags().GetString("content")
 
-		block, err := buildBlock(blockType, text, matchersJSON)
+		block, err := buildBlock(blockType, contentJSON)
 		if err != nil {
 			return err
 		}
@@ -55,10 +55,9 @@ var blockUpdateCmd = &cobra.Command{
 		parent, _ := cmd.Flags().GetString("doc")
 		blockNumber, _ := cmd.Flags().GetInt32("block-number")
 		blockType, _ := cmd.Flags().GetString("type")
-		text, _ := cmd.Flags().GetString("text")
-		matchersJSON, _ := cmd.Flags().GetString("matchers")
+		contentJSON, _ := cmd.Flags().GetString("content")
 
-		block, err := buildBlock(blockType, text, matchersJSON)
+		block, err := buildBlock(blockType, contentJSON)
 		if err != nil {
 			return err
 		}
@@ -156,18 +155,16 @@ var blockHistoryCmd = &cobra.Command{
 func init() {
 	// add
 	blockAddCmd.Flags().String("doc", "", "Parent document name (required)")
-	blockAddCmd.Flags().String("type", "", "Block type: markdown, alerts_matcher (required)")
-	blockAddCmd.Flags().String("text", "", "Markdown text (for type=markdown)")
-	blockAddCmd.Flags().String("matchers", "", "JSON array of label matchers (for type=alerts_matcher)")
+	blockAddCmd.Flags().String("type", "", "Block type (required)")
+	blockAddCmd.Flags().String("content", "{}", "Block content as JSON object")
 	_ = blockAddCmd.MarkFlagRequired("doc")
 	_ = blockAddCmd.MarkFlagRequired("type")
 
 	// update
 	blockUpdateCmd.Flags().String("doc", "", "Parent document name (required)")
 	blockUpdateCmd.Flags().Int32("block-number", 0, "Block number to update (required)")
-	blockUpdateCmd.Flags().String("type", "", "Block type: markdown, alerts_matcher (required)")
-	blockUpdateCmd.Flags().String("text", "", "Markdown text (for type=markdown)")
-	blockUpdateCmd.Flags().String("matchers", "", "JSON array of label matchers (for type=alerts_matcher)")
+	blockUpdateCmd.Flags().String("type", "", "Block type (required)")
+	blockUpdateCmd.Flags().String("content", "{}", "Block content as JSON object")
 	_ = blockUpdateCmd.MarkFlagRequired("doc")
 	_ = blockUpdateCmd.MarkFlagRequired("block-number")
 	_ = blockUpdateCmd.MarkFlagRequired("type")
@@ -193,35 +190,19 @@ func init() {
 }
 
 // buildBlock constructs a protobuf Block from CLI flags.
-func buildBlock(blockType, text, matchersJSON string) (*pb.Block, error) {
+func buildBlock(blockType, contentJSON string) (*pb.Block, error) {
 	block := &pb.Block{Type: blockType}
 
-	switch blockType {
-	case "markdown":
-		block.Content = &pb.Block_Markdown{
-			Markdown: &pb.MarkdownContent{Text: text},
-		}
-	case "alerts_matcher":
-		var raw []map[string][]string
-		if err := json.Unmarshal([]byte(matchersJSON), &raw); err != nil {
-			return nil, fmt.Errorf("invalid --matchers JSON: %w", err)
-		}
-		var matchers []*pb.LabelsMatcher
-		for _, m := range raw {
-			labels := make(map[string]*pb.LabelValues)
-			for k, v := range m {
-				labels[k] = &pb.LabelValues{Values: v}
-			}
-			matchers = append(matchers, &pb.LabelsMatcher{Labels: labels})
-		}
-		block.Content = &pb.Block_AlertsMatcher{
-			AlertsMatcher: &pb.AlertsMatcherContent{
-				LabelsMatchers: matchers,
-			},
-		}
-	default:
-		return nil, fmt.Errorf("unsupported block type: %s", blockType)
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(contentJSON), &raw); err != nil {
+		return nil, fmt.Errorf("invalid --content JSON: %w", err)
 	}
+
+	s, err := structpb.NewStruct(raw)
+	if err != nil {
+		return nil, fmt.Errorf("convert content to struct: %w", err)
+	}
+	block.Content = s
 
 	return block, nil
 }
