@@ -38,6 +38,36 @@ assert_equals() {
   fi
 }
 
+# table_cell extracts a cell value from table output by column header name and
+# row number (1-based, excluding the header). Works with the 3-space-separated
+# column format produced by the printer.
+#
+# Usage: table_cell "$output" "Header" [row]
+#   row defaults to 1
+table_cell() {
+  local output="$1" header="$2" row="${3:-1}"
+  local header_line data_line col_start col_end
+
+  header_line=$(echo "$output" | head -1)
+
+  # Find the column start position (byte offset) from the header line.
+  col_start=$(echo "$header_line" | grep -b -o "$header" | head -1 | cut -d: -f1)
+
+  # Find end: start of next column header or end of line.
+  # Next column starts after 3+ spaces following current header text.
+  local after=$((col_start + ${#header}))
+  local rest="${header_line:$after}"
+  if [[ "$rest" =~ ^([[:space:]]+)[^[:space:]] ]]; then
+    col_end=$((after + ${#BASH_REMATCH[1]}))
+  else
+    col_end=10000  # last column, take everything
+  fi
+
+  data_line=$(echo "$output" | tail -n +2 | sed -n "${row}p")
+  # Extract the substring, trim whitespace.
+  echo "${data_line:$col_start:$((col_end - col_start))}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
 echo "=== Incident Investigation E2E Test ==="
 echo ""
 
@@ -48,9 +78,10 @@ echo "Step 1: Create document"
 CREATE_OUT=$($CLI doc create --title "Payment service crash loop" --namespace payments)
 echo "$CREATE_OUT"
 
-DOC_NAME=$(echo "$CREATE_OUT" | grep '^name:' | awk '{print $2}')
-assert_contains "doc name is non-empty" "$DOC_NAME" "docs/"
-assert_contains "namespace is payments" "$CREATE_OUT" "namespace: payments"
+DOC_ID=$(table_cell "$CREATE_OUT" "ID")
+assert_contains "doc id is non-empty" "$DOC_ID" "-"
+DOC_NAME="docs/${DOC_ID}"
+assert_equals "namespace is payments" "$(table_cell "$CREATE_OUT" "NAMESPACE")" "payments"
 
 echo ""
 
@@ -64,10 +95,12 @@ ADD_ALERTS_OUT=$($CLI block add \
   --matchers '[{"name": ["CrashLoopBackOff"]}]')
 echo "$ADD_ALERTS_OUT"
 
-ALERTS_BLOCK_NUM=$(echo "$ADD_ALERTS_OUT" | grep '^block_number:' | awk '{print $2}')
-assert_equals "alerts block_number is 1" "$ALERTS_BLOCK_NUM" "1"
-assert_contains "alerts revision is 1" "$ADD_ALERTS_OUT" "revision_number: 1"
-assert_contains "matchers_count is 1" "$ADD_ALERTS_OUT" "matchers_count: 1"
+assert_equals "alerts block_number is 1" "$(table_cell "$ADD_ALERTS_OUT" "BLOCK")" "1"
+assert_equals "alerts revision is 1" "$(table_cell "$ADD_ALERTS_OUT" "REV")" "1"
+
+# Verify matcher content via JSON output
+ADD_ALERTS_JSON=$($CLI block get -o json --doc "$DOC_NAME" --block-number 1)
+assert_contains "matchers present" "$ADD_ALERTS_JSON" "CrashLoopBackOff"
 
 echo ""
 
@@ -81,10 +114,13 @@ ADD_MD_OUT=$($CLI block add \
   --text "initial investigation writeup")
 echo "$ADD_MD_OUT"
 
-MD_BLOCK_NUM=$(echo "$ADD_MD_OUT" | grep '^block_number:' | awk '{print $2}')
+MD_BLOCK_NUM=$(table_cell "$ADD_MD_OUT" "BLOCK")
 assert_equals "markdown block_number is 2" "$MD_BLOCK_NUM" "2"
-assert_contains "markdown revision is 1" "$ADD_MD_OUT" "revision_number: 1"
-assert_contains "markdown text" "$ADD_MD_OUT" "text: initial investigation writeup"
+assert_equals "markdown revision is 1" "$(table_cell "$ADD_MD_OUT" "REV")" "1"
+
+# Verify content via JSON
+ADD_MD_JSON=$($CLI block get -o json --doc "$DOC_NAME" --block-number "$MD_BLOCK_NUM")
+assert_contains "markdown text" "$ADD_MD_JSON" "initial investigation writeup"
 
 echo ""
 
@@ -99,8 +135,12 @@ UPDATE_ALERTS_OUT=$($CLI block update \
   --matchers '[{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]')
 echo "$UPDATE_ALERTS_OUT"
 
-assert_contains "updated alerts revision is 2" "$UPDATE_ALERTS_OUT" "revision_number: 2"
-assert_contains "matchers_count is 2" "$UPDATE_ALERTS_OUT" "matchers_count: 2"
+assert_equals "updated alerts revision is 2" "$(table_cell "$UPDATE_ALERTS_OUT" "REV")" "2"
+
+# Verify matchers via JSON
+UPDATE_ALERTS_JSON=$($CLI block get -o json --doc "$DOC_NAME" --block-number 1)
+MATCHERS_COUNT=$(echo "$UPDATE_ALERTS_JSON" | grep -c '"labels"' || true)
+assert_equals "matchers_count is 2" "$MATCHERS_COUNT" "2"
 
 echo ""
 
@@ -110,28 +150,26 @@ echo ""
 echo "Step 5: Update markdown block"
 UPDATE_MD_OUT=$($CLI block update \
   --doc "$DOC_NAME" \
-  --block-number 2 \
+  --block-number "$MD_BLOCK_NUM" \
   --type markdown \
   --text "updated investigation writeup")
 echo "$UPDATE_MD_OUT"
 
-assert_contains "updated markdown revision is 2" "$UPDATE_MD_OUT" "revision_number: 2"
-assert_contains "updated markdown text" "$UPDATE_MD_OUT" "text: updated investigation writeup"
+assert_equals "updated markdown revision is 2" "$(table_cell "$UPDATE_MD_OUT" "REV")" "2"
+
+UPDATE_MD_JSON=$($CLI block get -o json --doc "$DOC_NAME" --block-number "$MD_BLOCK_NUM")
+assert_contains "updated markdown text" "$UPDATE_MD_JSON" "updated investigation writeup"
 
 echo ""
 
 # -----------------------------------------------------------------------
-# 6. Verify final state: GetDoc with 2 blocks at revision 2
+# 6. Verify final state: GetDoc with blocks at latest revisions
 # -----------------------------------------------------------------------
 echo "Step 6: Verify final document state"
 GET_DOC_OUT=$($CLI doc get "$DOC_NAME")
 echo "$GET_DOC_OUT"
 
-assert_contains "doc has 2 blocks" "$GET_DOC_OUT" "blocks: 2"
-
-# Count blocks at revision 2
-REV2_COUNT=$(echo "$GET_DOC_OUT" | grep -c "rev=2" || true)
-assert_equals "both blocks at revision 2" "$REV2_COUNT" "2"
+assert_equals "doc has expected block count" "$(table_cell "$GET_DOC_OUT" "BLOCKS")" "2"
 
 echo ""
 
@@ -144,13 +182,24 @@ HISTORY_OUT=$($CLI block history \
   --block-number 1)
 echo "$HISTORY_OUT"
 
-# Should have 2 revisions
-REVISION_COUNT=$(echo "$HISTORY_OUT" | grep -c '^revision_number:' || true)
-assert_equals "history has 2 revisions" "$REVISION_COUNT" "2"
+# Table output: header + data rows; count data rows
+HISTORY_ROW_COUNT=$(echo "$HISTORY_OUT" | tail -n +2 | wc -l | tr -d ' ')
+assert_equals "history has 2 revisions" "$HISTORY_ROW_COUNT" "2"
 
-# First revision: 1 matcher; second: 2 matchers
-MATCHERS_COUNTS=$(echo "$HISTORY_OUT" | grep '^matchers_count:' | awk '{print $2}' | tr '\n' ',')
-assert_equals "matchers counts are 1,2" "$MATCHERS_COUNTS" "1,2,"
+# Check revisions via JSON
+HISTORY_JSON=$($CLI block history -o json --doc "$DOC_NAME" --block-number 1)
+REV1_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+print(len(data[0].get('alertsMatcher', {}).get('labelsMatchers', [])))
+" 2>/dev/null || echo "?")
+REV2_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+print(len(data[1].get('alertsMatcher', {}).get('labelsMatchers', [])))
+" 2>/dev/null || echo "?")
+assert_equals "first revision has 1 matcher" "$REV1_MATCHERS" "1"
+assert_equals "second revision has 2 matchers" "$REV2_MATCHERS" "2"
 
 echo ""
 

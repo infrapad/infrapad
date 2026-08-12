@@ -8,6 +8,7 @@ import (
 	"github.com/infrapad/infrapad/cli/pkg/output"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/proto"
 )
 
 var blockCmd = &cobra.Command{
@@ -41,8 +42,7 @@ var blockAddCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		output.PrintBlock(result)
-		return nil
+		return newPrinter().PrintResource(result, output.BlockColumns())
 	},
 }
 
@@ -73,8 +73,7 @@ var blockUpdateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		output.PrintBlock(result)
-		return nil
+		return newPrinter().PrintResource(result, output.BlockColumns())
 	},
 }
 
@@ -97,8 +96,7 @@ var blockGetCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		output.PrintBlock(result)
-		return nil
+		return newPrinter().PrintResource(result, output.BlockColumns())
 	},
 }
 
@@ -120,10 +118,11 @@ var blockListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		for _, b := range blocks {
-			fmt.Printf("block=%d  rev=%d  type=%s\n", b.GetBlockNumber(), b.GetRevisionNumber(), b.GetType())
+		msgs := make([]proto.Message, len(blocks))
+		for i, b := range blocks {
+			msgs[i] = b
 		}
-		return nil
+		return newPrinter().PrintResourceList(msgs, output.BlockColumns())
 	},
 }
 
@@ -146,11 +145,11 @@ var blockHistoryCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		for _, b := range blocks {
-			output.PrintBlock(b)
-			fmt.Println("---")
+		msgs := make([]proto.Message, len(blocks))
+		for i, b := range blocks {
+			msgs[i] = b
 		}
-		return nil
+		return newPrinter().PrintResourceList(msgs, output.BlockColumns())
 	},
 }
 

@@ -1,11 +1,10 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/infrapad/infrapad/cli/pkg/client"
 	"github.com/infrapad/infrapad/cli/pkg/output"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/proto"
 )
 
 var docCmd = &cobra.Command{
@@ -30,8 +29,7 @@ var docCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		output.PrintDoc(doc)
-		return nil
+		return newPrinter().PrintResource(doc, output.DocColumns())
 	},
 }
 
@@ -50,8 +48,7 @@ var docGetCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		output.PrintDoc(doc)
-		return nil
+		return newPrinter().PrintResource(doc, output.DocColumns())
 	},
 }
 
@@ -69,10 +66,11 @@ var docListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		for _, d := range docs {
-			fmt.Printf("%s\t%s\t%s\n", d.GetName(), d.GetNamespace(), d.GetTitle())
+		msgs := make([]proto.Message, len(docs))
+		for i, d := range docs {
+			msgs[i] = d
 		}
-		return nil
+		return newPrinter().PrintResourceList(msgs, output.DocColumns())
 	},
 }
 
