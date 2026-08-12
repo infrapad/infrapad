@@ -1,0 +1,3 @@
+# InfraPad Server
+
+## Repository layout

@@ -1,0 +1,15 @@
+version: '3'
+
+tasks:
+  generate:
+    desc: Generate Go stubs and OpenAPI specs from proto definitions
+    cmds:
+      - find gen/go -name '*.pb.go' -delete
+      - buf generate
+    sources:
+      - "**/*.proto"
+      - buf.gen.yaml
+      - buf.yaml
+    generates:
+      - "gen/go/**/*.go"
+      - "../docs/openapi/*.yaml"

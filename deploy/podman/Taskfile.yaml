@@ -1,0 +1,6 @@
+version: '3'
+tasks:
+  dev:
+    desc: Start in dev mode — builds frontend + backend from source in containers
+    cmds:
+      - ./scripts/start.sh -f compose.yaml
