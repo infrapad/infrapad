@@ -19,9 +19,6 @@ func DocColumns() []Column {
 		{Header: "Namespace", Value: func(m proto.Message) string { return m.(*pb.Doc).GetNamespace() }},
 		{Header: "Title", Value: func(m proto.Message) string { return m.(*pb.Doc).GetTitle() }},
 		{Header: "Status", Value: func(m proto.Message) string { return m.(*pb.Doc).GetStatus() }},
-		{Header: "Blocks", Value: func(m proto.Message) string {
-			return fmt.Sprintf("%d", len(m.(*pb.Doc).GetBlocks()))
-		}},
 		{Header: "Created At", Value: func(m proto.Message) string {
 			ts := m.(*pb.Doc).GetCreatedAt()
 			if ts == nil {
