@@ -108,22 +108,22 @@ func DeserializeBlockContent(sc SerializedContent) (BlockContent, error) {
 }
 
 type MarkdownBC struct {
-	content string
+	text string
 }
 
 // NewMarkdownBC creates a MarkdownBC with the given text content.
-func NewMarkdownBC(content string) MarkdownBC {
-	return MarkdownBC{content: content}
+func NewMarkdownBC(text string) MarkdownBC {
+	return MarkdownBC{text: text}
 }
 
 func (m MarkdownBC) Render() string {
-	return m.content
+	return m.text
 }
 
 func (m MarkdownBC) Serialize() (SerializedContent, error) {
 	data, err := json.Marshal(struct {
-		Content string `json:"content"`
-	}{Content: m.content})
+		Text string `json:"text"`
+	}{Text: m.text})
 	if err != nil {
 		return SerializedContent{}, err
 	}
@@ -135,12 +135,12 @@ var _ BlockContent = MarkdownBC{}
 func init() {
 	RegisterBlockContentType("markdown", func(data []byte) (BlockContent, error) {
 		var v struct {
-			Content string `json:"content"`
+			Text string `json:"text"`
 		}
 		if err := json.Unmarshal(data, &v); err != nil {
 			return nil, err
 		}
-		return MarkdownBC{content: v.Content}, nil
+		return MarkdownBC{text: v.Text}, nil
 	})
 }
 

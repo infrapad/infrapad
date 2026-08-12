@@ -111,7 +111,7 @@ echo "Step 3: Add markdown block"
 ADD_MD_OUT=$($CLI block add \
   --doc "$DOC_NAME" \
   --type markdown \
-  --content '{"content": "initial investigation writeup"}')
+  --content '{"text": "initial investigation writeup"}')
 echo "$ADD_MD_OUT"
 
 MD_BLOCK_NUM=$(table_cell "$ADD_MD_OUT" "BLOCK")
@@ -156,7 +156,7 @@ UPDATE_MD_OUT=$($CLI block update \
   --doc "$DOC_NAME" \
   --block-number "$MD_BLOCK_NUM" \
   --type markdown \
-  --content '{"content": "updated investigation writeup"}')
+  --content '{"text": "updated investigation writeup"}')
 echo "$UPDATE_MD_OUT"
 
 assert_equals "updated markdown revision is 2" "$(table_cell "$UPDATE_MD_OUT" "REV")" "2"

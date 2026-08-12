@@ -97,7 +97,7 @@ func TestIncidentInvestigation(t *testing.T) {
 		Block: &pb.Block{
 			Type: "markdown",
 			Content: mustStruct(t, map[string]any{
-				"content": "initial investigation writeup",
+				"text": "initial investigation writeup",
 			}),
 		},
 	})
@@ -148,7 +148,7 @@ func TestIncidentInvestigation(t *testing.T) {
 		Block: &pb.Block{
 			Type: "markdown",
 			Content: mustStruct(t, map[string]any{
-				"content": "updated investigation writeup",
+				"text": "updated investigation writeup",
 			}),
 		},
 	})
