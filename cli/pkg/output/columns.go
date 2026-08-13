@@ -1,10 +1,12 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
+	"gopkg.in/yaml.v3"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 )
@@ -39,5 +41,61 @@ func BlockColumns() []Column {
 			return fmt.Sprintf("%d", m.(*pb.Block).GetRevisionNumber())
 		}},
 		{Header: "Type", Value: func(m proto.Message) string { return m.(*pb.Block).GetType() }},
+		{Header: "Content", FullRow: true, Value: func(m proto.Message) string {
+			block := m.(*pb.Block)
+			content := block.GetContent()
+			if content == nil {
+				return ""
+			}
+			return blockContentYAML(block.GetType(), content.AsMap())
+		}},
 	}
+}
+
+// blockContentYAML converts block content to YAML with smart styling:
+// multi-line strings use literal block scalar style (|), and leaf
+// sequences (containing only scalars) use flow style ([a, b]).
+func blockContentYAML(_ string, data map[string]any) string {
+	var node yaml.Node
+	if err := node.Encode(data); err != nil {
+		out, _ := yaml.Marshal(data)
+		return strings.TrimRight(string(out), "\n")
+	}
+	setSmartStyle(&node)
+	var buf strings.Builder
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&node); err != nil {
+		// Fallback to JSON on error.
+		j, _ := json.Marshal(data)
+		return string(j)
+	}
+	enc.Close()
+	return strings.TrimRight(buf.String(), "\n")
+}
+
+// setSmartStyle walks a yaml.Node tree and applies styling heuristics:
+// - multi-line strings get literal block scalar style (|)
+// - leaf sequences (only scalars) get flow style ([a, b])
+func setSmartStyle(n *yaml.Node) {
+	if n.Kind == yaml.ScalarNode && n.Tag == "!!str" && strings.Contains(n.Value, "\n") {
+		n.Style = yaml.LiteralStyle
+	}
+	if n.Kind == yaml.SequenceNode && allScalar(n) {
+		n.Style = yaml.FlowStyle
+		return
+	}
+	for _, child := range n.Content {
+		setSmartStyle(child)
+	}
+}
+
+// allScalar returns true if every element of a sequence node is a scalar.
+func allScalar(n *yaml.Node) bool {
+	for _, child := range n.Content {
+		if child.Kind != yaml.ScalarNode {
+			return false
+		}
+	}
+	return true
 }

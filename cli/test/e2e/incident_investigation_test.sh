@@ -38,9 +38,20 @@ assert_equals() {
   fi
 }
 
+# table_data_rows filters table output to only data rows, stripping the header
+# line and any full-row fenced blocks (```...```).
+table_data_rows() {
+  local output="$1"
+  echo "$output" | awk '
+    NR == 1 { next }
+    /^```/  { fence = !fence; next }
+    !fence  { print }
+  '
+}
+
 # table_cell extracts a cell value from table output by column header name and
 # row number (1-based, excluding the header). Works with the 3-space-separated
-# column format produced by the printer.
+# column format produced by the printer.  Full-row fenced blocks are skipped.
 #
 # Usage: table_cell "$output" "Header" [row]
 #   row defaults to 1
@@ -63,7 +74,7 @@ table_cell() {
     col_end=10000  # last column, take everything
   fi
 
-  data_line=$(echo "$output" | tail -n +2 | sed -n "${row}p")
+  data_line=$(table_data_rows "$output" | sed -n "${row}p")
   # Extract the substring, trim whitespace.
   echo "${data_line:$col_start:$((col_end - col_start))}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
@@ -111,7 +122,7 @@ echo "Step 3: Add markdown block"
 ADD_MD_OUT=$($CLI block add \
   --doc "$DOC_NAME" \
   --type markdown \
-  --content '{"text": "initial investigation writeup"}')
+  --content '{"text": "initial investigation writeup\nneeds further analysis"}')
 echo "$ADD_MD_OUT"
 
 MD_BLOCK_NUM=$(table_cell "$ADD_MD_OUT" "BLOCK")
@@ -121,6 +132,7 @@ assert_equals "markdown revision is 1" "$(table_cell "$ADD_MD_OUT" "REV")" "1"
 # Verify content via JSON
 ADD_MD_JSON=$($CLI block get -o json --doc "$DOC_NAME" --block-number "$MD_BLOCK_NUM")
 assert_contains "markdown text" "$ADD_MD_JSON" "initial investigation writeup"
+assert_contains "markdown multiline content uses | style" "$ADD_MD_OUT" '|'
 
 echo ""
 
@@ -156,13 +168,14 @@ UPDATE_MD_OUT=$($CLI block update \
   --doc "$DOC_NAME" \
   --block-number "$MD_BLOCK_NUM" \
   --type markdown \
-  --content '{"text": "updated investigation writeup"}')
+  --content '{"text": "updated investigation writeup\nroot cause identified"}')
 echo "$UPDATE_MD_OUT"
 
 assert_equals "updated markdown revision is 2" "$(table_cell "$UPDATE_MD_OUT" "REV")" "2"
 
 UPDATE_MD_JSON=$($CLI block get -o json --doc "$DOC_NAME" --block-number "$MD_BLOCK_NUM")
 assert_contains "updated markdown text" "$UPDATE_MD_JSON" "updated investigation writeup"
+assert_contains "updated markdown multiline" "$UPDATE_MD_JSON" "root cause identified"
 
 echo ""
 
@@ -170,10 +183,11 @@ echo ""
 # 6. Verify final state: GetDoc with blocks at latest revisions
 # -----------------------------------------------------------------------
 echo "Step 6: Verify final document state"
-GET_DOC_OUT=$($CLI doc get "$DOC_NAME")
-echo "$GET_DOC_OUT"
+LIST_BLOCKS_OUT=$($CLI block list --doc "$DOC_NAME")
+echo "$LIST_BLOCKS_OUT"
 
-assert_equals "doc has expected block count" "$(table_cell "$GET_DOC_OUT" "BLOCKS")" "2"
+BLOCK_COUNT=$(table_data_rows "$LIST_BLOCKS_OUT" | wc -l | tr -d ' ')
+assert_equals "doc has expected block count" "$BLOCK_COUNT" "2"
 
 echo ""
 
@@ -186,8 +200,8 @@ HISTORY_OUT=$($CLI block history \
   --block-number 1)
 echo "$HISTORY_OUT"
 
-# Table output: header + data rows; count data rows
-HISTORY_ROW_COUNT=$(echo "$HISTORY_OUT" | tail -n +2 | wc -l | tr -d ' ')
+# Count only data rows (skip header and fenced full-row blocks)
+HISTORY_ROW_COUNT=$(table_data_rows "$HISTORY_OUT" | wc -l | tr -d ' ')
 assert_equals "history has 2 revisions" "$HISTORY_ROW_COUNT" "2"
 
 # Check revisions via JSON

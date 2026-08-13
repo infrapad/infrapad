@@ -8,9 +8,14 @@ import (
 
 // Column describes a single table column, mapping a header to a value
 // extractor that operates on a proto message.
+//
+// When FullRow is true the column is not shown in the header line.
+// Instead its value is rendered as an indented block below the normal
+// row, fenced with ```<Header> … ```.
 type Column struct {
-	Header string
-	Value  func(proto.Message) string
+	Header  string
+	Value   func(proto.Message) string
+	FullRow bool
 }
 
 // Printer renders proto messages according to the configured [Format].
