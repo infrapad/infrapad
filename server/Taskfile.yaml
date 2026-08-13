@@ -61,3 +61,10 @@ tasks:
     desc: "Run e2e tests (usage: task test:e2e [-- --run TestName ...])"
     cmds:
       - go test -v {{.CLI_ARGS}} ./test/e2e
+
+  test:e2e:force_skipped:
+    desc: "Run e2e tests including ones normally skipped (usage: task test:e2e:force_skipped [-- --run TestName ...])"
+    env:
+      FORCE_SKIPPED: "1"
+    cmds:
+      - go test -v {{.CLI_ARGS}} ./test/e2e
