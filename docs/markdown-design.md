@@ -41,8 +41,12 @@ Infrapad uses **leaf directives** (`::infrapad_block{…}`) as block
 boundary markers. The reference implementation of the syntax is
 [micromark-extension-directive][micromark-directive].
 
+We deliberately don't use the text directives, as they can colide inside the text
+like timestamps (12:42), see [remark-directive-timestamp-issue].
+
 [directives-spec]: https://talk.commonmark.org/t/generic-directives-plugins-syntax/444
 [micromark-directive]: https://github.com/micromark/micromark-extension-directive
+[remark-directive-timestamp-issue]: https://github.com/remarkjs/remark-directive/issues/29
 
 ## Mapping to markdown
 
