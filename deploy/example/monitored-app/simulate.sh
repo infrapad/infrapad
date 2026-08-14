@@ -82,6 +82,28 @@ wait_for_alerts() {
   fail "Timed out waiting for both alerts to fire."
 }
 
+wait_for_alerts_resolved() {
+  local max_wait=120
+  local interval=5
+  local elapsed=0
+  log "Waiting for Prometheus alerts to clear for both endpoints..."
+  while [ "$elapsed" -lt "$max_wait" ]; do
+    local firing
+    firing=$(curl -s "${PROMETHEUS_URL}/api/v1/alerts" | jq \
+      '[.data.alerts[]
+        | select(.state == "firing" and .labels.alertname == "MonitoredAppEndpointDown")
+        | .labels.endpoint] | unique | length' 2>/dev/null) || firing=0
+    if [ "$firing" -eq 0 ]; then
+      log "All alerts have cleared."
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+    log "  ...waiting (${elapsed}s/${max_wait}s, firing=${firing})"
+  done
+  fail "Timed out waiting for alerts to clear."
+}
+
 # ─── incident-start ────────────────────────────────────────────────────────
 
 cmd_incident_start() {
@@ -188,7 +210,10 @@ cmd_incident_resolve() {
     log "  ${ep}: HTTP ${code} (recovered)"
   done
 
-  # 2. Update the first block's Until field to the current time.
+  # 2. Wait for Prometheus alerts to clear.
+  wait_for_alerts_resolved
+
+  # 3. Update the first block's Until field to the current time.
   log "Updating alerts_matcher block with Until timestamp..."
 
   local until
@@ -209,7 +234,7 @@ cmd_incident_resolve() {
   ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE" --block 1
   log "  alerts_matcher block updated."
 
-  # 3. Add a markdown block about the alerts being resolved.
+  # 4. Add a markdown block about the alerts being resolved.
   log "Adding resolution markdown block..."
 
   # Append a new markdown block to the file.
