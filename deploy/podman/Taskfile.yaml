@@ -1,10 +1,26 @@
 version: '3'
 tasks:
-  dev:
-    desc: Start in dev mode — builds frontend + backend from source in containers
+  postgres:
+    desc: Start PostgreSQL in dev mode
     cmds:
       - ./scripts/start.sh -f postgres.yaml
   monitored-app:
     desc: Start the monitored example app with Prometheus and Alertmanager
     cmds:
       - ./scripts/start.sh -f monitored-app.yaml
+  dev:run:
+    desc: Start all dev services (PostgreSQL + monitored app)
+    cmds:
+      - ./scripts/start.sh -f postgres.yaml -f monitored-app.yaml
+  dev:start:
+    desc: Start all dev services in background (detached)
+    cmds:
+      - ./scripts/start.sh -f postgres.yaml -f monitored-app.yaml -- -d
+  dev:stop:
+    desc: Stop all dev services
+    cmds:
+      - podman compose -f postgres.yaml -f monitored-app.yaml down
+  dev:logs:
+    desc: Follow logs of all dev services
+    cmds:
+      - podman compose -f postgres.yaml -f monitored-app.yaml logs -f

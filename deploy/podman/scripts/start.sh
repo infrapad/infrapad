@@ -48,4 +48,20 @@ ensure_podman_ready() {
 
 ensure_podman_ready
 
-podman compose "$@" up
+# Split arguments at "--": before goes to compose, after goes to up.
+compose_args=()
+up_args=()
+past_separator=false
+for arg in "$@"; do
+  if [[ "$arg" == "--" ]]; then
+    past_separator=true
+    continue
+  fi
+  if $past_separator; then
+    up_args+=("$arg")
+  else
+    compose_args+=("$arg")
+  fi
+done
+
+podman compose "${compose_args[@]}" up "${up_args[@]}"

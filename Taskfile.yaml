@@ -18,6 +18,13 @@ includes:
     dir: ./proto
 
 tasks:
+  dev:
+    desc: Start full dev environment (containers + server)
+    cmds:
+      - task: podman:dev:start
+      - defer: { task: podman:dev:stop }
+      - task: server:run
+
   test:all:
     desc: Run all tests (unit, integration, e2e) across all projects
     cmds:
