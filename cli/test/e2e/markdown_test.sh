@@ -85,6 +85,60 @@ assert_equals "stdout matches file content" "$STDOUT_OUT" "$MD_CONTENT"
 echo ""
 
 # -----------------------------------------------------------------------
+# 7. Edit a markdown block locally and push it
+# -----------------------------------------------------------------------
+echo "Step 7: Edit markdown block locally and push"
+# Append new content to block 2 (markdown block).
+sed -i 's/root cause identified/root cause identified\n\nAdditional notes from local edit./' "$MD_FILE"
+
+EDITED_CONTENT=$(cat "$MD_FILE")
+assert_contains "local edit present before push" "$EDITED_CONTENT" "Additional notes from local edit."
+
+PUSH_OUT=$($CLI md push --file "$MD_FILE" --block 2 2>&1)
+assert_contains "push reports block updated" "$PUSH_OUT" "Block 2 updated"
+assert_contains "push reports file written" "$PUSH_OUT" "Written to"
+echo ""
+
+# -----------------------------------------------------------------------
+# 8. Verify the file was refreshed from the server after push
+# -----------------------------------------------------------------------
+echo "Step 8: Verify file refreshed after push"
+PUSHED_CONTENT=$(cat "$MD_FILE")
+assert_contains "refreshed file has doc id" "$PUSHED_CONTENT" "doc: $DOC_ID"
+assert_contains "refreshed file has block 2 directive" "$PUSHED_CONTENT" "::infrapad_block{block=2"
+assert_contains "refreshed file has pushed content" "$PUSHED_CONTENT" "Additional notes from local edit."
+assert_contains "refreshed file has original content" "$PUSHED_CONTENT" "root cause identified"
+# The rev should have incremented from 2 to 3 after the push.
+assert_contains "refreshed block 2 has new rev" "$PUSHED_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+echo ""
+
+# -----------------------------------------------------------------------
+# 9. Independently pull and verify the server has the pushed content
+# -----------------------------------------------------------------------
+echo "Step 9: Independent pull to verify server state"
+VERIFY_FILE="${TMPDIR_E2E}/${DOC_ID}_verify.md"
+$CLI md pull --doc "$DOC_ID" --file "$VERIFY_FILE" 2>/dev/null
+VERIFY_CONTENT=$(cat "$VERIFY_FILE")
+assert_contains "independent pull has pushed content" "$VERIFY_CONTENT" "Additional notes from local edit."
+assert_contains "independent pull has original content" "$VERIFY_CONTENT" "root cause identified"
+assert_contains "independent pull has updated rev" "$VERIFY_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+# Block 1 should be unchanged.
+assert_contains "block 1 unchanged after push" "$VERIFY_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
+assert_contains "block 1 content intact" "$VERIFY_CONTENT" "CrashLoopBackOff"
+echo ""
+
+# -----------------------------------------------------------------------
+# 10. Parse the pushed file to verify round-trip integrity
+# -----------------------------------------------------------------------
+echo "Step 10: Parse pushed file for round-trip integrity"
+PARSE_PUSHED=$($CLI md parse --file "$MD_FILE")
+assert_contains "parsed pushed block count" "$PARSE_PUSHED" "Blocks (2):"
+assert_contains "parsed pushed markdown content" "$PARSE_PUSHED" "Additional notes from local edit."
+assert_contains "parsed pushed original content" "$PARSE_PUSHED" "root cause identified"
+assert_contains "parsed pushed alerts_matcher intact" "$PARSE_PUSHED" "type:   alerts_matcher"
+echo ""
+
+# -----------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------
 print_summary
