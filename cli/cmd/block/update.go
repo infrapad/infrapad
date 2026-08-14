@@ -1,0 +1,47 @@
+package block
+
+import (
+	"github.com/infrapad/infrapad/cli/pkg/cliutil"
+	"github.com/infrapad/infrapad/cli/pkg/output"
+	"github.com/spf13/cobra"
+)
+
+func newUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update an existing block",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			parent, _ := cmd.Flags().GetString("doc")
+			blockNumber, _ := cmd.Flags().GetInt32("block-number")
+			blockType, _ := cmd.Flags().GetString("type")
+			contentJSON, _ := cmd.Flags().GetString("content")
+
+			block, err := buildBlock(blockType, contentJSON)
+			if err != nil {
+				return err
+			}
+
+			c, err := cliutil.NewClient()
+			if err != nil {
+				return err
+			}
+			defer c.Close()
+
+			result, err := c.UpdateBlock(cmd.Context(), parent, blockNumber, block)
+			if err != nil {
+				return err
+			}
+			return cliutil.NewPrinter().PrintResource(result, output.BlockColumns())
+		},
+	}
+
+	cmd.Flags().String("doc", "", "Parent document name (required)")
+	cmd.Flags().Int32("block-number", 0, "Block number to update (required)")
+	cmd.Flags().String("type", "", "Block type (required)")
+	cmd.Flags().String("content", "{}", "Block content as JSON object")
+	_ = cmd.MarkFlagRequired("doc")
+	_ = cmd.MarkFlagRequired("block-number")
+	_ = cmd.MarkFlagRequired("type")
+
+	return cmd
+}

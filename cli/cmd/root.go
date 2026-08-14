@@ -4,20 +4,19 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/infrapad/infrapad/cli/cmd/block"
+	"github.com/infrapad/infrapad/cli/cmd/doc"
+	"github.com/infrapad/infrapad/cli/cmd/md"
+	"github.com/infrapad/infrapad/cli/pkg/cliutil"
 	"github.com/infrapad/infrapad/cli/pkg/output"
 	"github.com/spf13/cobra"
-)
-
-var (
-	grpcAddr     string
-	outputFormat string
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "infrapad",
 	Short: "Infrapad CLI",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		return output.Format(outputFormat).Validate()
+		return output.Format(cliutil.OutputFormat).Validate()
 	},
 }
 
@@ -26,13 +25,10 @@ func init() {
 	if s := os.Getenv("GRPC_ADDR"); s != "" {
 		defaultAddr = s
 	}
-	rootCmd.PersistentFlags().StringVar(&grpcAddr, "grpc-addr", defaultAddr, "gRPC server address")
-	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "table", "Output format: table, json")
-}
+	rootCmd.PersistentFlags().StringVar(&cliutil.GRPCAddr, "grpc-addr", defaultAddr, "gRPC server address")
+	rootCmd.PersistentFlags().StringVarP(&cliutil.OutputFormat, "output", "o", "table", "Output format: table, json")
 
-// newPrinter returns a Printer configured from the global --output flag.
-func newPrinter() *output.Printer {
-	return output.NewPrinter(os.Stdout, output.Format(outputFormat))
+	rootCmd.AddCommand(doc.NewCmd(), block.NewCmd(), md.NewCmd())
 }
 
 // Execute runs the root command.
