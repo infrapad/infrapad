@@ -16,6 +16,12 @@ tasks:
     generates:
       - "{{.BINARY}}"
 
+  install:
+    desc: Build the CLI and install it as {{.BINARY}} into $GOPATH/bin
+    deps: [build]
+    cmds:
+      - install -m 0755 ./{{.BINARY}} "$(go env GOPATH)/bin/{{.BINARY}}"
+
   test:all:
     desc: Run all tests (unit, e2e)
     cmds:
