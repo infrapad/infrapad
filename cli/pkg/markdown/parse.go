@@ -3,13 +3,11 @@ package markdown
 import (
 	"fmt"
 	"strconv"
-	"strings"
-
 	"github.com/yuin/goldmark"
+	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
-	meta "github.com/yuin/goldmark-meta"
 )
 
 // DocMeta holds document-level metadata from the YAML frontmatter.
@@ -22,18 +20,16 @@ type DocMeta struct {
 
 // BlockMeta holds per-block metadata from the ::infrapad_block directive.
 type BlockMeta struct {
-	Type         string
-	BlockNumber  int
+	Type           string
+	BlockNumber    int
 	RevisionNumber int
-	AuthorID     string
+	AuthorID       string
 }
 
 // ParsedBlock is a block extracted from the infrapad markdown.
 type ParsedBlock struct {
 	Meta    BlockMeta
 	Content string // raw content between directives (trimmed of surrounding blank lines)
-
-	contentStart int // unexported; used during parsing to track byte offset
 }
 
 // ParsedDoc is the result of parsing an infrapad markdown file.
@@ -55,40 +51,48 @@ func Parse(src []byte) (*ParsedDoc, error) {
 		Meta: docMetaFromMap(meta.Get(ctx)),
 	}
 
-	// Walk the AST to collect blocks. Each directive starts a new block;
-	// its content runs until the next directive (or end of file).
-	var prevBlock *ParsedBlock
+	// Iterate over the document's top-level children. Each InfrapadBlock
+	// directive opens a new block; subsequent sibling nodes are its content.
+	var current *ParsedBlock
+	var contentStart int // byte offset where current block's content begins
 
-	_ = ast.Walk(tree, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
+	finalizeCurrentBlock := func(contentEnd int) {
+		if current == nil {
+			return
 		}
-		ib, ok := n.(*InfrapadBlock)
-		if !ok {
-			return ast.WalkContinue, nil
+		if current.Meta.Type == "markdown" {
+			current.Content = string(src[contentStart:contentEnd])
 		}
-
-		// Close previous block: its content is src[prevStart:thisDirectiveLine].
-		if prevBlock != nil {
-			contentEnd := lineStart(src, ib.ContentStart)
-			prevBlock.Content = trimBlankLines(string(src[prevBlock.contentStart:contentEnd]))
-		}
-
-		bm, err := blockMetaFromAttrs(ib.Attrs)
-		if err != nil {
-			return ast.WalkStop, fmt.Errorf("block %d: %w", len(doc.Blocks)+1, err)
-		}
-
-		doc.Blocks = append(doc.Blocks, ParsedBlock{Meta: bm, contentStart: ib.ContentStart})
-		prevBlock = &doc.Blocks[len(doc.Blocks)-1]
-
-		return ast.WalkContinue, nil
-	})
-
-	// Close the last block: content runs to end of source.
-	if prevBlock != nil {
-		prevBlock.Content = trimBlankLines(string(src[prevBlock.contentStart:]))
 	}
+
+	for child := tree.FirstChild(); child != nil; child = child.NextSibling() {
+		if ib, ok := child.(*InfrapadBlock); ok {
+			// Attach the content to the previous block before starting the new one.
+			finalizeCurrentBlock(lineStart(src, ib.ContentStart))
+			bm, err := blockMetaFromAttrs(ib.Attrs)
+			if err != nil {
+				return nil, fmt.Errorf("block %d: %w", len(doc.Blocks)+1, err)
+			}
+			doc.Blocks = append(doc.Blocks, ParsedBlock{Meta: bm})
+			current = &doc.Blocks[len(doc.Blocks)-1]
+			contentStart = ib.ContentStart
+			continue
+		}
+		if current == nil {
+			continue
+		}
+
+		// For non-markdown blocks, the infrapad format wraps content in a
+		// code fence for rendering. If the first sibling is a FencedCodeBlock,
+		// extract just its inner lines — the fence is a format detail, not
+		// actual content. Any remaining siblings (decorative) are ignored.
+		if current.Meta.Type != "markdown" {
+			if fcb, ok := child.(*ast.FencedCodeBlock); ok && current.Content == "" {
+				current.Content = string(fcb.Lines().Value(src))
+			}
+		}
+	}
+	finalizeCurrentBlock(len(src))
 
 	return doc, nil
 }
@@ -146,23 +150,4 @@ func lineStart(src []byte, pos int) int {
 	return i
 }
 
-// trimBlankLines removes leading and trailing blank lines from s.
-func trimBlankLines(s string) string {
-	lines := strings.Split(s, "\n")
 
-	// Trim leading blank lines.
-	start := 0
-	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
-		start++
-	}
-	// Trim trailing blank lines.
-	end := len(lines)
-	for end > start && strings.TrimSpace(lines[end-1]) == "" {
-		end--
-	}
-
-	if start >= end {
-		return ""
-	}
-	return strings.Join(lines[start:end], "\n")
-}

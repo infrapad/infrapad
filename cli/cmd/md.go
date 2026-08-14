@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/infrapad/infrapad/cli/pkg/markdown"
 	"github.com/spf13/cobra"
@@ -50,7 +51,7 @@ var mdParseCmd = &cobra.Command{
 			fmt.Printf("  author: %s\n", b.Meta.AuthorID)
 			fmt.Println("  content:")
 			// Indent each content line for readability.
-			for _, line := range splitLines(b.Content) {
+			for _, line := range splitLines(strings.Trim(b.Content, "\n")) {
 				fmt.Printf("    %s\n", line)
 			}
 		}

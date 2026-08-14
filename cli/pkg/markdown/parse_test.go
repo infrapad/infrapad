@@ -70,6 +70,14 @@ func TestParse(t *testing.T) {
 	if !strings.Contains(b1.Content, "CrashLoopBackOff") {
 		t.Errorf("block 1 content missing CrashLoopBackOff: %q", b1.Content)
 	}
+	// The default code fence wrapper should be stripped for non-markdown types.
+	if strings.Contains(b1.Content, "```") {
+		t.Errorf("block 1 content should not contain code fence: %q", b1.Content)
+	}
+	wantB1 := "LabelsMatchers:\n  - name: [CrashLoopBackOff]\n  - name: [KubeNodeNotReady]\n"
+	if b1.Content != wantB1 {
+		t.Errorf("block 1 content = %q, want %q", b1.Content, wantB1)
+	}
 
 	// Block 2: markdown
 	b2 := doc.Blocks[1]
@@ -99,6 +107,10 @@ func TestParse(t *testing.T) {
 	}
 	if !strings.Contains(b3.Content, "oc get pods") {
 		t.Errorf("block 3 content missing command: %q", b3.Content)
+	}
+	// Markdown blocks keep their embedded code fences.
+	if !strings.Contains(b3.Content, "```") {
+		t.Errorf("block 3 content should preserve code fence: %q", b3.Content)
 	}
 }
 
@@ -131,7 +143,7 @@ func TestParseNoFrontmatter(t *testing.T) {
 	if len(doc.Blocks) != 1 {
 		t.Fatalf("expected 1 block, got %d", len(doc.Blocks))
 	}
-	if doc.Blocks[0].Content != "Hello world" {
+	if doc.Blocks[0].Content != "Hello world\n" {
 		t.Errorf("content = %q", doc.Blocks[0].Content)
 	}
 }
