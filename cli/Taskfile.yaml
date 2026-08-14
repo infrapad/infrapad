@@ -16,6 +16,12 @@ tasks:
     generates:
       - "{{.BINARY}}"
 
+  test:all:
+    desc: Run all tests (unit, e2e)
+    cmds:
+      - task: test:unit
+      - task: test:e2e
+
   test:unit:
     desc: Run unit tests
     cmds:

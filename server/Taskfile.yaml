@@ -52,6 +52,12 @@ tasks:
     cmds:
       - goose create -s {{.CLI_ARGS}} sql
 
+  test:all:
+    desc: Run all tests (intergration, e2e)
+    cmds:
+      - task: test:integration
+      - task: test:e2e
+
   test:integration:
     desc: "Run integration tests (usage: task test:integration [-- --run TestName ...])"
     cmds:

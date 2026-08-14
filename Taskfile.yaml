@@ -18,10 +18,8 @@ includes:
     dir: ./proto
 
 tasks:
-  test:
+  test:all:
     desc: Run all tests (unit, integration, e2e) across all projects
     cmds:
-      - task: server:test:integration
-      - task: server:test:e2e
-      - task: cli:test:unit
-      - task: cli:test:e2e
+      - task: cli:test:all
+      - task: server:test:all
