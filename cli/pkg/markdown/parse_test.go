@@ -67,16 +67,14 @@ func TestParse(t *testing.T) {
 	if b1.Meta.AuthorID != "incident_detector:123" {
 		t.Errorf("block 1 author = %q", b1.Meta.AuthorID)
 	}
-	if !strings.Contains(b1.Content, "CrashLoopBackOff") {
-		t.Errorf("block 1 content missing CrashLoopBackOff: %q", b1.Content)
+	// Non-markdown blocks should have their YAML content parsed into a map.
+	matchers, ok := b1.Content["LabelsMatchers"]
+	if !ok {
+		t.Fatalf("block 1 content missing LabelsMatchers key: %v", b1.Content)
 	}
-	// The default code fence wrapper should be stripped for non-markdown types.
-	if strings.Contains(b1.Content, "```") {
-		t.Errorf("block 1 content should not contain code fence: %q", b1.Content)
-	}
-	wantB1 := "LabelsMatchers:\n  - name: [CrashLoopBackOff]\n  - name: [KubeNodeNotReady]\n"
-	if b1.Content != wantB1 {
-		t.Errorf("block 1 content = %q, want %q", b1.Content, wantB1)
+	matcherList, ok := matchers.([]any)
+	if !ok || len(matcherList) != 2 {
+		t.Errorf("block 1 LabelsMatchers = %v, want 2-element list", matchers)
 	}
 
 	// Block 2: markdown
@@ -90,11 +88,12 @@ func TestParse(t *testing.T) {
 	if b2.Meta.AuthorID != "agentic_run_analysis:456" {
 		t.Errorf("block 2 author = %q", b2.Meta.AuthorID)
 	}
-	if !strings.Contains(b2.Content, "# Initial investigation") {
-		t.Errorf("block 2 content missing heading: %q", b2.Content)
+	b2Text, _ := b2.Content["text"].(string)
+	if !strings.Contains(b2Text, "# Initial investigation") {
+		t.Errorf("block 2 content missing heading: %q", b2Text)
 	}
-	if !strings.Contains(b2.Content, "12:42") {
-		t.Errorf("block 2 content missing timestamp 12:42: %q", b2.Content)
+	if !strings.Contains(b2Text, "12:42") {
+		t.Errorf("block 2 content missing timestamp 12:42: %q", b2Text)
 	}
 
 	// Block 3: markdown
@@ -105,12 +104,13 @@ func TestParse(t *testing.T) {
 	if b3.Meta.BlockNumber != 3 {
 		t.Errorf("block 3 number = %d", b3.Meta.BlockNumber)
 	}
-	if !strings.Contains(b3.Content, "oc get pods") {
-		t.Errorf("block 3 content missing command: %q", b3.Content)
+	b3Text, _ := b3.Content["text"].(string)
+	if !strings.Contains(b3Text, "oc get pods") {
+		t.Errorf("block 3 content missing command: %q", b3Text)
 	}
 	// Markdown blocks keep their embedded code fences.
-	if !strings.Contains(b3.Content, "```") {
-		t.Errorf("block 3 content should preserve code fence: %q", b3.Content)
+	if !strings.Contains(b3Text, "```") {
+		t.Errorf("block 3 content should preserve code fence: %q", b3Text)
 	}
 }
 
@@ -143,7 +143,7 @@ func TestParseNoFrontmatter(t *testing.T) {
 	if len(doc.Blocks) != 1 {
 		t.Fatalf("expected 1 block, got %d", len(doc.Blocks))
 	}
-	if doc.Blocks[0].Content != "Hello world\n" {
+	if text, _ := doc.Blocks[0].Content["text"].(string); text != "Hello world\n" {
 		t.Errorf("content = %q", doc.Blocks[0].Content)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/infrapad/infrapad/cli/pkg/markdown"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 func newParseCmd() *cobra.Command {
@@ -47,7 +48,14 @@ func newParseCmd() *cobra.Command {
 				fmt.Printf("  author: %s\n", b.Meta.AuthorID)
 				fmt.Println("  content:")
 				// Indent each content line for readability.
-				for _, line := range splitLines(strings.Trim(b.Content, "\n")) {
+				var contentStr string
+				if b.Meta.Type == "markdown" {
+					contentStr = b.Content["text"].(string)
+				} else {
+					out, _ := yaml.Marshal(b.Content)
+					contentStr = string(out)
+				}
+				for _, line := range splitLines(strings.Trim(contentStr, "\n")) {
 					fmt.Printf("    %s\n", line)
 				}
 			}

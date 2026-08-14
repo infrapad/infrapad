@@ -9,7 +9,6 @@ import (
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/types/known/structpb"
-	"gopkg.in/yaml.v3"
 )
 
 func newPushCmd() *cobra.Command {
@@ -42,20 +41,7 @@ func newPushCmd() *cobra.Command {
 				return fmt.Errorf("block %d not found in %s", blockNumber, filePath)
 			}
 
-			// Build the content struct based on block type.
-			var contentMap map[string]any
-			if found.Meta.Type == "markdown" {
-				contentMap = map[string]any{"text": found.Content}
-			} else {
-				// Non-markdown blocks have YAML content; parse it.
-				var parsed map[string]any
-				if err := yaml.Unmarshal([]byte(found.Content), &parsed); err != nil {
-					return fmt.Errorf("parse block content as YAML: %w", err)
-				}
-				contentMap = parsed
-			}
-
-			contentStruct, err := structpb.NewStruct(contentMap)
+			contentStruct, err := structpb.NewStruct(found.Content)
 			if err != nil {
 				return fmt.Errorf("convert content to struct: %w", err)
 			}

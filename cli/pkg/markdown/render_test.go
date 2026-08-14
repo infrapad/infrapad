@@ -101,8 +101,8 @@ func TestRender(t *testing.T) {
 	if parsed.Blocks[1].Meta.Type != "markdown" {
 		t.Errorf("round-trip block 1 type = %q", parsed.Blocks[1].Meta.Type)
 	}
-	if !strings.Contains(parsed.Blocks[1].Content, "# Initial investigation") {
-		t.Errorf("round-trip block 1 content = %q", parsed.Blocks[1].Content)
+	if text, _ := parsed.Blocks[1].Content["text"].(string); !strings.Contains(text, "# Initial investigation") {
+		t.Errorf("round-trip block 1 content = %v", parsed.Blocks[1].Content)
 	}
 }
 

@@ -3,11 +3,13 @@ package markdown
 import (
 	"fmt"
 	"strconv"
+
 	"github.com/yuin/goldmark"
 	meta "github.com/yuin/goldmark-meta"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"gopkg.in/yaml.v3"
 )
 
 // DocMeta holds document-level metadata from the YAML frontmatter.
@@ -29,8 +31,10 @@ type BlockMeta struct {
 // ParsedBlock is a block extracted from the infrapad markdown.
 type ParsedBlock struct {
 	Meta    BlockMeta
-	Content string // raw content between directives (trimmed of surrounding blank lines)
+	Content map[string]any // structured content: {"text": ...} for markdown, parsed YAML for others
 }
+
+
 
 // ParsedDoc is the result of parsing an infrapad markdown file.
 type ParsedDoc struct {
@@ -56,12 +60,13 @@ func Parse(src []byte) (*ParsedDoc, error) {
 	var current *ParsedBlock
 	var contentStart int // byte offset where current block's content begins
 
+	var finalizeErr error
 	finalizeCurrentBlock := func(contentEnd int) {
 		if current == nil {
 			return
 		}
 		if current.Meta.Type == "markdown" {
-			current.Content = string(src[contentStart:contentEnd])
+			current.Content = map[string]any{"text": string(src[contentStart:contentEnd])}
 		}
 	}
 
@@ -87,12 +92,21 @@ func Parse(src []byte) (*ParsedDoc, error) {
 		// extract just its inner lines — the fence is a format detail, not
 		// actual content. Any remaining siblings (decorative) are ignored.
 		if current.Meta.Type != "markdown" {
-			if fcb, ok := child.(*ast.FencedCodeBlock); ok && current.Content == "" {
-				current.Content = string(fcb.Lines().Value(src))
+			if fcb, ok := child.(*ast.FencedCodeBlock); ok && current.Content == nil {
+				raw := fcb.Lines().Value(src)
+				var parsed map[string]any
+				if err := yaml.Unmarshal(raw, &parsed); err != nil {
+					finalizeErr = fmt.Errorf("parse block %d YAML content: %w", current.Meta.BlockNumber, err)
+				} else {
+					current.Content = parsed
+				}
 			}
 		}
 	}
 	finalizeCurrentBlock(len(src))
+	if finalizeErr != nil {
+		return nil, finalizeErr
+	}
 
 	return doc, nil
 }
