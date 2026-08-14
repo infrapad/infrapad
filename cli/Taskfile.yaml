@@ -30,6 +30,7 @@ tasks:
     deps: [build]
     cmds:
       - ./test/e2e/incident_investigation_test.sh
+      - ./test/e2e/markdown_test.sh
     env:
       INFRAPAD_CLI: ./{{.BINARY}}
       GRPC_ADDR: "{{.GRPC_ADDR}}"
