@@ -36,8 +36,8 @@ func renderBlock(block *pb.Block) string {
 	var sb strings.Builder
 
 	// Directive line.
-	sb.WriteString(fmt.Sprintf("::infrapad_block{type=%s block=%d rev=%d",
-		block.GetType(), block.GetBlockNumber(), block.GetRevisionNumber()))
+	sb.WriteString(fmt.Sprintf("::infrapad_block{block=%d rev=%d type=%s",
+		block.GetBlockNumber(), block.GetRevisionNumber(), block.GetType()))
 	if author := block.GetAuthorId(); author != "" {
 		sb.WriteString(fmt.Sprintf(" author=%s", author))
 	}

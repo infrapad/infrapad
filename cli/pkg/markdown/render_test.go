@@ -64,7 +64,7 @@ func TestRender(t *testing.T) {
 	}
 
 	// Block 1 directive.
-	if !strings.Contains(out, "::infrapad_block{type=alerts_matcher block=1 rev=2 author=incident_detector:123}") {
+	if !strings.Contains(out, "::infrapad_block{block=1 rev=2 type=alerts_matcher author=incident_detector:123}") {
 		t.Error("missing block 1 directive")
 	}
 	// Block 1 content in a yaml code fence.
@@ -76,7 +76,7 @@ func TestRender(t *testing.T) {
 	}
 
 	// Block 2 directive.
-	if !strings.Contains(out, "::infrapad_block{type=markdown block=2 rev=2 author=agentic_run_analysis:456}") {
+	if !strings.Contains(out, "::infrapad_block{block=2 rev=2 type=markdown author=agentic_run_analysis:456}") {
 		t.Error("missing block 2 directive")
 	}
 	// Block 2 content (inline markdown, no code fence).
@@ -131,7 +131,7 @@ func TestRenderNoAuthor(t *testing.T) {
 	if strings.Contains(out, "author=") {
 		t.Error("should not include author= when author is empty")
 	}
-	if !strings.Contains(out, "::infrapad_block{type=markdown block=1 rev=1}") {
+	if !strings.Contains(out, "::infrapad_block{block=1 rev=1 type=markdown}") {
 		t.Errorf("unexpected directive line in: %s", out)
 	}
 }

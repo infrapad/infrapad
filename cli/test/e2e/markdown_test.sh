@@ -49,8 +49,8 @@ echo ""
 # 4. Verify block directives and content
 # -----------------------------------------------------------------------
 echo "Step 4: Verify block directives and content"
-assert_contains "has alerts_matcher directive" "$MD_CONTENT" "::infrapad_block{type=alerts_matcher block=1 rev=2"
-assert_contains "has markdown directive" "$MD_CONTENT" "::infrapad_block{type=markdown block=2 rev=2"
+assert_contains "has alerts_matcher directive" "$MD_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
+assert_contains "has markdown directive" "$MD_CONTENT" "::infrapad_block{block=2 rev=2 type=markdown"
 assert_contains "alerts content has CrashLoopBackOff" "$MD_CONTENT" "CrashLoopBackOff"
 assert_contains "alerts content has KubeNodeNotReady" "$MD_CONTENT" "KubeNodeNotReady"
 assert_contains "alerts wrapped in yaml fence" "$MD_CONTENT" '```yaml'
