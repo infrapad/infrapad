@@ -61,7 +61,7 @@ func blockContentYAML(_ string, data map[string]any) string {
 		out, _ := yaml.Marshal(data)
 		return strings.TrimRight(string(out), "\n")
 	}
-	setSmartStyle(&node)
+	SetSmartYAMLStyle(&node)
 	var buf strings.Builder
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
@@ -74,10 +74,10 @@ func blockContentYAML(_ string, data map[string]any) string {
 	return strings.TrimRight(buf.String(), "\n")
 }
 
-// setSmartStyle walks a yaml.Node tree and applies styling heuristics:
+// SetSmartYAMLStyle walks a yaml.Node tree and applies styling heuristics:
 // - multi-line strings get literal block scalar style (|)
 // - leaf sequences (only scalars) get flow style ([a, b])
-func setSmartStyle(n *yaml.Node) {
+func SetSmartYAMLStyle(n *yaml.Node) {
 	if n.Kind == yaml.ScalarNode && n.Tag == "!!str" && strings.Contains(n.Value, "\n") {
 		n.Style = yaml.LiteralStyle
 	}
@@ -86,7 +86,7 @@ func setSmartStyle(n *yaml.Node) {
 		return
 	}
 	for _, child := range n.Content {
-		setSmartStyle(child)
+		SetSmartYAMLStyle(child)
 	}
 }
 
