@@ -22,7 +22,7 @@ func newPushCmd() *cobra.Command {
 
 			isNew := blockFlag == "new"
 
-			// 1. Parse the file to extract the referenced block.
+			// 1. Parse the file to extract the referenced block(s).
 			data, err := os.ReadFile(filePath)
 			if err != nil {
 				return fmt.Errorf("read file: %w", err)
@@ -33,15 +33,14 @@ func newPushCmd() *cobra.Command {
 				return fmt.Errorf("parse: %w", err)
 			}
 
-			var found *markdown.ParsedBlock
+			var targets []*markdown.ParsedBlock
 			if isNew {
 				for i := range doc.Blocks {
 					if doc.Blocks[i].Meta.IsNew {
-						found = &doc.Blocks[i]
-						break
+						targets = append(targets, &doc.Blocks[i])
 					}
 				}
-				if found == nil {
+				if len(targets) == 0 {
 					return fmt.Errorf("new block not found in %s", filePath)
 				}
 			} else {
@@ -51,26 +50,16 @@ func newPushCmd() *cobra.Command {
 				}
 				for i := range doc.Blocks {
 					if int64(doc.Blocks[i].Meta.BlockNumber) == blockNumber {
-						found = &doc.Blocks[i]
+						targets = append(targets, &doc.Blocks[i])
 						break
 					}
 				}
-				if found == nil {
+				if len(targets) == 0 {
 					return fmt.Errorf("block %d not found in %s", blockNumber, filePath)
 				}
 			}
 
-			contentStruct, err := structpb.NewStruct(found.Content)
-			if err != nil {
-				return fmt.Errorf("convert content to struct: %w", err)
-			}
-
-			block := &pb.Block{
-				Type:    found.Meta.Type,
-				Content: contentStruct,
-			}
-
-			// 2. Save the block to the server.
+			// 2. Save the block(s) to the server.
 			c, err := cliutil.NewClient()
 			if err != nil {
 				return err
@@ -78,19 +67,31 @@ func newPushCmd() *cobra.Command {
 			defer c.Close()
 
 			docName := doc.Meta.DocID
-			if isNew {
-				_, err = c.AddBlock(cmd.Context(), docName, block)
+			for _, found := range targets {
+				contentStruct, err := structpb.NewStruct(found.Content)
 				if err != nil {
-					return fmt.Errorf("add block: %w", err)
+					return fmt.Errorf("convert content to struct: %w", err)
 				}
-				fmt.Fprintf(cmd.OutOrStderr(), "Block added\n")
-			} else {
-				blockNumber, _ := strconv.ParseInt(blockFlag, 10, 32)
-				_, err = c.UpdateBlock(cmd.Context(), docName, int32(blockNumber), block)
-				if err != nil {
-					return fmt.Errorf("update block: %w", err)
+
+				block := &pb.Block{
+					Type:    found.Meta.Type,
+					Content: contentStruct,
 				}
-				fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", blockNumber)
+
+				if isNew {
+					_, err = c.AddBlock(cmd.Context(), docName, block)
+					if err != nil {
+						return fmt.Errorf("add block: %w", err)
+					}
+					fmt.Fprintf(cmd.OutOrStderr(), "Block added\n")
+				} else {
+					blockNumber, _ := strconv.ParseInt(blockFlag, 10, 32)
+					_, err = c.UpdateBlock(cmd.Context(), docName, int32(blockNumber), block)
+					if err != nil {
+						return fmt.Errorf("update block: %w", err)
+					}
+					fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", blockNumber)
+				}
 			}
 
 			// 3. Pull to get the latest version of the file after save.

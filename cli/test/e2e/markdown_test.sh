@@ -204,6 +204,98 @@ assert_contains "parsed alerts_matcher still intact" "$PARSE_NEW" "type:   alert
 echo ""
 
 # -----------------------------------------------------------------------
+# 15. Add two new blocks at once and push with --block=new
+# -----------------------------------------------------------------------
+echo "Step 15: Add two new blocks at once and push with --block=new"
+# Simulate the incident-investigate workflow: investigation summary + recommended actions.
+cat >> "$MD_FILE" <<'EOF'
+
+::infrapad_block{type=markdown block=new}
+# Investigation Summary
+
+**Investigated at**: 2026-08-14T12:00:00Z
+
+## Findings
+
+The payment service pod is in CrashLoopBackOff due to an OOM kill.
+
+## Diagnosis
+
+Memory limit is set too low for the current traffic pattern.
+
+::infrapad_block{type=markdown block=new}
+# Recommended Actions
+
+1. Increase memory limit from 256Mi to 512Mi.
+2. Add horizontal pod autoscaler.
+3. Review recent traffic spike with the platform team.
+EOF
+
+TWO_BLOCK_CONTENT=$(cat "$MD_FILE")
+# Verify both new block directives are present locally.
+TWO_NEW_COUNT=$(grep -c 'block=new' "$MD_FILE")
+assert_equals "local file has two block=new directives" "$TWO_NEW_COUNT" "2"
+assert_contains "local file has investigation summary" "$TWO_BLOCK_CONTENT" "# Investigation Summary"
+assert_contains "local file has recommended actions" "$TWO_BLOCK_CONTENT" "# Recommended Actions"
+
+PUSH_TWO_OUT=$($CLI md push --file "$MD_FILE" --block new 2>&1)
+echo "$PUSH_TWO_OUT"
+# Both blocks should be reported as added.
+TWO_ADDED_COUNT=$(echo "$PUSH_TWO_OUT" | grep -c "Block added")
+assert_equals "push reports two blocks added" "$TWO_ADDED_COUNT" "2"
+assert_contains "push two reports file written" "$PUSH_TWO_OUT" "Written to"
+echo ""
+
+# -----------------------------------------------------------------------
+# 16. Verify both new blocks got real block numbers after push
+# -----------------------------------------------------------------------
+echo "Step 16: Verify both new blocks assigned real block numbers"
+PUSHED_TWO_CONTENT=$(cat "$MD_FILE")
+assert_not_contains "refreshed file has no block=new" "$PUSHED_TWO_CONTENT" "block=new"
+assert_contains "refreshed file has investigation summary" "$PUSHED_TWO_CONTENT" "# Investigation Summary"
+assert_contains "refreshed file has recommended actions" "$PUSHED_TWO_CONTENT" "# Recommended Actions"
+assert_contains "refreshed file has OOM diagnosis" "$PUSHED_TWO_CONTENT" "OOM kill"
+assert_contains "refreshed file has memory limit action" "$PUSHED_TWO_CONTENT" "Increase memory limit"
+# The two new blocks should be block 4 and block 5.
+assert_contains "refreshed file has block 4" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=4 rev=1 type=markdown"
+assert_contains "refreshed file has block 5" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=5 rev=1 type=markdown"
+# Earlier blocks should be unchanged.
+assert_contains "block 1 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
+assert_contains "block 2 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+assert_contains "block 3 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=3"
+echo ""
+
+# -----------------------------------------------------------------------
+# 17. Independent pull to verify server received both new blocks
+# -----------------------------------------------------------------------
+echo "Step 17: Independent pull to verify both new blocks on server"
+VERIFY_TWO_FILE="${TMPDIR_E2E}/${DOC_ID}_verify_two.md"
+$CLI md pull --doc "$DOC_ID" --file "$VERIFY_TWO_FILE" 2>/dev/null
+VERIFY_TWO_CONTENT=$(cat "$VERIFY_TWO_FILE")
+assert_contains "independent pull has block 4" "$VERIFY_TWO_CONTENT" "::infrapad_block{block=4"
+assert_contains "independent pull has block 5" "$VERIFY_TWO_CONTENT" "::infrapad_block{block=5"
+assert_contains "independent pull has investigation summary" "$VERIFY_TWO_CONTENT" "# Investigation Summary"
+assert_contains "independent pull has recommended actions" "$VERIFY_TWO_CONTENT" "# Recommended Actions"
+assert_contains "independent pull has OOM diagnosis" "$VERIFY_TWO_CONTENT" "OOM kill"
+assert_contains "independent pull has memory limit action" "$VERIFY_TWO_CONTENT" "Increase memory limit"
+assert_contains "independent pull block 1 intact" "$VERIFY_TWO_CONTENT" "CrashLoopBackOff"
+assert_contains "independent pull block 2 intact" "$VERIFY_TWO_CONTENT" "root cause identified"
+assert_contains "independent pull block 3 intact" "$VERIFY_TWO_CONTENT" "This was a red-herring."
+echo ""
+
+# -----------------------------------------------------------------------
+# 18. Parse the file with five blocks to verify round-trip integrity
+# -----------------------------------------------------------------------
+echo "Step 18: Parse file with five blocks for round-trip integrity"
+PARSE_TWO=$($CLI md parse --file "$MD_FILE")
+assert_contains "parsed five block count" "$PARSE_TWO" "Blocks (5):"
+assert_contains "parsed block 4 number" "$PARSE_TWO" "block:  4"
+assert_contains "parsed block 5 number" "$PARSE_TWO" "block:  5"
+assert_contains "parsed investigation content" "$PARSE_TWO" "Investigation Summary"
+assert_contains "parsed recommended actions content" "$PARSE_TWO" "Recommended Actions"
+echo ""
+
+# -----------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------
 print_summary
