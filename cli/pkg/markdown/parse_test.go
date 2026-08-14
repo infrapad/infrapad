@@ -131,6 +131,60 @@ func TestParseExampleFile(t *testing.T) {
 	}
 }
 
+func TestParseNewBlock(t *testing.T) {
+	input := `---
+doc: test-doc-id
+title: Test
+namespace: test
+status: active
+---
+::infrapad_block{type=markdown block=1 rev=1}
+Existing content
+
+::infrapad_block{block=new type=markdown}
+
+# New block heading
+
+New block content.
+`
+	doc, err := Parse([]byte(input))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if len(doc.Blocks) != 2 {
+		t.Fatalf("expected 2 blocks, got %d", len(doc.Blocks))
+	}
+
+	// Block 1: existing block
+	b1 := doc.Blocks[0]
+	if b1.Meta.IsNew {
+		t.Error("block 1 should not be new")
+	}
+	if b1.Meta.BlockNumber != 1 {
+		t.Errorf("block 1 number = %d, want 1", b1.Meta.BlockNumber)
+	}
+
+	// Block 2: new block
+	b2 := doc.Blocks[1]
+	if !b2.Meta.IsNew {
+		t.Error("block 2 should be new")
+	}
+	if b2.Meta.BlockNumber != 0 {
+		t.Errorf("new block number = %d, want 0", b2.Meta.BlockNumber)
+	}
+	if b2.Meta.Type != "markdown" {
+		t.Errorf("new block type = %q, want markdown", b2.Meta.Type)
+	}
+	b2Text, _ := b2.Content["text"].(string)
+	if !strings.Contains(b2Text, "# New block heading") {
+		t.Errorf("new block content missing heading: %q", b2Text)
+	}
+	if !strings.Contains(b2Text, "New block content.") {
+		t.Errorf("new block content missing body: %q", b2Text)
+	}
+}
+
 func TestParseNoFrontmatter(t *testing.T) {
 	input := "::infrapad_block{type=markdown block=1 rev=1}\nHello world\n"
 	doc, err := Parse([]byte(input))

@@ -24,6 +24,7 @@ type DocMeta struct {
 type BlockMeta struct {
 	Type           string
 	BlockNumber    int
+	IsNew          bool // true when block=new (not yet persisted)
 	RevisionNumber int
 	AuthorID       string
 }
@@ -137,11 +138,15 @@ func blockMetaFromAttrs(attrs map[string]string) (BlockMeta, error) {
 	}
 
 	if v, ok := attrs["block"]; ok {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return bm, fmt.Errorf("invalid block number %q: %w", v, err)
+		if v == "new" {
+			bm.IsNew = true
+		} else {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return bm, fmt.Errorf("invalid block number %q: %w", v, err)
+			}
+			bm.BlockNumber = n
 		}
-		bm.BlockNumber = n
 	}
 
 	if v, ok := attrs["rev"]; ok {

@@ -139,6 +139,71 @@ assert_contains "parsed pushed alerts_matcher intact" "$PARSE_PUSHED" "type:   a
 echo ""
 
 # -----------------------------------------------------------------------
+# 11. Add a new block via md push --block=new
+# -----------------------------------------------------------------------
+echo "Step 11: Add a new block locally and push with --block=new"
+# Append a new block directive and content to the pulled file.
+cat >> "$MD_FILE" <<'EOF'
+
+::infrapad_block{block=new type=markdown}
+
+# Additional notes from the investigation
+
+This was a red-herring.
+EOF
+
+NEW_BLOCK_CONTENT=$(cat "$MD_FILE")
+assert_contains "local file has new block directive" "$NEW_BLOCK_CONTENT" "block=new type=markdown"
+assert_contains "local file has new block content" "$NEW_BLOCK_CONTENT" "This was a red-herring."
+
+PUSH_NEW_OUT=$($CLI md push --file "$MD_FILE" --block new 2>&1)
+assert_contains "push new reports block added" "$PUSH_NEW_OUT" "Block added"
+assert_contains "push new reports file written" "$PUSH_NEW_OUT" "Written to"
+echo ""
+
+# -----------------------------------------------------------------------
+# 12. Verify the file was refreshed and the new block got a real number
+# -----------------------------------------------------------------------
+echo "Step 12: Verify new block assigned a real block number after push"
+PUSHED_NEW_CONTENT=$(cat "$MD_FILE")
+assert_contains "refreshed file has doc id" "$PUSHED_NEW_CONTENT" "doc: $DOC_ID"
+assert_not_contains "refreshed file has no block=new directive" "$PUSHED_NEW_CONTENT" "block=new"
+assert_contains "refreshed file has new block content" "$PUSHED_NEW_CONTENT" "This was a red-herring."
+assert_contains "refreshed file has new block heading" "$PUSHED_NEW_CONTENT" "# Additional notes from the investigation"
+# The new block should be block 3.
+assert_contains "refreshed file has block 3 directive" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=3"
+assert_contains "refreshed file has block 3 as markdown" "$PUSHED_NEW_CONTENT" "block=3 rev=1 type=markdown"
+# Earlier blocks should be unchanged.
+assert_contains "block 1 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
+assert_contains "block 2 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+echo ""
+
+# -----------------------------------------------------------------------
+# 13. Independent pull to verify server received the new block
+# -----------------------------------------------------------------------
+echo "Step 13: Independent pull to verify new block on server"
+VERIFY_NEW_FILE="${TMPDIR_E2E}/${DOC_ID}_verify_new.md"
+$CLI md pull --doc "$DOC_ID" --file "$VERIFY_NEW_FILE" 2>/dev/null
+VERIFY_NEW_CONTENT=$(cat "$VERIFY_NEW_FILE")
+assert_contains "independent pull has 3 blocks" "$VERIFY_NEW_CONTENT" "::infrapad_block{block=3"
+assert_contains "independent pull has new block content" "$VERIFY_NEW_CONTENT" "This was a red-herring."
+assert_contains "independent pull has new block heading" "$VERIFY_NEW_CONTENT" "# Additional notes from the investigation"
+assert_contains "independent pull block 1 intact" "$VERIFY_NEW_CONTENT" "CrashLoopBackOff"
+assert_contains "independent pull block 2 intact" "$VERIFY_NEW_CONTENT" "root cause identified"
+echo ""
+
+# -----------------------------------------------------------------------
+# 14. Parse the file with the new block to verify round-trip integrity
+# -----------------------------------------------------------------------
+echo "Step 14: Parse file with new block for round-trip integrity"
+PARSE_NEW=$($CLI md parse --file "$MD_FILE")
+assert_contains "parsed new block count" "$PARSE_NEW" "Blocks (3):"
+assert_contains "parsed new block content" "$PARSE_NEW" "This was a red-herring."
+assert_contains "parsed block 3 number" "$PARSE_NEW" "block:  3"
+assert_contains "parsed alerts_matcher still intact" "$PARSE_NEW" "type:   alerts_matcher"
+echo ""
+
+# -----------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------
 print_summary

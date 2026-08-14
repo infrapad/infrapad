@@ -3,6 +3,7 @@ package md
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
 	"github.com/infrapad/infrapad/cli/pkg/markdown"
@@ -17,7 +18,9 @@ func newPushCmd() *cobra.Command {
 		Short: "Push local changes to a block back to the server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filePath, _ := cmd.Flags().GetString("file")
-			blockNumber, _ := cmd.Flags().GetInt32("block")
+			blockFlag, _ := cmd.Flags().GetString("block")
+
+			isNew := blockFlag == "new"
 
 			// 1. Parse the file to extract the referenced block.
 			data, err := os.ReadFile(filePath)
@@ -31,14 +34,30 @@ func newPushCmd() *cobra.Command {
 			}
 
 			var found *markdown.ParsedBlock
-			for i := range doc.Blocks {
-				if int32(doc.Blocks[i].Meta.BlockNumber) == blockNumber {
-					found = &doc.Blocks[i]
-					break
+			if isNew {
+				for i := range doc.Blocks {
+					if doc.Blocks[i].Meta.IsNew {
+						found = &doc.Blocks[i]
+						break
+					}
 				}
-			}
-			if found == nil {
-				return fmt.Errorf("block %d not found in %s", blockNumber, filePath)
+				if found == nil {
+					return fmt.Errorf("new block not found in %s", filePath)
+				}
+			} else {
+				blockNumber, err := strconv.ParseInt(blockFlag, 10, 32)
+				if err != nil {
+					return fmt.Errorf("invalid block flag %q: must be a number or \"new\"", blockFlag)
+				}
+				for i := range doc.Blocks {
+					if int64(doc.Blocks[i].Meta.BlockNumber) == blockNumber {
+						found = &doc.Blocks[i]
+						break
+					}
+				}
+				if found == nil {
+					return fmt.Errorf("block %d not found in %s", blockNumber, filePath)
+				}
 			}
 
 			contentStruct, err := structpb.NewStruct(found.Content)
@@ -59,12 +78,20 @@ func newPushCmd() *cobra.Command {
 			defer c.Close()
 
 			docName := doc.Meta.DocID
-			_, err = c.UpdateBlock(cmd.Context(), docName, blockNumber, block)
-			if err != nil {
-				return fmt.Errorf("update block: %w", err)
+			if isNew {
+				_, err = c.AddBlock(cmd.Context(), docName, block)
+				if err != nil {
+					return fmt.Errorf("add block: %w", err)
+				}
+				fmt.Fprintf(cmd.OutOrStderr(), "Block added\n")
+			} else {
+				blockNumber, _ := strconv.ParseInt(blockFlag, 10, 32)
+				_, err = c.UpdateBlock(cmd.Context(), docName, int32(blockNumber), block)
+				if err != nil {
+					return fmt.Errorf("update block: %w", err)
+				}
+				fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", blockNumber)
 			}
-
-			fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", blockNumber)
 
 			// 3. Pull to get the latest version of the file after save.
 			serverDoc, err := c.GetDoc(cmd.Context(), docName)
@@ -92,7 +119,7 @@ func newPushCmd() *cobra.Command {
 	}
 
 	cmd.Flags().String("file", "", "Path to the markdown file (required)")
-	cmd.Flags().Int32("block", 0, "Block number to push (required)")
+	cmd.Flags().String("block", "", "Block number to push, or \"new\" for a new block (required)")
 	_ = cmd.MarkFlagRequired("file")
 	_ = cmd.MarkFlagRequired("block")
 
