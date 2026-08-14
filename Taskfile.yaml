@@ -16,3 +16,12 @@ includes:
   proto:
     taskfile: ./proto/Taskfile.yaml
     dir: ./proto
+
+tasks:
+  test:
+    desc: Run all tests (unit, integration, e2e) across all projects
+    cmds:
+      - task: server:test:integration
+      - task: server:test:e2e
+      - task: cli:test:unit
+      - task: cli:test:e2e
