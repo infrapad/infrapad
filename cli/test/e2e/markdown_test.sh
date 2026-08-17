@@ -3,7 +3,7 @@
 # E2E test for the markdown pull/parse round-trip via the infrapad CLI.
 #
 # Prerequisites:
-#   - infrapad server running (GRPC_ADDR defaults to localhost:50051)
+#   - infrapad server running (GRPC_ADDR defaults to localhost:50061)
 #   - infrapad CLI binary built (set INFRAPAD_CLI or it uses ../../../cli/infrapad)
 #
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

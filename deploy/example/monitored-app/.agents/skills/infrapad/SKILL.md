@@ -48,7 +48,7 @@ See `deploy/example/monitored-app/tmp/incident.md` for a real-world example of a
 
 ## CLI Commands
 
-The infrapad CLI communicates with the server via gRPC (default `localhost:50051`, override with `--grpc-addr`).
+The infrapad CLI communicates with the server via gRPC (default `localhost:50061`, override with `--grpc-addr`).
 
 ### Markdown Pull/Push Workflow
 

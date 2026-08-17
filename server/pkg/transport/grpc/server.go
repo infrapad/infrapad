@@ -16,7 +16,7 @@ import (
 )
 
 // DefaultPort is the default gRPC listen port.
-const DefaultPort = 50051
+const DefaultPort = 50061
 
 // Server wraps the gRPC server and the controller.
 type Server struct {

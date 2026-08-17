@@ -21,7 +21,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	defaultAddr := "localhost:50051"
+	defaultAddr := "localhost:50061"
 	if s := os.Getenv("GRPC_ADDR"); s != "" {
 		defaultAddr = s
 	}

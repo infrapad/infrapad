@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   BINARY: infrapad
-  GRPC_ADDR: '{{.GRPC_ADDR | default "localhost:50051"}}'
+  GRPC_ADDR: '{{.GRPC_ADDR | default "localhost:50061"}}'
 
 tasks:
   build:

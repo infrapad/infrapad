@@ -16,7 +16,7 @@ func grpcAddr() string {
 	if s := os.Getenv("GRPC_ADDR"); s != "" {
 		return s
 	}
-	return "localhost:50051"
+	return "localhost:50061"
 }
 
 // mustStruct is a test helper that creates a structpb.Struct from a map.

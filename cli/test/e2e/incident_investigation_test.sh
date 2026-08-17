@@ -4,7 +4,7 @@
 # Mirrors server/test/e2e/incident_investigation_test.go
 #
 # Prerequisites:
-#   - infrapad server running (GRPC_ADDR defaults to localhost:50051)
+#   - infrapad server running (GRPC_ADDR defaults to localhost:50061)
 #   - infrapad CLI binary built (set INFRAPAD_CLI or it uses ../../../cli/infrapad)
 #
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
