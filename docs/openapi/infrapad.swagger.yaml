@@ -1,0 +1,369 @@
+swagger: "2.0"
+info:
+  title: infrapad/v1alpha1/infrapad.proto
+  version: version not set
+tags:
+  - name: InfrapadService
+consumes:
+  - application/json
+produces:
+  - application/json
+paths:
+  /v1/docs:
+    get:
+      operationId: InfrapadService_ListDocs
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListDocsResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      tags:
+        - InfrapadService
+    post:
+      summary: '----- Document operations -----'
+      operationId: InfrapadService_CreateDoc
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1CreateDocResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/v1CreateDocRequest'
+      tags:
+        - InfrapadService
+  /v1/{name}:
+    get:
+      operationId: InfrapadService_GetDoc
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetDocResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+          pattern: docs/[^/]+
+      tags:
+        - InfrapadService
+  /v1/{parent}/blocks:
+    get:
+      operationId: InfrapadService_ListBlocks
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlocksResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: parent
+          in: path
+          required: true
+          type: string
+          pattern: docs/[^/]+
+      tags:
+        - InfrapadService
+    post:
+      summary: '----- Block operations -----'
+      operationId: InfrapadService_AddBlock
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1AddBlockResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: parent
+          in: path
+          required: true
+          type: string
+          pattern: docs/[^/]+
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/InfrapadServiceAddBlockBody'
+      tags:
+        - InfrapadService
+  /v1/{parent}/blocks/{blockNumber}:
+    get:
+      operationId: InfrapadService_GetBlock
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1GetBlockResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: parent
+          in: path
+          required: true
+          type: string
+          pattern: docs/[^/]+
+        - name: blockNumber
+          in: path
+          required: true
+          type: integer
+          format: int32
+        - name: revisionNumber
+          description: 0 means latest revision.
+          in: query
+          required: false
+          type: integer
+          format: int32
+      tags:
+        - InfrapadService
+    put:
+      operationId: InfrapadService_UpdateBlock
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1UpdateBlockResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: parent
+          in: path
+          required: true
+          type: string
+          pattern: docs/[^/]+
+        - name: blockNumber
+          in: path
+          required: true
+          type: integer
+          format: int32
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/InfrapadServiceUpdateBlockBody'
+      tags:
+        - InfrapadService
+  /v1/{parent}/blocks/{blockNumber}/history:
+    get:
+      operationId: InfrapadService_ListBlockHistory
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ListBlockHistoryResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: parent
+          in: path
+          required: true
+          type: string
+          pattern: docs/[^/]+
+        - name: blockNumber
+          in: path
+          required: true
+          type: integer
+          format: int32
+      tags:
+        - InfrapadService
+definitions:
+  InfrapadServiceAddBlockBody:
+    type: object
+    properties:
+      block:
+        $ref: '#/definitions/v1Block'
+    required:
+      - block
+  InfrapadServiceUpdateBlockBody:
+    type: object
+    properties:
+      block:
+        $ref: '#/definitions/v1Block'
+    required:
+      - block
+  protobufAny:
+    type: object
+    properties:
+      '@type':
+        type: string
+    additionalProperties: {}
+  protobufNullValue:
+    type: string
+    enum:
+      - NULL_VALUE
+    default: NULL_VALUE
+    description: |-
+      `NullValue` is a singleton enumeration to represent the null value for the
+      `Value` type union.
+
+      The JSON representation for `NullValue` is JSON `null`.
+
+       - NULL_VALUE: Null value.
+  rpcStatus:
+    type: object
+    properties:
+      code:
+        type: integer
+        format: int32
+      message:
+        type: string
+      details:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/protobufAny'
+  v1AddBlockResponse:
+    type: object
+    properties:
+      block:
+        $ref: '#/definitions/v1Block'
+  v1Block:
+    type: object
+    properties:
+      name:
+        type: string
+        description: 'Resource name: "docs/{doc}/blocks/{block}".'
+        readOnly: true
+      blockNumber:
+        type: integer
+        format: int32
+        readOnly: true
+      revisionNumber:
+        type: integer
+        format: int32
+        readOnly: true
+      authorId:
+        type: string
+      type:
+        type: string
+      status:
+        type: string
+        title: '"progressing" | "published" | "deleted"'
+      createdAt:
+        type: string
+        format: date-time
+        readOnly: true
+      content:
+        type: object
+        title: |-
+          Arbitrary content payload; structure is determined by `type`.
+          E.g. for "markdown": {"text": "…"}
+          E.g. for "alerts_matcher": {"labels_matchers": [...], "since": "…"}
+    description: Block represents a single content block within a document.
+    required:
+      - type
+      - content
+  v1CreateDocRequest:
+    type: object
+    properties:
+      title:
+        type: string
+      namespace:
+        type: string
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Block'
+        description: Optional initial blocks.
+    required:
+      - title
+  v1CreateDocResponse:
+    type: object
+    properties:
+      doc:
+        $ref: '#/definitions/v1Doc'
+  v1Doc:
+    type: object
+    properties:
+      name:
+        type: string
+        description: 'Resource name: "docs/{doc}".'
+        readOnly: true
+      status:
+        type: string
+        title: '"active" | "archived"'
+        readOnly: true
+      title:
+        type: string
+      namespace:
+        type: string
+      createdAt:
+        type: string
+        format: date-time
+        readOnly: true
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Block'
+        readOnly: true
+    description: Doc represents an investigation document.
+    required:
+      - title
+  v1GetBlockResponse:
+    type: object
+    properties:
+      block:
+        $ref: '#/definitions/v1Block'
+  v1GetDocResponse:
+    type: object
+    properties:
+      doc:
+        $ref: '#/definitions/v1Doc'
+  v1ListBlockHistoryResponse:
+    type: object
+    properties:
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Block'
+  v1ListBlocksResponse:
+    type: object
+    properties:
+      blocks:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Block'
+  v1ListDocsResponse:
+    type: object
+    properties:
+      docs:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1Doc'
+  v1UpdateBlockResponse:
+    type: object
+    properties:
+      block:
+        $ref: '#/definitions/v1Block'
