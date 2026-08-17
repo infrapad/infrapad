@@ -4,6 +4,8 @@ services:
       context: ../example/monitored-app
     ports:
       - "8080:8080"
+    networks:
+      - infrapad
 
   prometheus:
     image: prom/prometheus:v3.4.1
@@ -14,6 +16,8 @@ services:
       - ./monitored-app/alerts.yaml:/etc/prometheus/alerts.yaml:ro
     depends_on:
       - monitored-app
+    networks:
+      - infrapad
 
   alertmanager:
     image: prom/alertmanager:v0.28.1
@@ -21,3 +25,5 @@ services:
       - "9093:9093"
     volumes:
       - ./monitored-app/alertmanager.yaml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - infrapad

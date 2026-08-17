@@ -1,3 +1,8 @@
+# To avoid conflicts with other compose projects.
+networks:
+  infrapad:
+    name: infrapad
+
 services:
   postgres:
     image: postgres:18
@@ -15,6 +20,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+    networks:
+      - infrapad
 
 volumes:
   postgres-data:
