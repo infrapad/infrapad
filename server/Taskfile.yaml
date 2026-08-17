@@ -24,10 +24,10 @@ tasks:
       - ./infrapad-server
 
   run:
-    desc: Start the gRPC server
+    desc: Start the gRPC + HTTP server
     deps: [build]
     cmds:
-      - ./infrapad-server start --db "{{.TEST_DBSTRING}}" {{.CLI_ARGS}}
+      - ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
 
   db:migrate:status:
     desc: Show status of migrations

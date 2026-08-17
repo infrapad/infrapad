@@ -29,7 +29,7 @@ func mustStruct(t *testing.T, m map[string]any) *structpb.Struct {
 	return s
 }
 
-func TestIncidentInvestigation(t *testing.T) {
+func TestIncidentInvestigationGRPC(t *testing.T) {
 	ctx := context.Background()
 
 	conn, err := grpc.NewClient(grpcAddr(), grpc.WithTransportCredentials(insecure.NewCredentials()))

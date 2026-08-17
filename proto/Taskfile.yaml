@@ -4,7 +4,7 @@ tasks:
   generate:
     desc: Generate Go stubs and OpenAPI specs from proto definitions
     cmds:
-      - find gen/go -name '*.pb.go' -delete
+      - find gen/go \( -name '*.pb.go' -o -name '*.pb.gw.go' \) -delete
       - buf generate
     sources:
       - "**/*.proto"

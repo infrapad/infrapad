@@ -981,7 +981,7 @@ var File_infrapad_v1alpha1_infrapad_proto protoreflect.FileDescriptor
 
 const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\n" +
-	" infrapad/v1alpha1/infrapad.proto\x12\vinfrapad.v1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x02\n" +
+	" infrapad/v1alpha1/infrapad.proto\x12\vinfrapad.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x02\n" +
 	"\x03Doc\x12\x1a\n" +
 	"\x04name\x18\x01 \x01(\tB\x06\xe0A\b\xe0A\x03R\x04name\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tB\x03\xe0A\x03R\x06status\x12\x19\n" +
@@ -1048,17 +1048,18 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\x0finfrapad.io/DocR\x06parent\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x02R\vblockNumber\"F\n" +
 	"\x18ListBlockHistoryResponse\x12*\n" +
-	"\x06blocks\x18\x01 \x03(\v2\x12.infrapad.v1.BlockR\x06blocks2\xfd\x04\n" +
-	"\x0fInfrapadService\x12J\n" +
-	"\tCreateDoc\x12\x1d.infrapad.v1.CreateDocRequest\x1a\x1e.infrapad.v1.CreateDocResponse\x12A\n" +
-	"\x06GetDoc\x12\x1a.infrapad.v1.GetDocRequest\x1a\x1b.infrapad.v1.GetDocResponse\x12G\n" +
-	"\bListDocs\x12\x1c.infrapad.v1.ListDocsRequest\x1a\x1d.infrapad.v1.ListDocsResponse\x12G\n" +
-	"\bAddBlock\x12\x1c.infrapad.v1.AddBlockRequest\x1a\x1d.infrapad.v1.AddBlockResponse\x12P\n" +
-	"\vUpdateBlock\x12\x1f.infrapad.v1.UpdateBlockRequest\x1a .infrapad.v1.UpdateBlockResponse\x12G\n" +
-	"\bGetBlock\x12\x1c.infrapad.v1.GetBlockRequest\x1a\x1d.infrapad.v1.GetBlockResponse\x12M\n" +
+	"\x06blocks\x18\x01 \x03(\v2\x12.infrapad.v1.BlockR\x06blocks2\xb0\a\n" +
+	"\x0fInfrapadService\x12_\n" +
+	"\tCreateDoc\x12\x1d.infrapad.v1.CreateDocRequest\x1a\x1e.infrapad.v1.CreateDocResponse\"\x13\x82\xd3\xe4\x93\x02\r:\x01*\"\b/v1/docs\x12\\\n" +
+	"\x06GetDoc\x12\x1a.infrapad.v1.GetDocRequest\x1a\x1b.infrapad.v1.GetDocResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/{name=docs/*}\x12Y\n" +
+	"\bListDocs\x12\x1c.infrapad.v1.ListDocsRequest\x1a\x1d.infrapad.v1.ListDocsResponse\"\x10\x82\xd3\xe4\x93\x02\n" +
+	"\x12\b/v1/docs\x12n\n" +
+	"\bAddBlock\x12\x1c.infrapad.v1.AddBlockRequest\x1a\x1d.infrapad.v1.AddBlockResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/v1/{parent=docs/*}/blocks\x12\x86\x01\n" +
+	"\vUpdateBlock\x12\x1f.infrapad.v1.UpdateBlockRequest\x1a .infrapad.v1.UpdateBlockResponse\"4\x82\xd3\xe4\x93\x02.:\x01*\x1a)/v1/{parent=docs/*}/blocks/{block_number}\x12z\n" +
+	"\bGetBlock\x12\x1c.infrapad.v1.GetBlockRequest\x1a\x1d.infrapad.v1.GetBlockResponse\"1\x82\xd3\xe4\x93\x02+\x12)/v1/{parent=docs/*}/blocks/{block_number}\x12q\n" +
 	"\n" +
-	"ListBlocks\x12\x1e.infrapad.v1.ListBlocksRequest\x1a\x1f.infrapad.v1.ListBlocksResponse\x12_\n" +
-	"\x10ListBlockHistory\x12$.infrapad.v1.ListBlockHistoryRequest\x1a%.infrapad.v1.ListBlockHistoryResponseBBZ@github.com/infrapad/infrapad/proto/gen/go/infrapad/v1;infrapadv1b\x06proto3"
+	"ListBlocks\x12\x1e.infrapad.v1.ListBlocksRequest\x1a\x1f.infrapad.v1.ListBlocksResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/v1/{parent=docs/*}/blocks\x12\x9a\x01\n" +
+	"\x10ListBlockHistory\x12$.infrapad.v1.ListBlockHistoryRequest\x1a%.infrapad.v1.ListBlockHistoryResponse\"9\x82\xd3\xe4\x93\x023\x121/v1/{parent=docs/*}/blocks/{block_number}/historyBBZ@github.com/infrapad/infrapad/proto/gen/go/infrapad/v1;infrapadv1b\x06proto3"
 
 var (
 	file_infrapad_v1alpha1_infrapad_proto_rawDescOnce sync.Once
