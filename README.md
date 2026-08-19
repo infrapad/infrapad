@@ -1,6 +1,6 @@
 # InfraPad
 
-Notes about your infrastructure, for humans and agents.
+Trusted notes about your infrastructure.
 
 ## The problem
 
@@ -29,7 +29,7 @@ with other parts of the system.
 Everything in the system is versioned and tracked, making it a safe space
 for exploration and collaboration between human and machines.
 
-## An example use-cases
+## Example use-cases
 
 ### Incidents response
 
