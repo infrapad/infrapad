@@ -70,17 +70,17 @@ It's ok to add multiple blocks at once before pushing.
 
 ### 5. Push the summary to infrapad
 
-Push the new block back to the server:
+Push the changes back to the server:
 
 ```bash
-infrapad md push --file incident.md --block new
+infrapad md push --file incident.md
 ```
-This ensures the investigation is recorded in the shared incident document for the team.
+
+The push command auto-detects changed and new blocks and pushes only those. This ensures the investigation is recorded in the shared incident document for the team.
 
 ## Important Notes
 
 - Always **pull** the latest version before making changes to avoid conflicts.
-- Use `--block new` when pushing a new block, and `--block <number>` when updating an existing one.
 - The investigation summary should be factual and based on observed data, not assumptions.
 - Include timestamps in UTC format for consistency.
 - Don't try to resolve the issue. Just wrap up with "the investigation has been finished".

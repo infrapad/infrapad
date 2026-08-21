@@ -61,22 +61,20 @@ infrapad md pull --doc <name> --file <path>
 # Omit --file to print to stdout
 ```
 
-**Push** — upload local changes to a specific block:
+**Push** — upload local changes back to the server:
 
 ```bash
-# Push changes to an existing block (by number):
-infrapad md push --file <path> --block <number>
-
-# Push a new block (add `::infrapad_block{... block=new}` section to the file first):
-infrapad md push --file <path> --block new
+infrapad md push --file <path>
 ```
+
+The push command auto-detects which blocks have changed (by comparing the local file against the server state) and pushes only those. New blocks (`block=new`) are also detected and pushed automatically. The output reports which blocks are being pushed.
 
 ### Typical Agent Workflow
 
 1. **Pull** the document to a local file: `infrapad md pull --doc <name> --file incident.md`
 2. **Read** the file to understand the current state.
 3. **Edit** the file — modify existing blocks or append new ones.
-4. **Push** changes back: `infrapad md push --file incident.md --block <number>` (or `--block new` for new blocks).
+4. **Push** changes back: `infrapad md push --file incident.md` (auto-detects changed and new blocks).
 
 ### Adding a New Block via Markdown
 
@@ -89,4 +87,4 @@ To add a new block, append it to the pulled markdown file with `block=new`:
 Content goes here.
 ```
 
-Then push with: `infrapad md push --file incident.md --block new`
+Then push with: `infrapad md push --file incident.md`

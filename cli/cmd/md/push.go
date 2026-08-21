@@ -3,14 +3,12 @@ package md
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
 	"github.com/infrapad/infrapad/cli/pkg/markdown"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/types/known/structpb"
-	"gopkg.in/yaml.v3"
 )
 
 func newPushCmd() *cobra.Command {
@@ -48,35 +46,12 @@ with the current server state. Only changed existing blocks and new blocks
 				return fmt.Errorf("list server blocks: %w", err)
 			}
 
-			// Build a lookup of server blocks by number.
-			serverBlockMap := make(map[int]*pb.Block, len(serverBlocks))
-			for _, sb := range serverBlocks {
-				serverBlockMap[int(sb.GetBlockNumber())] = sb
-			}
+			remote := markdown.NewRemoteDoc(docName, serverBlocks)
 
 			// 3. Detect changed and new blocks.
-			type pushAction struct {
-				block *markdown.ParsedBlock
-				isNew bool
-			}
-			var actions []pushAction
-
-			for i := range doc.Blocks {
-				local := &doc.Blocks[i]
-
-				if local.Meta.IsNew {
-					actions = append(actions, pushAction{block: local, isNew: true})
-					continue
-				}
-
-				server, exists := serverBlockMap[local.Meta.BlockNumber]
-				if !exists {
-					return fmt.Errorf("block %d exists locally but not on server", local.Meta.BlockNumber)
-				}
-
-				if blockContentChanged(local, server) {
-					actions = append(actions, pushAction{block: local, isNew: false})
-				}
+			actions, err := markdown.DiffBlocks(doc, remote)
+			if err != nil {
+				return err
 			}
 
 			if len(actions) == 0 {
@@ -86,29 +61,29 @@ with the current server state. Only changed existing blocks and new blocks
 
 			// 4. Push changed/new blocks.
 			for _, a := range actions {
-				contentStruct, err := structpb.NewStruct(a.block.Content)
+				contentStruct, err := structpb.NewStruct(a.Block.Content)
 				if err != nil {
 					return fmt.Errorf("convert content to struct: %w", err)
 				}
 
 				block := &pb.Block{
-					Type:    a.block.Meta.Type,
+					Type:    a.Block.Meta.Type,
 					Content: contentStruct,
 				}
 
-				if a.isNew {
+				if a.IsNew {
 					_, err = c.AddBlock(cmd.Context(), docName, block)
 					if err != nil {
 						return fmt.Errorf("add block: %w", err)
 					}
 					fmt.Fprintf(cmd.OutOrStderr(), "Block added\n")
 				} else {
-					bn := int32(a.block.Meta.BlockNumber)
+					bn := int32(a.Block.Meta.BlockNumber)
 					_, err = c.UpdateBlock(cmd.Context(), docName, bn, block)
 					if err != nil {
 						return fmt.Errorf("update block: %w", err)
 					}
-					fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", a.block.Meta.BlockNumber)
+					fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", a.Block.Meta.BlockNumber)
 				}
 			}
 
@@ -141,26 +116,4 @@ with the current server state. Only changed existing blocks and new blocks
 	_ = cmd.MarkFlagRequired("file")
 
 	return cmd
-}
-
-// blockContentChanged compares local parsed block content with the server block.
-func blockContentChanged(local *markdown.ParsedBlock, server *pb.Block) bool {
-	serverContent := server.GetContent().AsMap()
-
-	if local.Meta.Type == "markdown" {
-		localText, _ := local.Content["text"].(string)
-		serverText, _ := serverContent["text"].(string)
-		// Trim trailing newlines: blank lines between block directives
-		// are parsed as part of the preceding block's content but are
-		// not semantically significant.
-		return strings.TrimRight(localText, "\n") != strings.TrimRight(serverText, "\n")
-	}
-
-	// For non-markdown blocks, compare by serializing to YAML.
-	localYAML, err1 := yaml.Marshal(local.Content)
-	serverYAML, err2 := yaml.Marshal(serverContent)
-	if err1 != nil || err2 != nil {
-		return true // can't compare, assume changed
-	}
-	return string(localYAML) != string(serverYAML)
 }
