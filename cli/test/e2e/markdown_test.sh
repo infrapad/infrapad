@@ -94,7 +94,7 @@ sed -i 's/root cause identified/root cause identified\n\nAdditional notes from l
 EDITED_CONTENT=$(cat "$MD_FILE")
 assert_contains "local edit present before push" "$EDITED_CONTENT" "Additional notes from local edit."
 
-PUSH_OUT=$($CLI md push --file "$MD_FILE" --block 2 2>&1)
+PUSH_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
 assert_contains "push reports block updated" "$PUSH_OUT" "Block 2 updated"
 assert_contains "push reports file written" "$PUSH_OUT" "Written to"
 echo ""
@@ -139,9 +139,9 @@ assert_contains "parsed pushed alerts_matcher intact" "$PARSE_PUSHED" "type:   a
 echo ""
 
 # -----------------------------------------------------------------------
-# 11. Add a new block via md push --block=new
+# 11. Add a new block via md push
 # -----------------------------------------------------------------------
-echo "Step 11: Add a new block locally and push with --block=new"
+echo "Step 11: Add a new block locally and push"
 # Append a new block directive and content to the pulled file.
 cat >> "$MD_FILE" <<'EOF'
 
@@ -156,7 +156,7 @@ NEW_BLOCK_CONTENT=$(cat "$MD_FILE")
 assert_contains "local file has new block directive" "$NEW_BLOCK_CONTENT" "block=new type=markdown"
 assert_contains "local file has new block content" "$NEW_BLOCK_CONTENT" "This was a red-herring."
 
-PUSH_NEW_OUT=$($CLI md push --file "$MD_FILE" --block new 2>&1)
+PUSH_NEW_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
 assert_contains "push new reports block added" "$PUSH_NEW_OUT" "Block added"
 assert_contains "push new reports file written" "$PUSH_NEW_OUT" "Written to"
 echo ""
@@ -204,9 +204,9 @@ assert_contains "parsed alerts_matcher still intact" "$PARSE_NEW" "type:   alert
 echo ""
 
 # -----------------------------------------------------------------------
-# 15. Add two new blocks at once and push with --block=new
+# 15. Add two new blocks at once and push
 # -----------------------------------------------------------------------
-echo "Step 15: Add two new blocks at once and push with --block=new"
+echo "Step 15: Add two new blocks at once and push"
 # Simulate the incident-investigate workflow: investigation summary + recommended actions.
 cat >> "$MD_FILE" <<'EOF'
 
@@ -238,7 +238,7 @@ assert_equals "local file has two block=new directives" "$TWO_NEW_COUNT" "2"
 assert_contains "local file has investigation summary" "$TWO_BLOCK_CONTENT" "# Investigation Summary"
 assert_contains "local file has recommended actions" "$TWO_BLOCK_CONTENT" "# Recommended Actions"
 
-PUSH_TWO_OUT=$($CLI md push --file "$MD_FILE" --block new 2>&1)
+PUSH_TWO_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
 echo "$PUSH_TWO_OUT"
 # Both blocks should be reported as added.
 TWO_ADDED_COUNT=$(echo "$PUSH_TWO_OUT" | grep -c "Block added")

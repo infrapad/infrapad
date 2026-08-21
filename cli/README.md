@@ -148,22 +148,19 @@ infrapad md pull --doc <name-or-id>
 #### Push: upload local changes back to the server
 
 ```bash
-# Update an existing block
-infrapad md push --file incident.md --block 2
-
-# Add a new block
-infrapad md push --file incident.md --block new
+infrapad md push --file incident.md
 ```
+
+The command automatically detects which blocks have been modified locally
+(by comparing with the current server state) and pushes only the changed
+blocks. New blocks (with `block=new` in the directive) are always pushed.
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--file` | yes | Path to the markdown file |
-| `--block` | yes | Block number to push, or `new` for new blocks |
 
 After pushing, the file is automatically refreshed from the server to reflect
 the latest state (updated revision numbers, assigned block numbers for new blocks).
-
-When using `--block new`, all blocks with `block=new` in the file are pushed at once.
 
 #### Parse: inspect a markdown file
 
@@ -187,16 +184,9 @@ infrapad md pull --doc <id> --file incident.md
 # 2. Read and edit the file locally
 #    (modify existing blocks or append new ones)
 
-# 3. Push changes to an existing block
-infrapad md push --file incident.md --block 2
-
-# 4. Or add a new block appending to the file:
-#    ::infrapad_block{type=markdown block=new}
-#    # My New Section
-#    Content goes here.
-
-# 5. Push the new block
-infrapad md push --file incident.md --block new
+# 3. Push changes back to the server
+infrapad md push --file incident.md
+#    Only modified and new blocks are pushed.
 ```
 
 ### Adding multiple new blocks at once
@@ -218,7 +208,7 @@ Root cause: OOM kill due to memory limit set too low.
 2. Add horizontal pod autoscaler.
 EOF
 
-infrapad md push --file incident.md --block new
+infrapad md push --file incident.md
 ```
 
 Both blocks are pushed in order, and the file is refreshed with their assigned
