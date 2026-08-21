@@ -18,6 +18,25 @@ func newPullCmd() *cobra.Command {
 			docName, _ := cmd.Flags().GetString("doc")
 			filePath, _ := cmd.Flags().GetString("file")
 
+			// If --doc is not provided, try to extract the doc ID from an existing file.
+			if docName == "" {
+				if filePath == "" {
+					return fmt.Errorf("either --doc or --file (pointing to a previously pulled file) is required")
+				}
+				data, err := os.ReadFile(filePath)
+				if err != nil {
+					return fmt.Errorf("read file to extract doc ID: %w", err)
+				}
+				doc, err := markdown.Parse(data)
+				if err != nil {
+					return fmt.Errorf("parse file to extract doc ID: %w", err)
+				}
+				if doc.Meta.DocID == "" {
+					return fmt.Errorf("file %s has no doc ID in frontmatter; use --doc to specify", filePath)
+				}
+				docName = doc.Meta.DocID
+			}
+
 			c, err := cliutil.NewClient()
 			if err != nil {
 				return err
@@ -57,9 +76,8 @@ func newPullCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("doc", "", "Document name or ID (required)")
+	cmd.Flags().String("doc", "", "Document name or ID (required for new files)")
 	cmd.Flags().String("file", "", "Output file path (writes to stdout if omitted)")
-	_ = cmd.MarkFlagRequired("doc")
 
 	return cmd
 }

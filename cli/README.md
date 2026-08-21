@@ -138,11 +138,14 @@ infrapad md pull --doc <name-or-id> --file incident.md
 
 # Print to stdout
 infrapad md pull --doc <name-or-id>
+
+# Pull latest changes to a previously synchronized file
+infrapad md pull --file incident.md
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--doc` | yes | Document name or ID |
+| `--doc` | yes for new files | Document name or ID |
 | `--file` | no | Output file path (prints to stdout if omitted) |
 
 #### Push: upload local changes back to the server

@@ -296,6 +296,29 @@ assert_contains "parsed recommended actions content" "$PARSE_TWO" "Recommended A
 echo ""
 
 # -----------------------------------------------------------------------
+# 19. Pull with --file only (no --doc) to refresh a previously pulled file
+# -----------------------------------------------------------------------
+echo "Step 19: Pull with --file only (no --doc)"
+PULL_FILEONLY_OUT=$($CLI md pull --file "$MD_FILE" 2>&1)
+assert_contains "pull --file-only reports output file" "$PULL_FILEONLY_OUT" "Written to"
+FILEONLY_CONTENT=$(cat "$MD_FILE")
+assert_contains "file-only pull has doc id" "$FILEONLY_CONTENT" "doc: $DOC_ID"
+assert_contains "file-only pull has block 1" "$FILEONLY_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
+assert_contains "file-only pull has block 2" "$FILEONLY_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+assert_contains "file-only pull has block 5" "$FILEONLY_CONTENT" "::infrapad_block{block=5"
+assert_contains "file-only pull has original content" "$FILEONLY_CONTENT" "CrashLoopBackOff"
+echo ""
+
+# -----------------------------------------------------------------------
+# 20. Pull with neither --doc nor --file should fail
+# -----------------------------------------------------------------------
+echo "Step 20: Pull with --file only for non-existing file should fail"
+PULL_NOFILE_OUT=$($CLI md pull --file "${TMPDIR_E2E}/does_not_exist.md" 2>&1) && PULL_NOFILE_RC=0 || PULL_NOFILE_RC=$?
+assert_not_contains "pull non-existing file exits non-zero" "_${PULL_NOFILE_RC}_" "_0_"
+assert_contains "pull non-existing file reports read error" "$PULL_NOFILE_OUT" "read file to extract doc ID"
+echo ""
+
+# -----------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------
 print_summary
