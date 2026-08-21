@@ -231,7 +231,7 @@ cmd_incident_resolve() {
   sed -i 's|Until:\s*"\?0001-01-01T00:00:00Z"\?|Until: "'"${until}"'"|' "$INCIDENT_FILE"
 
   # Push the updated block 1.
-  ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE" --block 1
+  ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE"
   log "  alerts_matcher block updated."
 
   # 4. Add a markdown block about the alerts being resolved.
@@ -250,7 +250,7 @@ The alerts have been resolved at ${until}. Both endpoints are back to healthy st
 - endpoint2: recovered
 EOF
 
-  ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE" --block new
+  ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE"
   log "  Resolution block added."
 
   log "Incident resolved. Document updated at ${INCIDENT_FILE}"
