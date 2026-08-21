@@ -24,18 +24,18 @@ func New(s store.Store) *Controller {
 // Document operations
 // ---------------------------------------------------------------------------
 
-// CreateDoc creates a new document. If doc.Blocks is non-empty the blocks are
+// CreateDocument creates a new document. If doc.Blocks is non-empty the blocks are
 // inserted as well, each getting BlockNumber assigned sequentially starting at 1.
-func (c *Controller) CreateDoc(ctx context.Context, doc model.Doc) (model.Doc, error) {
+func (c *Controller) CreateDocument(ctx context.Context, doc model.Document) (model.Document, error) {
 	tx, err := c.store.Begin(ctx)
 	if err != nil {
-		return model.Doc{}, fmt.Errorf("begin tx: %w", err)
+		return model.Document{}, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	created, err := tx.Docs().Create(ctx, doc)
+	created, err := tx.Documents().Create(ctx, doc)
 	if err != nil {
-		return model.Doc{}, fmt.Errorf("create doc: %w", err)
+		return model.Document{}, fmt.Errorf("create document: %w", err)
 	}
 
 	for i, blk := range doc.Blocks {
@@ -43,52 +43,52 @@ func (c *Controller) CreateDoc(ctx context.Context, doc model.Doc) (model.Doc, e
 		blk.RevisionNumber = 1
 		b, err := tx.Blocks().Create(ctx, created.Uid, blk)
 		if err != nil {
-			return model.Doc{}, fmt.Errorf("create initial block %d: %w", i+1, err)
+			return model.Document{}, fmt.Errorf("create initial block %d: %w", i+1, err)
 		}
 		created.Blocks = append(created.Blocks, b)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return model.Doc{}, fmt.Errorf("commit tx: %w", err)
+		return model.Document{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return created, nil
 }
 
-// GetDoc returns a document together with the latest revision of each of its
+// GetDocument returns a document together with the latest revision of each of its
 // blocks.
-func (c *Controller) GetDoc(ctx context.Context, uid model.DocUID) (model.Doc, error) {
+func (c *Controller) GetDocument(ctx context.Context, uid model.DocumentUID) (model.Document, error) {
 	tx, err := c.store.BeginReadOnly(ctx)
 	if err != nil {
-		return model.Doc{}, fmt.Errorf("begin read-only tx: %w", err)
+		return model.Document{}, fmt.Errorf("begin read-only tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	doc, err := tx.Docs().Get(ctx, uid)
+	doc, err := tx.Documents().Get(ctx, uid)
 	if err != nil {
-		return model.Doc{}, fmt.Errorf("get doc: %w", err)
+		return model.Document{}, fmt.Errorf("get document: %w", err)
 	}
 
 	blocks, err := tx.Blocks().ListLatest(ctx, uid)
 	if err != nil {
-		return model.Doc{}, fmt.Errorf("list latest blocks: %w", err)
+		return model.Document{}, fmt.Errorf("list latest blocks: %w", err)
 	}
 	doc.Blocks = blocks
 
 	if err := tx.Commit(); err != nil {
-		return model.Doc{}, fmt.Errorf("commit tx: %w", err)
+		return model.Document{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return doc, nil
 }
 
-// ListDocs returns all documents (without blocks).
-func (c *Controller) ListDocs(ctx context.Context) ([]model.Doc, error) {
+// ListDocuments returns all documents (without blocks).
+func (c *Controller) ListDocuments(ctx context.Context) ([]model.Document, error) {
 	tx, err := c.store.BeginReadOnly(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin read-only tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	docs, err := tx.Docs().List(ctx)
+	documents, err := tx.Documents().List(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (c *Controller) ListDocs(ctx context.Context) ([]model.Doc, error) {
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit tx: %w", err)
 	}
-	return docs, nil
+	return documents, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ func (c *Controller) ListDocs(ctx context.Context) ([]model.Doc, error) {
 
 // AddBlock appends a new block to the document. The BlockNumber is assigned
 // automatically by the store (next sequential number for the doc).
-func (c *Controller) AddBlock(ctx context.Context, docUID model.DocUID, blk model.Block) (model.Block, error) {
+func (c *Controller) AddBlock(ctx context.Context, documentUID model.DocumentUID, blk model.Block) (model.Block, error) {
 	tx, err := c.store.Begin(ctx)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("begin tx: %w", err)
@@ -113,11 +113,11 @@ func (c *Controller) AddBlock(ctx context.Context, docUID model.DocUID, blk mode
 	defer tx.Rollback()
 
 	// Verify the document exists.
-	if _, err := tx.Docs().Get(ctx, docUID); err != nil {
-		return model.Block{}, fmt.Errorf("get doc for add block: %w", err)
+	if _, err := tx.Documents().Get(ctx, documentUID); err != nil {
+		return model.Block{}, fmt.Errorf("get document for add block: %w", err)
 	}
 
-	created, err := tx.Blocks().Create(ctx, docUID, blk)
+	created, err := tx.Blocks().Create(ctx, documentUID, blk)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("create block: %w", err)
 	}
@@ -130,7 +130,7 @@ func (c *Controller) AddBlock(ctx context.Context, docUID model.DocUID, blk mode
 
 // UpdateBlock creates a new revision for an existing block. The new revision
 // keeps the same BlockNumber but gets an incremented RevisionNumber.
-func (c *Controller) UpdateBlock(ctx context.Context, docUID model.DocUID, blockNumber model.BlockNumber, blk model.Block) (model.Block, error) {
+func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.DocumentUID, blockNumber model.BlockNumber, blk model.Block) (model.Block, error) {
 	tx, err := c.store.Begin(ctx)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("begin tx: %w", err)
@@ -138,13 +138,13 @@ func (c *Controller) UpdateBlock(ctx context.Context, docUID model.DocUID, block
 	defer tx.Rollback()
 
 	// Make sure the block exists before we create a new revision.
-	_, err = tx.Blocks().Get(ctx, docUID, blockNumber, 0)
+	_, err = tx.Blocks().Get(ctx, documentUID, blockNumber, 0)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("get latest block for update: %w", err)
 	}
 
 	blk.BlockNumber = blockNumber
-	created, err := tx.Blocks().Create(ctx, docUID, blk)
+	created, err := tx.Blocks().Create(ctx, documentUID, blk)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("create block revision: %w", err)
 	}
@@ -157,14 +157,14 @@ func (c *Controller) UpdateBlock(ctx context.Context, docUID model.DocUID, block
 
 // GetBlock returns a specific revision of a block. If revisionNumber is 0 the
 // latest revision is returned.
-func (c *Controller) GetBlock(ctx context.Context, docUID model.DocUID, blockNumber model.BlockNumber, revisionNumber model.RevisionNumber) (model.Block, error) {
+func (c *Controller) GetBlock(ctx context.Context, documentUID model.DocumentUID, blockNumber model.BlockNumber, revisionNumber model.RevisionNumber) (model.Block, error) {
 	tx, err := c.store.BeginReadOnly(ctx)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("begin read-only tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	blk, err := tx.Blocks().Get(ctx, docUID, blockNumber, revisionNumber)
+	blk, err := tx.Blocks().Get(ctx, documentUID, blockNumber, revisionNumber)
 	if err != nil {
 		return model.Block{}, err
 	}
@@ -176,14 +176,14 @@ func (c *Controller) GetBlock(ctx context.Context, docUID model.DocUID, blockNum
 }
 
 // ListBlocks returns the latest revision of every block in the document.
-func (c *Controller) ListBlocks(ctx context.Context, docUID model.DocUID) ([]model.Block, error) {
+func (c *Controller) ListBlocks(ctx context.Context, documentUID model.DocumentUID) ([]model.Block, error) {
 	tx, err := c.store.BeginReadOnly(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin read-only tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	blocks, err := tx.Blocks().ListLatest(ctx, docUID)
+	blocks, err := tx.Blocks().ListLatest(ctx, documentUID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,14 +195,14 @@ func (c *Controller) ListBlocks(ctx context.Context, docUID model.DocUID) ([]mod
 }
 
 // ListBlockHistory returns all revisions of a given block.
-func (c *Controller) ListBlockHistory(ctx context.Context, docUID model.DocUID, blockNumber model.BlockNumber) ([]model.Block, error) {
+func (c *Controller) ListBlockHistory(ctx context.Context, documentUID model.DocumentUID, blockNumber model.BlockNumber) ([]model.Block, error) {
 	tx, err := c.store.BeginReadOnly(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin read-only tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	revisions, err := tx.Blocks().ListRevisions(ctx, docUID, blockNumber)
+	revisions, err := tx.Blocks().ListRevisions(ctx, documentUID, blockNumber)
 	if err != nil {
 		return nil, err
 	}

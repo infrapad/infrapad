@@ -27,7 +27,7 @@ type RemoteDoc struct {
 }
 
 // NewRemoteDoc builds a RemoteDoc from the protobuf blocks returned by the
-// server. docID is the short document identifier (without the "docs/" prefix).
+// server. docID is the short document identifier (without the "documents/" prefix).
 func NewRemoteDoc(docID string, blocks []*pb.Block) *RemoteDoc {
 	rd := &RemoteDoc{DocID: docID}
 	for _, b := range blocks {

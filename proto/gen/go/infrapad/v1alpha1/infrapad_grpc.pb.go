@@ -19,9 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InfrapadService_CreateDoc_FullMethodName        = "/infrapad.v1.InfrapadService/CreateDoc"
-	InfrapadService_GetDoc_FullMethodName           = "/infrapad.v1.InfrapadService/GetDoc"
-	InfrapadService_ListDocs_FullMethodName         = "/infrapad.v1.InfrapadService/ListDocs"
+	InfrapadService_CreateDocument_FullMethodName   = "/infrapad.v1.InfrapadService/CreateDocument"
+	InfrapadService_GetDocument_FullMethodName      = "/infrapad.v1.InfrapadService/GetDocument"
+	InfrapadService_ListDocuments_FullMethodName    = "/infrapad.v1.InfrapadService/ListDocuments"
 	InfrapadService_AddBlock_FullMethodName         = "/infrapad.v1.InfrapadService/AddBlock"
 	InfrapadService_UpdateBlock_FullMethodName      = "/infrapad.v1.InfrapadService/UpdateBlock"
 	InfrapadService_GetBlock_FullMethodName         = "/infrapad.v1.InfrapadService/GetBlock"
@@ -34,9 +34,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type InfrapadServiceClient interface {
 	// ----- Document operations -----
-	CreateDoc(ctx context.Context, in *CreateDocRequest, opts ...grpc.CallOption) (*CreateDocResponse, error)
-	GetDoc(ctx context.Context, in *GetDocRequest, opts ...grpc.CallOption) (*GetDocResponse, error)
-	ListDocs(ctx context.Context, in *ListDocsRequest, opts ...grpc.CallOption) (*ListDocsResponse, error)
+	CreateDocument(ctx context.Context, in *CreateDocumentRequest, opts ...grpc.CallOption) (*CreateDocumentResponse, error)
+	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*GetDocumentResponse, error)
+	ListDocuments(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*ListDocumentsResponse, error)
 	// ----- Block operations -----
 	AddBlock(ctx context.Context, in *AddBlockRequest, opts ...grpc.CallOption) (*AddBlockResponse, error)
 	UpdateBlock(ctx context.Context, in *UpdateBlockRequest, opts ...grpc.CallOption) (*UpdateBlockResponse, error)
@@ -53,30 +53,30 @@ func NewInfrapadServiceClient(cc grpc.ClientConnInterface) InfrapadServiceClient
 	return &infrapadServiceClient{cc}
 }
 
-func (c *infrapadServiceClient) CreateDoc(ctx context.Context, in *CreateDocRequest, opts ...grpc.CallOption) (*CreateDocResponse, error) {
+func (c *infrapadServiceClient) CreateDocument(ctx context.Context, in *CreateDocumentRequest, opts ...grpc.CallOption) (*CreateDocumentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CreateDocResponse)
-	err := c.cc.Invoke(ctx, InfrapadService_CreateDoc_FullMethodName, in, out, cOpts...)
+	out := new(CreateDocumentResponse)
+	err := c.cc.Invoke(ctx, InfrapadService_CreateDocument_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *infrapadServiceClient) GetDoc(ctx context.Context, in *GetDocRequest, opts ...grpc.CallOption) (*GetDocResponse, error) {
+func (c *infrapadServiceClient) GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*GetDocumentResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetDocResponse)
-	err := c.cc.Invoke(ctx, InfrapadService_GetDoc_FullMethodName, in, out, cOpts...)
+	out := new(GetDocumentResponse)
+	err := c.cc.Invoke(ctx, InfrapadService_GetDocument_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *infrapadServiceClient) ListDocs(ctx context.Context, in *ListDocsRequest, opts ...grpc.CallOption) (*ListDocsResponse, error) {
+func (c *infrapadServiceClient) ListDocuments(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*ListDocumentsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListDocsResponse)
-	err := c.cc.Invoke(ctx, InfrapadService_ListDocs_FullMethodName, in, out, cOpts...)
+	out := new(ListDocumentsResponse)
+	err := c.cc.Invoke(ctx, InfrapadService_ListDocuments_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,9 +138,9 @@ func (c *infrapadServiceClient) ListBlockHistory(ctx context.Context, in *ListBl
 // for forward compatibility.
 type InfrapadServiceServer interface {
 	// ----- Document operations -----
-	CreateDoc(context.Context, *CreateDocRequest) (*CreateDocResponse, error)
-	GetDoc(context.Context, *GetDocRequest) (*GetDocResponse, error)
-	ListDocs(context.Context, *ListDocsRequest) (*ListDocsResponse, error)
+	CreateDocument(context.Context, *CreateDocumentRequest) (*CreateDocumentResponse, error)
+	GetDocument(context.Context, *GetDocumentRequest) (*GetDocumentResponse, error)
+	ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error)
 	// ----- Block operations -----
 	AddBlock(context.Context, *AddBlockRequest) (*AddBlockResponse, error)
 	UpdateBlock(context.Context, *UpdateBlockRequest) (*UpdateBlockResponse, error)
@@ -157,14 +157,14 @@ type InfrapadServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedInfrapadServiceServer struct{}
 
-func (UnimplementedInfrapadServiceServer) CreateDoc(context.Context, *CreateDocRequest) (*CreateDocResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreateDoc not implemented")
+func (UnimplementedInfrapadServiceServer) CreateDocument(context.Context, *CreateDocumentRequest) (*CreateDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDocument not implemented")
 }
-func (UnimplementedInfrapadServiceServer) GetDoc(context.Context, *GetDocRequest) (*GetDocResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetDoc not implemented")
+func (UnimplementedInfrapadServiceServer) GetDocument(context.Context, *GetDocumentRequest) (*GetDocumentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDocument not implemented")
 }
-func (UnimplementedInfrapadServiceServer) ListDocs(context.Context, *ListDocsRequest) (*ListDocsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListDocs not implemented")
+func (UnimplementedInfrapadServiceServer) ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDocuments not implemented")
 }
 func (UnimplementedInfrapadServiceServer) AddBlock(context.Context, *AddBlockRequest) (*AddBlockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddBlock not implemented")
@@ -202,56 +202,56 @@ func RegisterInfrapadServiceServer(s grpc.ServiceRegistrar, srv InfrapadServiceS
 	s.RegisterService(&InfrapadService_ServiceDesc, srv)
 }
 
-func _InfrapadService_CreateDoc_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateDocRequest)
+func _InfrapadService_CreateDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateDocumentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InfrapadServiceServer).CreateDoc(ctx, in)
+		return srv.(InfrapadServiceServer).CreateDocument(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: InfrapadService_CreateDoc_FullMethodName,
+		FullMethod: InfrapadService_CreateDocument_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InfrapadServiceServer).CreateDoc(ctx, req.(*CreateDocRequest))
+		return srv.(InfrapadServiceServer).CreateDocument(ctx, req.(*CreateDocumentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InfrapadService_GetDoc_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetDocRequest)
+func _InfrapadService_GetDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDocumentRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InfrapadServiceServer).GetDoc(ctx, in)
+		return srv.(InfrapadServiceServer).GetDocument(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: InfrapadService_GetDoc_FullMethodName,
+		FullMethod: InfrapadService_GetDocument_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InfrapadServiceServer).GetDoc(ctx, req.(*GetDocRequest))
+		return srv.(InfrapadServiceServer).GetDocument(ctx, req.(*GetDocumentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _InfrapadService_ListDocs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListDocsRequest)
+func _InfrapadService_ListDocuments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDocumentsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(InfrapadServiceServer).ListDocs(ctx, in)
+		return srv.(InfrapadServiceServer).ListDocuments(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: InfrapadService_ListDocs_FullMethodName,
+		FullMethod: InfrapadService_ListDocuments_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(InfrapadServiceServer).ListDocs(ctx, req.(*ListDocsRequest))
+		return srv.(InfrapadServiceServer).ListDocuments(ctx, req.(*ListDocumentsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -354,16 +354,16 @@ var InfrapadService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*InfrapadServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateDoc",
-			Handler:    _InfrapadService_CreateDoc_Handler,
+			MethodName: "CreateDocument",
+			Handler:    _InfrapadService_CreateDocument_Handler,
 		},
 		{
-			MethodName: "GetDoc",
-			Handler:    _InfrapadService_GetDoc_Handler,
+			MethodName: "GetDocument",
+			Handler:    _InfrapadService_GetDocument_Handler,
 		},
 		{
-			MethodName: "ListDocs",
-			Handler:    _InfrapadService_ListDocs_Handler,
+			MethodName: "ListDocuments",
+			Handler:    _InfrapadService_ListDocuments_Handler,
 		},
 		{
 			MethodName: "AddBlock",

@@ -49,7 +49,7 @@ func TestIncidentInvestigation(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 1. Create a new document of type 'incident' in "payments" namespace.
 	// -----------------------------------------------------------------------
-	doc, err := ctrl.CreateDoc(ctx, model.Doc{
+	doc, err := ctrl.CreateDocument(ctx, model.Document{
 		Title:     "Payment service crash loop",
 		Namespace: "payments",
 	})
@@ -57,12 +57,12 @@ func TestIncidentInvestigation(t *testing.T) {
 		t.Fatalf("create doc: %v", err)
 	}
 	if doc.Uid == "" {
-		t.Fatal("expected non-empty doc uid")
+		t.Fatal("expected non-empty document uid")
 	}
 	if doc.Namespace != "payments" {
 		t.Fatalf("expected namespace 'payments', got %q", doc.Namespace)
 	}
-	t.Logf("created doc %s", doc.Uid)
+	t.Logf("created document %s", doc.Uid)
 
 	// -----------------------------------------------------------------------
 	// 2. Create a block of alerts_matcher type with filter name="CrashLoopBackOff".
@@ -137,11 +137,11 @@ func TestIncidentInvestigation(t *testing.T) {
 	t.Logf("updated markdown block %d to rev %d", updatedMd.BlockNumber, updatedMd.RevisionNumber)
 
 	// -----------------------------------------------------------------------
-	// Verify final state: GetDoc should return 2 blocks, each at revision 2.
+	// Verify final state: GetDocument should return 2 blocks, each at revision 2.
 	// -----------------------------------------------------------------------
-	finalDoc, err := ctrl.GetDoc(ctx, doc.Uid)
+	finalDoc, err := ctrl.GetDocument(ctx, doc.Uid)
 	if err != nil {
-		t.Fatalf("get doc: %v", err)
+		t.Fatalf("get document: %v", err)
 	}
 	if len(finalDoc.Blocks) != 2 {
 		t.Fatalf("expected 2 blocks, got %d", len(finalDoc.Blocks))

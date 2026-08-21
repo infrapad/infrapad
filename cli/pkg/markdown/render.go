@@ -12,11 +12,11 @@ import (
 // Render produces an infrapad-flavoured markdown document from a Doc and its
 // blocks. The output follows the format described in
 // docs/infrapad-markdown-example.md.
-func Render(doc *pb.Doc, blocks []*pb.Block) (string, error) {
+func Render(doc *pb.Document, blocks []*pb.Block) (string, error) {
 	var sb strings.Builder
 
 	// --- YAML frontmatter ---
-	docID := strings.TrimPrefix(doc.GetName(), "docs/")
+	docID := strings.TrimPrefix(doc.GetName(), "documents/")
 	sb.WriteString("---\n")
 	sb.WriteString(fmt.Sprintf("doc: %s\n", docID))
 	sb.WriteString(fmt.Sprintf("title: %s\n", doc.GetTitle()))

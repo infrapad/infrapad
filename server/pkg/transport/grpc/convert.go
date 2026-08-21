@@ -15,9 +15,9 @@ import (
 // model → proto
 // ---------------------------------------------------------------------------
 
-func docToProto(d model.Doc) *pb.Doc {
-	out := &pb.Doc{
-		Name:      "docs/" + string(d.Uid),
+func documentToProto(d model.Document) *pb.Document {
+	out := &pb.Document{
+		Name:      "documents/" + string(d.Uid),
 		Status:    string(d.Status),
 		Title:     d.Title,
 		Namespace: d.Namespace,
@@ -31,9 +31,9 @@ func docToProto(d model.Doc) *pb.Doc {
 	return out
 }
 
-func blockToProto(b model.Block, docUID model.DocUID) *pb.Block {
+func blockToProto(b model.Block, documentUID model.DocumentUID) *pb.Block {
 	out := &pb.Block{
-		Name:           fmt.Sprintf("docs/%s/blocks/%d", string(docUID), b.BlockNumber),
+		Name:           fmt.Sprintf("documents/%s/blocks/%d", string(documentUID), b.BlockNumber),
 		BlockNumber:    int32(b.BlockNumber),
 		RevisionNumber: int32(b.RevisionNumber),
 		AuthorId:       string(b.AuthorID),

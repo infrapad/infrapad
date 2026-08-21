@@ -43,21 +43,21 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 1. Create a new document of type 'incident' in "payments" namespace.
 	// -----------------------------------------------------------------------
-	createDocResp, err := client.CreateDoc(ctx, &pb.CreateDocRequest{
+	createDocResp, err := client.CreateDocument(ctx, &pb.CreateDocumentRequest{
 		Title:     "Payment service crash loop",
 		Namespace: "payments",
 	})
 	if err != nil {
-		t.Fatalf("CreateDoc: %v", err)
+		t.Fatalf("CreateDocument: %v", err)
 	}
-	doc := createDocResp.GetDoc()
+	doc := createDocResp.GetDocument()
 	if doc.GetName() == "" {
-		t.Fatal("expected non-empty doc name")
+		t.Fatal("expected non-empty document name")
 	}
 	if doc.GetNamespace() != "payments" {
 		t.Fatalf("expected namespace 'payments', got %q", doc.GetNamespace())
 	}
-	t.Logf("created doc %s", doc.GetName())
+	t.Logf("created document %s", doc.GetName())
 
 	docName := doc.GetName()
 
@@ -162,13 +162,13 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	t.Logf("updated markdown block %d to rev %d", updatedMd.GetBlockNumber(), updatedMd.GetRevisionNumber())
 
 	// -----------------------------------------------------------------------
-	// Verify final state: GetDoc should return 2 blocks, each at revision 2.
+	// Verify final state: GetDocument should return 2 blocks, each at revision 2.
 	// -----------------------------------------------------------------------
-	getDocResp, err := client.GetDoc(ctx, &pb.GetDocRequest{Name: docName})
+	getDocResp, err := client.GetDocument(ctx, &pb.GetDocumentRequest{Name: docName})
 	if err != nil {
-		t.Fatalf("GetDoc: %v", err)
+		t.Fatalf("GetDocument: %v", err)
 	}
-	finalDoc := getDocResp.GetDoc()
+	finalDoc := getDocResp.GetDocument()
 	if len(finalDoc.GetBlocks()) != 2 {
 		t.Fatalf("expected 2 blocks, got %d", len(finalDoc.GetBlocks()))
 	}

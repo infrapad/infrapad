@@ -56,8 +56,8 @@ func (s *Server) GRPCServer() *grpc.Server {
 // Document RPCs
 // ---------------------------------------------------------------------------
 
-func (s *Server) CreateDoc(ctx context.Context, req *pb.CreateDocRequest) (*pb.CreateDocResponse, error) {
-	doc := model.Doc{
+func (s *Server) CreateDocument(ctx context.Context, req *pb.CreateDocumentRequest) (*pb.CreateDocumentResponse, error) {
+	doc := model.Document{
 		Title:     req.GetTitle(),
 		Namespace: req.GetNamespace(),
 	}
@@ -65,39 +65,39 @@ func (s *Server) CreateDoc(ctx context.Context, req *pb.CreateDocRequest) (*pb.C
 		doc.Blocks = append(doc.Blocks, blockFromProto(b))
 	}
 
-	created, err := s.ctrl.CreateDoc(ctx, doc)
+	created, err := s.ctrl.CreateDocument(ctx, doc)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create doc: %v", err)
+		return nil, status.Errorf(codes.Internal, "create document: %v", err)
 	}
-	return &pb.CreateDocResponse{Doc: docToProto(created)}, nil
+	return &pb.CreateDocumentResponse{Document: documentToProto(created)}, nil
 }
 
-// docUIDFromName extracts the doc UID from a resource name like "docs/{uid}".
-func docUIDFromName(name string) model.DocUID {
-	return model.DocUID(strings.TrimPrefix(name, "docs/"))
+// documentUIDFromName extracts the document UID from a resource name like "documents/{uid}".
+func documentUIDFromName(name string) model.DocumentUID {
+	return model.DocumentUID(strings.TrimPrefix(name, "documents/"))
 }
 
-// docUIDFromParent extracts the doc UID from a parent resource name like "docs/{uid}".
-func docUIDFromParent(parent string) model.DocUID {
-	return docUIDFromName(parent)
+// documentUIDFromParent extracts the document UID from a parent resource name like "documents/{uid}".
+func documentUIDFromParent(parent string) model.DocumentUID {
+	return documentUIDFromName(parent)
 }
 
-func (s *Server) GetDoc(ctx context.Context, req *pb.GetDocRequest) (*pb.GetDocResponse, error) {
-	doc, err := s.ctrl.GetDoc(ctx, docUIDFromName(req.GetName()))
+func (s *Server) GetDocument(ctx context.Context, req *pb.GetDocumentRequest) (*pb.GetDocumentResponse, error) {
+	doc, err := s.ctrl.GetDocument(ctx, documentUIDFromName(req.GetName()))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get doc: %v", err)
+		return nil, status.Errorf(codes.Internal, "get document: %v", err)
 	}
-	return &pb.GetDocResponse{Doc: docToProto(doc)}, nil
+	return &pb.GetDocumentResponse{Document: documentToProto(doc)}, nil
 }
 
-func (s *Server) ListDocs(ctx context.Context, req *pb.ListDocsRequest) (*pb.ListDocsResponse, error) {
-	docs, err := s.ctrl.ListDocs(ctx)
+func (s *Server) ListDocuments(ctx context.Context, req *pb.ListDocumentsRequest) (*pb.ListDocumentsResponse, error) {
+	documents, err := s.ctrl.ListDocuments(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list docs: %v", err)
+		return nil, status.Errorf(codes.Internal, "list documents: %v", err)
 	}
-	resp := &pb.ListDocsResponse{}
-	for _, d := range docs {
-		resp.Docs = append(resp.Docs, docToProto(d))
+	resp := &pb.ListDocumentsResponse{}
+	for _, d := range documents {
+		resp.Documents = append(resp.Documents, documentToProto(d))
 	}
 	return resp, nil
 }
@@ -107,56 +107,56 @@ func (s *Server) ListDocs(ctx context.Context, req *pb.ListDocsRequest) (*pb.Lis
 // ---------------------------------------------------------------------------
 
 func (s *Server) AddBlock(ctx context.Context, req *pb.AddBlockRequest) (*pb.AddBlockResponse, error) {
-	docUID := docUIDFromParent(req.GetParent())
+	documentUID := documentUIDFromParent(req.GetParent())
 	blk := blockFromProto(req.GetBlock())
-	created, err := s.ctrl.AddBlock(ctx, docUID, blk)
+	created, err := s.ctrl.AddBlock(ctx, documentUID, blk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "add block: %v", err)
 	}
-	return &pb.AddBlockResponse{Block: blockToProto(created, docUID)}, nil
+	return &pb.AddBlockResponse{Block: blockToProto(created, documentUID)}, nil
 }
 
 func (s *Server) UpdateBlock(ctx context.Context, req *pb.UpdateBlockRequest) (*pb.UpdateBlockResponse, error) {
-	docUID := docUIDFromParent(req.GetParent())
+	documentUID := documentUIDFromParent(req.GetParent())
 	blk := blockFromProto(req.GetBlock())
-	updated, err := s.ctrl.UpdateBlock(ctx, docUID, model.BlockNumber(req.GetBlockNumber()), blk)
+	updated, err := s.ctrl.UpdateBlock(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()), blk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "update block: %v", err)
 	}
-	return &pb.UpdateBlockResponse{Block: blockToProto(updated, docUID)}, nil
+	return &pb.UpdateBlockResponse{Block: blockToProto(updated, documentUID)}, nil
 }
 
 func (s *Server) GetBlock(ctx context.Context, req *pb.GetBlockRequest) (*pb.GetBlockResponse, error) {
-	docUID := docUIDFromParent(req.GetParent())
-	blk, err := s.ctrl.GetBlock(ctx, docUID, model.BlockNumber(req.GetBlockNumber()), model.RevisionNumber(req.GetRevisionNumber()))
+	documentUID := documentUIDFromParent(req.GetParent())
+	blk, err := s.ctrl.GetBlock(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()), model.RevisionNumber(req.GetRevisionNumber()))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get block: %v", err)
 	}
-	return &pb.GetBlockResponse{Block: blockToProto(blk, docUID)}, nil
+	return &pb.GetBlockResponse{Block: blockToProto(blk, documentUID)}, nil
 }
 
 func (s *Server) ListBlocks(ctx context.Context, req *pb.ListBlocksRequest) (*pb.ListBlocksResponse, error) {
-	docUID := docUIDFromParent(req.GetParent())
-	blocks, err := s.ctrl.ListBlocks(ctx, docUID)
+	documentUID := documentUIDFromParent(req.GetParent())
+	blocks, err := s.ctrl.ListBlocks(ctx, documentUID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list blocks: %v", err)
 	}
 	resp := &pb.ListBlocksResponse{}
 	for _, b := range blocks {
-		resp.Blocks = append(resp.Blocks, blockToProto(b, docUID))
+		resp.Blocks = append(resp.Blocks, blockToProto(b, documentUID))
 	}
 	return resp, nil
 }
 
 func (s *Server) ListBlockHistory(ctx context.Context, req *pb.ListBlockHistoryRequest) (*pb.ListBlockHistoryResponse, error) {
-	docUID := docUIDFromParent(req.GetParent())
-	revisions, err := s.ctrl.ListBlockHistory(ctx, docUID, model.BlockNumber(req.GetBlockNumber()))
+	documentUID := documentUIDFromParent(req.GetParent())
+	revisions, err := s.ctrl.ListBlockHistory(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list block history: %v", err)
 	}
 	resp := &pb.ListBlockHistoryResponse{}
 	for _, b := range revisions {
-		resp.Blocks = append(resp.Blocks, blockToProto(b, docUID))
+		resp.Blocks = append(resp.Blocks, blockToProto(b, documentUID))
 	}
 	return resp, nil
 }

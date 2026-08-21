@@ -9,8 +9,8 @@ import (
 )
 
 func TestRender(t *testing.T) {
-	doc := &pb.Doc{
-		Name:      "docs/796756c0-1829-41ae-91c2-3cdc531e3d59",
+	doc := &pb.Document{
+		Name:      "documents/796756c0-1829-41ae-91c2-3cdc531e3d59",
 		Title:     "Payment service crash loop",
 		Namespace: "payments",
 		Status:    "active",
@@ -107,8 +107,8 @@ func TestRender(t *testing.T) {
 }
 
 func TestRenderNoAuthor(t *testing.T) {
-	doc := &pb.Doc{
-		Name:      "docs/abc",
+	doc := &pb.Document{
+		Name:      "documents/abc",
 		Title:     "Test",
 		Namespace: "ns",
 		Status:    "active",

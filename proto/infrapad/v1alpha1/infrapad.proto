@@ -14,16 +14,16 @@ import "google/protobuf/timestamp.proto";
 // Messages – domain objects
 // ==========================================================================
 
-// Doc represents an investigation document.
-message Doc {
+// Document represents an investigation document.
+message Document {
     option (google.api.resource) = {
-        type : "infrapad.io/Doc"
-        pattern : "docs/{doc}"
-        singular : "doc"
-        plural : "docs"
+        type : "infrapad.io/Document"
+        pattern : "documents/{document}"
+        singular : "document"
+        plural : "documents"
     };
 
-    // Resource name: "docs/{doc}".
+    // Resource name: "documents/{document}".
     string name = 1 [
         (google.api.field_behavior) = IDENTIFIER,
         (google.api.field_behavior) = OUTPUT_ONLY
@@ -41,12 +41,12 @@ message Doc {
 message Block {
     option (google.api.resource) = {
         type : "infrapad.io/Block"
-        pattern : "docs/{doc}/blocks/{block}"
+        pattern : "documents/{document}/blocks/{block}"
         singular : "block"
         plural : "blocks"
     };
 
-    // Resource name: "docs/{doc}/blocks/{block}".
+    // Resource name: "documents/{document}/blocks/{block}".
     string name = 1 [
         (google.api.field_behavior) = IDENTIFIER,
         (google.api.field_behavior) = OUTPUT_ONLY
@@ -74,84 +74,84 @@ message Block {
 
 service InfrapadService {
     // ----- Document operations -----
-    rpc CreateDoc(CreateDocRequest) returns (CreateDocResponse) {
+    rpc CreateDocument(CreateDocumentRequest) returns (CreateDocumentResponse) {
         option (google.api.http) = {
-            post: "/v1/docs"
+            post: "/v1/documents"
             body: "*"
         };
     }
-    rpc GetDoc(GetDocRequest) returns (GetDocResponse) {
+    rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse) {
         option (google.api.http) = {
-            get: "/v1/{name=docs/*}"
+            get: "/v1/{name=documents/*}"
         };
     }
-    rpc ListDocs(ListDocsRequest) returns (ListDocsResponse) {
+    rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse) {
         option (google.api.http) = {
-            get: "/v1/docs"
+            get: "/v1/documents"
         };
     }
 
     // ----- Block operations -----
     rpc AddBlock(AddBlockRequest) returns (AddBlockResponse) {
         option (google.api.http) = {
-            post: "/v1/{parent=docs/*}/blocks"
+            post: "/v1/{parent=documents/*}/blocks"
             body: "*"
         };
     }
     rpc UpdateBlock(UpdateBlockRequest) returns (UpdateBlockResponse) {
         option (google.api.http) = {
-            put: "/v1/{parent=docs/*}/blocks/{block_number}"
+            put: "/v1/{parent=documents/*}/blocks/{block_number}"
             body: "*"
         };
     }
     rpc GetBlock(GetBlockRequest) returns (GetBlockResponse) {
         option (google.api.http) = {
-            get: "/v1/{parent=docs/*}/blocks/{block_number}"
+            get: "/v1/{parent=documents/*}/blocks/{block_number}"
         };
     }
     rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse) {
         option (google.api.http) = {
-            get: "/v1/{parent=docs/*}/blocks"
+            get: "/v1/{parent=documents/*}/blocks"
         };
     }
     rpc ListBlockHistory(ListBlockHistoryRequest)
         returns (ListBlockHistoryResponse) {
         option (google.api.http) = {
-            get: "/v1/{parent=docs/*}/blocks/{block_number}/history"
+            get: "/v1/{parent=documents/*}/blocks/{block_number}/history"
         };
     }
 }
 
 // ----- Document requests / responses -----
 
-message CreateDocRequest {
+message CreateDocumentRequest {
     string title = 1 [ (google.api.field_behavior) = REQUIRED ];
     string namespace = 2 [ (google.api.field_behavior) = OPTIONAL ];
     // Optional initial blocks.
     repeated Block blocks = 3 [ (google.api.field_behavior) = OPTIONAL ];
 }
 
-message CreateDocResponse { Doc doc = 1; }
+message CreateDocumentResponse { Document document = 1; }
 
-message GetDocRequest {
+message GetDocumentRequest {
     string name = 1 [
         (google.api.field_behavior) = REQUIRED,
-        (google.api.resource_reference).type = "infrapad.io/Doc"
+        (google.api.resource_reference).type = "infrapad.io/Document"
     ];
 }
 
-message GetDocResponse { Doc doc = 1; }
+message GetDocumentResponse { Document document = 1; }
 
-message ListDocsRequest {}
+message ListDocumentsRequest {}
 
-message ListDocsResponse { repeated Doc docs = 1; }
+message ListDocumentsResponse { repeated Document documents = 1; }
 
 // ----- Block requests / responses -----
 
 message AddBlockRequest {
     string parent = 1 [
         (google.api.field_behavior) = REQUIRED,
-        (google.api.resource_reference).type = "infrapad.io/Doc"
+        (google.api.resource_reference).type = "infrapad.io/Document"
     ];
     Block block = 2 [ (google.api.field_behavior) = REQUIRED ];
 }
@@ -161,7 +161,7 @@ message AddBlockResponse { Block block = 1; }
 message UpdateBlockRequest {
     string parent = 1 [
         (google.api.field_behavior) = REQUIRED,
-        (google.api.resource_reference).type = "infrapad.io/Doc"
+        (google.api.resource_reference).type = "infrapad.io/Document"
     ];
     int32 block_number = 2 [ (google.api.field_behavior) = REQUIRED ];
     Block block = 3 [ (google.api.field_behavior) = REQUIRED ];
@@ -172,7 +172,7 @@ message UpdateBlockResponse { Block block = 1; }
 message GetBlockRequest {
     string parent = 1 [
         (google.api.field_behavior) = REQUIRED,
-        (google.api.resource_reference).type = "infrapad.io/Doc"
+        (google.api.resource_reference).type = "infrapad.io/Document"
     ];
     int32 block_number = 2 [ (google.api.field_behavior) = REQUIRED ];
     // 0 means latest revision.
@@ -184,7 +184,7 @@ message GetBlockResponse { Block block = 1; }
 message ListBlocksRequest {
     string parent = 1 [
         (google.api.field_behavior) = REQUIRED,
-        (google.api.resource_reference).type = "infrapad.io/Doc"
+        (google.api.resource_reference).type = "infrapad.io/Document"
     ];
 }
 
@@ -193,7 +193,7 @@ message ListBlocksResponse { repeated Block blocks = 1; }
 message ListBlockHistoryRequest {
     string parent = 1 [
         (google.api.field_behavior) = REQUIRED,
-        (google.api.resource_reference).type = "infrapad.io/Doc"
+        (google.api.resource_reference).type = "infrapad.io/Document"
     ];
     int32 block_number = 2 [ (google.api.field_behavior) = REQUIRED ];
 }

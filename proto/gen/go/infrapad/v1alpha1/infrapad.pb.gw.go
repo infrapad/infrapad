@@ -35,9 +35,9 @@ var (
 	_ = metadata.Join
 )
 
-func request_InfrapadService_CreateDoc_0(ctx context.Context, marshaler runtime.Marshaler, client InfrapadServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_InfrapadService_CreateDocument_0(ctx context.Context, marshaler runtime.Marshaler, client InfrapadServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq CreateDocRequest
+		protoReq CreateDocumentRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
@@ -46,25 +46,25 @@ func request_InfrapadService_CreateDoc_0(ctx context.Context, marshaler runtime.
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	msg, err := client.CreateDoc(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.CreateDocument(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_InfrapadService_CreateDoc_0(ctx context.Context, marshaler runtime.Marshaler, server InfrapadServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_InfrapadService_CreateDocument_0(ctx context.Context, marshaler runtime.Marshaler, server InfrapadServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq CreateDocRequest
+		protoReq CreateDocumentRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	msg, err := server.CreateDoc(ctx, &protoReq)
+	msg, err := server.CreateDocument(ctx, &protoReq)
 	return msg, metadata, err
 }
 
-func request_InfrapadService_GetDoc_0(ctx context.Context, marshaler runtime.Marshaler, client InfrapadServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_InfrapadService_GetDocument_0(ctx context.Context, marshaler runtime.Marshaler, client InfrapadServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq GetDocRequest
+		protoReq GetDocumentRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -79,13 +79,13 @@ func request_InfrapadService_GetDoc_0(ctx context.Context, marshaler runtime.Mar
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	msg, err := client.GetDoc(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.GetDocument(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_InfrapadService_GetDoc_0(ctx context.Context, marshaler runtime.Marshaler, server InfrapadServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_InfrapadService_GetDocument_0(ctx context.Context, marshaler runtime.Marshaler, server InfrapadServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq GetDocRequest
+		protoReq GetDocumentRequest
 		metadata runtime.ServerMetadata
 		err      error
 	)
@@ -97,28 +97,28 @@ func local_request_InfrapadService_GetDoc_0(ctx context.Context, marshaler runti
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
-	msg, err := server.GetDoc(ctx, &protoReq)
+	msg, err := server.GetDocument(ctx, &protoReq)
 	return msg, metadata, err
 }
 
-func request_InfrapadService_ListDocs_0(ctx context.Context, marshaler runtime.Marshaler, client InfrapadServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_InfrapadService_ListDocuments_0(ctx context.Context, marshaler runtime.Marshaler, client InfrapadServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq ListDocsRequest
+		protoReq ListDocumentsRequest
 		metadata runtime.ServerMetadata
 	)
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	msg, err := client.ListDocs(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.ListDocuments(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_InfrapadService_ListDocs_0(ctx context.Context, marshaler runtime.Marshaler, server InfrapadServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_InfrapadService_ListDocuments_0(ctx context.Context, marshaler runtime.Marshaler, server InfrapadServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq ListDocsRequest
+		protoReq ListDocumentsRequest
 		metadata runtime.ServerMetadata
 	)
-	msg, err := server.ListDocs(ctx, &protoReq)
+	msg, err := server.ListDocuments(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -397,65 +397,65 @@ func local_request_InfrapadService_ListBlockHistory_0(ctx context.Context, marsh
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterInfrapadServiceHandlerFromEndpoint instead.
 // GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterInfrapadServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server InfrapadServiceServer) error {
-	mux.Handle(http.MethodPost, pattern_InfrapadService_CreateDoc_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_InfrapadService_CreateDocument_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/CreateDoc", runtime.WithHTTPPathPattern("/v1/docs"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/CreateDocument", runtime.WithHTTPPathPattern("/v1/documents"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_InfrapadService_CreateDoc_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_InfrapadService_CreateDocument_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_InfrapadService_CreateDoc_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InfrapadService_CreateDocument_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_InfrapadService_GetDoc_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_InfrapadService_GetDocument_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetDoc", runtime.WithHTTPPathPattern("/v1/{name=docs/*}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetDocument", runtime.WithHTTPPathPattern("/v1/{name=documents/*}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_InfrapadService_GetDoc_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_InfrapadService_GetDocument_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_InfrapadService_GetDoc_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InfrapadService_GetDocument_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_InfrapadService_ListDocs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_InfrapadService_ListDocuments_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListDocs", runtime.WithHTTPPathPattern("/v1/docs"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListDocuments", runtime.WithHTTPPathPattern("/v1/documents"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_InfrapadService_ListDocs_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_InfrapadService_ListDocuments_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_InfrapadService_ListDocs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InfrapadService_ListDocuments_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_InfrapadService_AddBlock_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -463,7 +463,7 @@ func RegisterInfrapadServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/AddBlock", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/AddBlock", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -483,7 +483,7 @@ func RegisterInfrapadServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/UpdateBlock", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks/{block_number}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/UpdateBlock", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks/{block_number}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -503,7 +503,7 @@ func RegisterInfrapadServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetBlock", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks/{block_number}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetBlock", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks/{block_number}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -523,7 +523,7 @@ func RegisterInfrapadServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlocks", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlocks", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -543,7 +543,7 @@ func RegisterInfrapadServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlockHistory", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks/{block_number}/history"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlockHistory", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks/{block_number}/history"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -597,62 +597,62 @@ func RegisterInfrapadServiceHandler(ctx context.Context, mux *runtime.ServeMux, 
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
 // "InfrapadServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterInfrapadServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client InfrapadServiceClient) error {
-	mux.Handle(http.MethodPost, pattern_InfrapadService_CreateDoc_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_InfrapadService_CreateDocument_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/CreateDoc", runtime.WithHTTPPathPattern("/v1/docs"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/CreateDocument", runtime.WithHTTPPathPattern("/v1/documents"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_InfrapadService_CreateDoc_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_InfrapadService_CreateDocument_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_InfrapadService_CreateDoc_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InfrapadService_CreateDocument_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_InfrapadService_GetDoc_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_InfrapadService_GetDocument_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetDoc", runtime.WithHTTPPathPattern("/v1/{name=docs/*}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetDocument", runtime.WithHTTPPathPattern("/v1/{name=documents/*}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_InfrapadService_GetDoc_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_InfrapadService_GetDocument_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_InfrapadService_GetDoc_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InfrapadService_GetDocument_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_InfrapadService_ListDocs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_InfrapadService_ListDocuments_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListDocs", runtime.WithHTTPPathPattern("/v1/docs"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListDocuments", runtime.WithHTTPPathPattern("/v1/documents"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_InfrapadService_ListDocs_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_InfrapadService_ListDocuments_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_InfrapadService_ListDocs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_InfrapadService_ListDocuments_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_InfrapadService_AddBlock_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/AddBlock", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/AddBlock", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -669,7 +669,7 @@ func RegisterInfrapadServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/UpdateBlock", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks/{block_number}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/UpdateBlock", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks/{block_number}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -686,7 +686,7 @@ func RegisterInfrapadServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetBlock", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks/{block_number}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/GetBlock", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks/{block_number}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -703,7 +703,7 @@ func RegisterInfrapadServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlocks", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlocks", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -720,7 +720,7 @@ func RegisterInfrapadServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlockHistory", runtime.WithHTTPPathPattern("/v1/{parent=docs/*}/blocks/{block_number}/history"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/infrapad.v1.InfrapadService/ListBlockHistory", runtime.WithHTTPPathPattern("/v1/{parent=documents/*}/blocks/{block_number}/history"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -737,20 +737,20 @@ func RegisterInfrapadServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 }
 
 var (
-	pattern_InfrapadService_CreateDoc_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "docs"}, ""))
-	pattern_InfrapadService_GetDoc_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2}, []string{"v1", "docs", "name"}, ""))
-	pattern_InfrapadService_ListDocs_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "docs"}, ""))
-	pattern_InfrapadService_AddBlock_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "docs", "parent", "blocks"}, ""))
-	pattern_InfrapadService_UpdateBlock_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "docs", "parent", "blocks", "block_number"}, ""))
-	pattern_InfrapadService_GetBlock_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "docs", "parent", "blocks", "block_number"}, ""))
-	pattern_InfrapadService_ListBlocks_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "docs", "parent", "blocks"}, ""))
-	pattern_InfrapadService_ListBlockHistory_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "docs", "parent", "blocks", "block_number", "history"}, ""))
+	pattern_InfrapadService_CreateDocument_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "documents"}, ""))
+	pattern_InfrapadService_GetDocument_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2}, []string{"v1", "documents", "name"}, ""))
+	pattern_InfrapadService_ListDocuments_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "documents"}, ""))
+	pattern_InfrapadService_AddBlock_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "documents", "parent", "blocks"}, ""))
+	pattern_InfrapadService_UpdateBlock_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "documents", "parent", "blocks", "block_number"}, ""))
+	pattern_InfrapadService_GetBlock_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "documents", "parent", "blocks", "block_number"}, ""))
+	pattern_InfrapadService_ListBlocks_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1", "documents", "parent", "blocks"}, ""))
+	pattern_InfrapadService_ListBlockHistory_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"v1", "documents", "parent", "blocks", "block_number", "history"}, ""))
 )
 
 var (
-	forward_InfrapadService_CreateDoc_0        = runtime.ForwardResponseMessage
-	forward_InfrapadService_GetDoc_0           = runtime.ForwardResponseMessage
-	forward_InfrapadService_ListDocs_0         = runtime.ForwardResponseMessage
+	forward_InfrapadService_CreateDocument_0   = runtime.ForwardResponseMessage
+	forward_InfrapadService_GetDocument_0      = runtime.ForwardResponseMessage
+	forward_InfrapadService_ListDocuments_0    = runtime.ForwardResponseMessage
 	forward_InfrapadService_AddBlock_0         = runtime.ForwardResponseMessage
 	forward_InfrapadService_UpdateBlock_0      = runtime.ForwardResponseMessage
 	forward_InfrapadService_GetBlock_0         = runtime.ForwardResponseMessage

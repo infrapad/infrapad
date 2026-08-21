@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-type Doc struct {
-	Uid       DocUID
-	Status    DocStatus
+type Document struct {
+	Uid       DocumentUID
+	Status    DocumentStatus
 	Title     string
 	Namespace string
 	CreatedAt time.Time
@@ -17,13 +17,13 @@ type Doc struct {
 	Blocks []Block
 }
 
-type DocUID string
+type DocumentUID string
 
-type DocStatus string
+type DocumentStatus string
 
 const (
-	ActiveDoc   DocStatus = "active"
-	ArchivedDoc DocStatus = "archived"
+	ActiveDocument   DocumentStatus = "active"
+	ArchivedDocument DocumentStatus = "archived"
 )
 
 type Block struct {

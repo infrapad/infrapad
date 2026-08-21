@@ -8,12 +8,12 @@ with type-specific data in a JSONB `serialized_content` column.
 
 ## Schema
 
-### docs
+### documents
 
 Top-level entity representing an incident, observation, or analysis.
 
 ```sql
-CREATE TABLE docs (
+CREATE TABLE documents (
     uid                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     status              TEXT NOT NULL DEFAULT 'active',
     title               TEXT NOT NULL,
@@ -30,7 +30,7 @@ The current version of a block is determined by the highest `revision_number`.
 
 ```sql
 CREATE TABLE blocks (
-    doc_uid           UUID NOT NULL REFERENCES docs(uid),
+    document_uid      UUID NOT NULL REFERENCES documents(uid),
     block_number      INT NOT NULL,
     revision_number   INT NOT NULL,
     author_id         TEXT NOT NULL DEFAULT '',
@@ -39,24 +39,24 @@ CREATE TABLE blocks (
     serialized_content JSONB NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    PRIMARY KEY (doc_uid, block_number, revision_number)
+    PRIMARY KEY (document_uid, block_number, revision_number)
 );
 ```
 
 Both `block_number` and `revision_number` are scoped auto-increments
-starting from 1 for each doc (and each block respectively). They are
+starting from 1 for each document (and each block respectively). They are
 assigned via subqueries at insert time (see [Inserting](#inserting) below).
 
 ## Indexes
 
-The composite PK `(doc_uid, block_number, revision_number)` covers
+The composite PK `(document_uid, block_number, revision_number)` covers
 the two primary access patterns with no additional indexes needed:
 
-- **Fetch all blocks for a doc** — prefix scan on `doc_uid`
-- **Fetch history of a block** — prefix scan on `(doc_uid, block_number)`
+- **Fetch all blocks for a document** — prefix scan on `document_uid`
+- **Fetch history of a block** — prefix scan on `(document_uid, block_number)`
 
-All blocks of the same doc are physically adjacent in the B-tree index,
-making doc fetches very efficient.
+All blocks of the same document are physically adjacent in the B-tree index,
+making document fetches very efficient.
 
 ## Versioning
 
@@ -68,27 +68,27 @@ The important invariant: the current version of the block always has
 the highest revision number. This allows for efficient queries for current
 blocks.
 
-### Fetching Current State of a Doc
+### Fetching Current State of a Document
 
 ```sql
 SELECT DISTINCT ON (block_number) *
 FROM blocks
-WHERE doc_uid = $1
+WHERE document_uid = $1
 ORDER BY block_number, revision_number DESC;
 ```
 
 ### Inserting a New Block {#inserting}
 
 Creating a new block uses a subquery to find the next available `block_number`
-for the doc.
+for the document.
 
 ```sql
-INSERT INTO blocks (doc_uid, block_number, revision_number, author_id, type, status, serialized_content)
+INSERT INTO blocks (document_uid, block_number, revision_number, author_id, type, status, serialized_content)
 VALUES (
     $1,
     (SELECT COALESCE(MAX(block_number), 0) + 1
        FROM blocks
-      WHERE doc_uid = $1),
+      WHERE document_uid = $1),
     1,
     $2, $3, $4, $5
 );
@@ -97,17 +97,17 @@ VALUES (
 ### Inserting a New Revision of an Existing Block
 
 ```sql
-INSERT INTO blocks (doc_uid, block_number, revision_number, author_id, type, status, serialized_content)
+INSERT INTO blocks (document_uid, block_number, revision_number, author_id, type, status, serialized_content)
 VALUES (
     $1,
     $2,
     (SELECT MAX(revision_number) + 1
        FROM blocks
-      WHERE doc_uid = $1 AND block_number = $2),
+      WHERE document_uid = $1 AND block_number = $2),
     $3, $4, $5, $6
 );
 ```
 
-The PK constraint on `(doc_uid, block_number, revision_number)` prevents
+The PK constraint on `(document_uid, block_number, revision_number)` prevents
 duplicate revisions in case of concurrent edits — the application can retry
 on conflict.

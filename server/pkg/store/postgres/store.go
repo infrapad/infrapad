@@ -75,69 +75,69 @@ type pgTx struct {
 
 var _ store.Tx = &pgTx{}
 
-func (t *pgTx) Docs() store.DocsCollection     { return &pgDocs{tx: t.tx} }
-func (t *pgTx) Blocks() store.BlocksCollection { return &pgBlocks{tx: t.tx} }
-func (t *pgTx) Commit() error                  { return t.tx.Commit() }
-func (t *pgTx) Rollback() error                { return t.tx.Rollback() }
+func (t *pgTx) Documents() store.DocumentsCollection { return &pgDocuments{tx: t.tx} }
+func (t *pgTx) Blocks() store.BlocksCollection       { return &pgBlocks{tx: t.tx} }
+func (t *pgTx) Commit() error                        { return t.tx.Commit() }
+func (t *pgTx) Rollback() error                      { return t.tx.Rollback() }
 
 // ---------------------------------------------------------------------------
-// DocsCollection
+// DocumentsCollection
 // ---------------------------------------------------------------------------
 
-type pgDocs struct {
+type pgDocuments struct {
 	tx *sql.Tx
 }
 
-var _ store.DocsCollection = &pgDocs{}
+var _ store.DocumentsCollection = &pgDocuments{}
 
-func (d *pgDocs) Create(ctx context.Context, doc model.Doc) (model.Doc, error) {
+func (d *pgDocuments) Create(ctx context.Context, doc model.Document) (model.Document, error) {
 	row := d.tx.QueryRowContext(ctx,
-		`INSERT INTO docs (status, title, namespace)
+		`INSERT INTO documents (status, title, namespace)
 		 VALUES ($1, $2, $3)
 		 RETURNING uid, status, title, namespace, created_at`,
-		cond(doc.Status == "", string(model.ActiveDoc), string(doc.Status)),
+		cond(doc.Status == "", string(model.ActiveDocument), string(doc.Status)),
 		doc.Title,
 		cond(doc.Namespace == "", "default", doc.Namespace),
 	)
-	var out model.Doc
+	var out model.Document
 	var status string
 	if err := row.Scan(&out.Uid, &status, &out.Title, &out.Namespace, &out.CreatedAt); err != nil {
-		return model.Doc{}, fmt.Errorf("insert doc: %w", err)
+		return model.Document{}, fmt.Errorf("insert document: %w", err)
 	}
-	out.Status = model.DocStatus(status)
+	out.Status = model.DocumentStatus(status)
 	return out, nil
 }
 
-func (d *pgDocs) Get(ctx context.Context, uid model.DocUID) (model.Doc, error) {
+func (d *pgDocuments) Get(ctx context.Context, uid model.DocumentUID) (model.Document, error) {
 	row := d.tx.QueryRowContext(ctx,
-		`SELECT uid, status, title, namespace, created_at FROM docs WHERE uid = $1`, uid)
-	var out model.Doc
+		`SELECT uid, status, title, namespace, created_at FROM documents WHERE uid = $1`, uid)
+	var out model.Document
 	var status string
 	if err := row.Scan(&out.Uid, &status, &out.Title, &out.Namespace, &out.CreatedAt); err != nil {
-		return model.Doc{}, fmt.Errorf("get doc %s: %w", uid, err)
+		return model.Document{}, fmt.Errorf("get document %s: %w", uid, err)
 	}
-	out.Status = model.DocStatus(status)
+	out.Status = model.DocumentStatus(status)
 	return out, nil
 }
 
-func (d *pgDocs) List(ctx context.Context) ([]model.Doc, error) {
+func (d *pgDocuments) List(ctx context.Context) ([]model.Document, error) {
 	rows, err := d.tx.QueryContext(ctx,
-		`SELECT uid, status, title, namespace, created_at FROM docs ORDER BY created_at`)
+		`SELECT uid, status, title, namespace, created_at FROM documents ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var docs []model.Doc
+	var documents []model.Document
 	for rows.Next() {
-		var doc model.Doc
+		var doc model.Document
 		var status string
 		if err := rows.Scan(&doc.Uid, &status, &doc.Title, &doc.Namespace, &doc.CreatedAt); err != nil {
 			return nil, err
 		}
-		doc.Status = model.DocStatus(status)
-		docs = append(docs, doc)
+		doc.Status = model.DocumentStatus(status)
+		documents = append(documents, doc)
 	}
-	return docs, rows.Err()
+	return documents, rows.Err()
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ type pgBlocks struct {
 
 var _ store.BlocksCollection = &pgBlocks{}
 
-func (b *pgBlocks) Create(ctx context.Context, docUid model.DocUID, blk model.Block) (model.Block, error) {
+func (b *pgBlocks) Create(ctx context.Context, documentUid model.DocumentUID, blk model.Block) (model.Block, error) {
 	sc := blk.SerializedContent
 	if blk.Content != nil {
 		var err error
@@ -165,84 +165,84 @@ func (b *pgBlocks) Create(ctx context.Context, docUid model.DocUID, blk model.Bl
 
 	if blk.BlockNumber == 0 {
 		// New block – assign next block_number, revision = 1.
-		revisionExpr = `(SELECT COALESCE(MAX(block_number), 0) + 1 FROM blocks WHERE doc_uid = $1), 1`
-		args = []any{string(docUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data}
+		revisionExpr = `(SELECT COALESCE(MAX(block_number), 0) + 1 FROM blocks WHERE document_uid = $1), 1`
+		args = []any{string(documentUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data}
 	} else {
 		// New revision of existing block.
-		revisionExpr = `$6, (SELECT COALESCE(MAX(revision_number), 0) + 1 FROM blocks WHERE doc_uid = $1 AND block_number = $6)`
-		args = []any{string(docUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data, blk.BlockNumber}
+		revisionExpr = `$6, (SELECT COALESCE(MAX(revision_number), 0) + 1 FROM blocks WHERE document_uid = $1 AND block_number = $6)`
+		args = []any{string(documentUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data, blk.BlockNumber}
 	}
 
 	query := fmt.Sprintf(
-		`INSERT INTO blocks (doc_uid, block_number, revision_number, author_id, type, status, serialized_content)
+		`INSERT INTO blocks (document_uid, block_number, revision_number, author_id, type, status, serialized_content)
 		 VALUES ($1, %s, $2, $3, $4, $5)
 		 RETURNING block_number, revision_number, author_id, type, status, serialized_content, created_at`,
 		revisionExpr,
 	)
 
 	row := b.tx.QueryRowContext(ctx, query, args...)
-	return scanBlock(docUid, row)
+	return scanBlock(documentUid, row)
 }
 
-func (b *pgBlocks) Get(ctx context.Context, docUid model.DocUID, blockNumber model.BlockNumber, revisionNumber model.RevisionNumber) (model.Block, error) {
+func (b *pgBlocks) Get(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber, revisionNumber model.RevisionNumber) (model.Block, error) {
 	var row *sql.Row
 	if revisionNumber == 0 {
 		row = b.tx.QueryRowContext(ctx,
 			`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
-			 FROM blocks WHERE doc_uid = $1 AND block_number = $2
+			 FROM blocks WHERE document_uid = $1 AND block_number = $2
 			 ORDER BY revision_number DESC LIMIT 1`,
-			docUid, blockNumber)
+			documentUid, blockNumber)
 	} else {
 		row = b.tx.QueryRowContext(ctx,
 			`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
-			 FROM blocks WHERE doc_uid = $1 AND block_number = $2 AND revision_number = $3`,
-			docUid, blockNumber, revisionNumber)
+			 FROM blocks WHERE document_uid = $1 AND block_number = $2 AND revision_number = $3`,
+			documentUid, blockNumber, revisionNumber)
 	}
-	return scanBlock(docUid, row)
+	return scanBlock(documentUid, row)
 }
 
-func (b *pgBlocks) List(ctx context.Context, docUid model.DocUID) ([]model.Block, error) {
+func (b *pgBlocks) List(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error) {
 	rows, err := b.tx.QueryContext(ctx,
 		`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
-		 FROM blocks WHERE doc_uid = $1
+		 FROM blocks WHERE document_uid = $1
 		 ORDER BY block_number, revision_number`,
-		docUid)
+		documentUid)
 	if err != nil {
 		return nil, err
 	}
-	return scanBlocks(docUid, rows)
+	return scanBlocks(documentUid, rows)
 }
 
-func (b *pgBlocks) ListRevisions(ctx context.Context, docUid model.DocUID, blockNumber model.BlockNumber) ([]model.Block, error) {
+func (b *pgBlocks) ListRevisions(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber) ([]model.Block, error) {
 	rows, err := b.tx.QueryContext(ctx,
 		`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
-		 FROM blocks WHERE doc_uid = $1 AND block_number = $2
+		 FROM blocks WHERE document_uid = $1 AND block_number = $2
 		 ORDER BY revision_number`,
-		docUid, blockNumber)
+		documentUid, blockNumber)
 	if err != nil {
 		return nil, err
 	}
-	return scanBlocks(docUid, rows)
+	return scanBlocks(documentUid, rows)
 }
 
-func (b *pgBlocks) ListLatest(ctx context.Context, docUid model.DocUID) ([]model.Block, error) {
+func (b *pgBlocks) ListLatest(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error) {
 	rows, err := b.tx.QueryContext(ctx,
 		`SELECT DISTINCT ON (block_number)
 		        block_number, revision_number, author_id, type, status, serialized_content, created_at
-		 FROM blocks WHERE doc_uid = $1
+		 FROM blocks WHERE document_uid = $1
 		 ORDER BY block_number, revision_number DESC`,
-		docUid)
+		documentUid)
 	if err != nil {
 		return nil, err
 	}
-	return scanBlocks(docUid, rows)
+	return scanBlocks(documentUid, rows)
 }
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
-func scanBlock(docUid model.DocUID, row *sql.Row) (model.Block, error) {
+func scanBlock(documentUid model.DocumentUID, row *sql.Row) (model.Block, error) {
 	var blk model.Block
 	var status, typ string
 	var data []byte
@@ -261,7 +261,7 @@ func scanBlock(docUid model.DocUID, row *sql.Row) (model.Block, error) {
 	return blk, nil
 }
 
-func scanBlocks(docUid model.DocUID, rows *sql.Rows) ([]model.Block, error) {
+func scanBlocks(documentUid model.DocumentUID, rows *sql.Rows) ([]model.Block, error) {
 	defer rows.Close()
 	var blocks []model.Block
 	for rows.Next() {

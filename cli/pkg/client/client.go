@@ -32,33 +32,33 @@ func (c *Client) Close() error {
 }
 
 // CreateDoc creates a new document.
-func (c *Client) CreateDoc(ctx context.Context, title, namespace string) (*pb.Doc, error) {
-	resp, err := c.svc.CreateDoc(ctx, &pb.CreateDocRequest{
+func (c *Client) CreateDoc(ctx context.Context, title, namespace string) (*pb.Document, error) {
+	resp, err := c.svc.CreateDocument(ctx, &pb.CreateDocumentRequest{
 		Title:     title,
 		Namespace: namespace,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return resp.GetDoc(), nil
+	return resp.GetDocument(), nil
 }
 
 // GetDoc retrieves a document by name.
-func (c *Client) GetDoc(ctx context.Context, name string) (*pb.Doc, error) {
-	resp, err := c.svc.GetDoc(ctx, &pb.GetDocRequest{Name: name})
+func (c *Client) GetDoc(ctx context.Context, name string) (*pb.Document, error) {
+	resp, err := c.svc.GetDocument(ctx, &pb.GetDocumentRequest{Name: name})
 	if err != nil {
 		return nil, err
 	}
-	return resp.GetDoc(), nil
+	return resp.GetDocument(), nil
 }
 
 // ListDocs lists all documents.
-func (c *Client) ListDocs(ctx context.Context) ([]*pb.Doc, error) {
-	resp, err := c.svc.ListDocs(ctx, &pb.ListDocsRequest{})
+func (c *Client) ListDocs(ctx context.Context) ([]*pb.Document, error) {
+	resp, err := c.svc.ListDocuments(ctx, &pb.ListDocumentsRequest{})
 	if err != nil {
 		return nil, err
 	}
-	return resp.GetDocs(), nil
+	return resp.GetDocuments(), nil
 }
 
 // AddBlock adds a block to a document.

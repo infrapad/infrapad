@@ -45,17 +45,17 @@ func requireCode(t *testing.T, err error, want codes.Code, msgAndArgs ...interfa
 	}
 }
 
-// helperCreateDoc creates a valid doc and returns its UID, failing the test
+// helperCreateDocument creates a valid document and returns its name, failing the test
 // on error.
-func helperCreateDoc(t *testing.T, client pb.InfrapadServiceClient) string {
+func helperCreateDocument(t *testing.T, client pb.InfrapadServiceClient) string {
 	t.Helper()
-	resp, err := client.CreateDoc(context.Background(), &pb.CreateDocRequest{
-		Title: "helper doc for invalid-data tests",
+	resp, err := client.CreateDocument(context.Background(), &pb.CreateDocumentRequest{
+		Title: "helper document for invalid-data tests",
 	})
 	if err != nil {
-		t.Fatalf("helperCreateDoc: %v", err)
+		t.Fatalf("helperCreateDocument: %v", err)
 	}
-	return resp.GetDoc().GetName()
+	return resp.GetDocument().GetName()
 }
 
 // validContent returns a simple valid content struct for testing.
@@ -95,35 +95,35 @@ func TestInvalidData(t *testing.T) {
 
 	client := pb.NewInfrapadServiceClient(conn)
 
-	// Create a valid doc + block for use in later sub-tests.
-	validDocName := helperCreateDoc(t, client)
+	// Create a valid document + block for use in later sub-tests.
+	validDocName := helperCreateDocument(t, client)
 	validBlock := helperAddBlock(t, client, validDocName)
 
 	// ===================================================================
 	// CreateDoc
 	// ===================================================================
 
-	t.Run("CreateDoc/empty_title", func(t *testing.T) {
+	t.Run("CreateDocument/empty_title", func(t *testing.T) {
 		skip(t)
 		// title is REQUIRED — empty string should be rejected.
-		_, err := client.CreateDoc(ctx, &pb.CreateDocRequest{Title: ""})
+		_, err := client.CreateDocument(ctx, &pb.CreateDocumentRequest{Title: ""})
 		requireCode(t, err, codes.InvalidArgument, "empty title")
 	})
 
 	// ===================================================================
-	// GetDoc
+	// GetDocument
 	// ===================================================================
 
-	t.Run("GetDoc/empty_name", func(t *testing.T) {
+	t.Run("GetDocument/empty_name", func(t *testing.T) {
 		skip(t)
 		// name is REQUIRED.
-		_, err := client.GetDoc(ctx, &pb.GetDocRequest{Name: ""})
+		_, err := client.GetDocument(ctx, &pb.GetDocumentRequest{Name: ""})
 		requireCode(t, err, codes.InvalidArgument, "empty name")
 	})
 
-	t.Run("GetDoc/nonexistent_name", func(t *testing.T) {
+	t.Run("GetDocument/nonexistent_name", func(t *testing.T) {
 		skip(t)
-		_, err := client.GetDoc(ctx, &pb.GetDocRequest{Name: "docs/does-not-exist-12345"})
+		_, err := client.GetDocument(ctx, &pb.GetDocumentRequest{Name: "documents/does-not-exist-12345"})
 		requireCode(t, err, codes.NotFound, "nonexistent name")
 	})
 
@@ -146,7 +146,7 @@ func TestInvalidData(t *testing.T) {
 	t.Run("AddBlock/nonexistent_parent", func(t *testing.T) {
 		skip(t)
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
-			Parent: "docs/does-not-exist-12345",
+			Parent: "documents/does-not-exist-12345",
 			Block: &pb.Block{
 				Type:    "markdown",
 				Content: validContent(t),
@@ -210,7 +210,7 @@ func TestInvalidData(t *testing.T) {
 	t.Run("UpdateBlock/nonexistent_parent", func(t *testing.T) {
 		skip(t)
 		_, err := client.UpdateBlock(ctx, &pb.UpdateBlockRequest{
-			Parent:      "docs/does-not-exist-12345",
+			Parent:      "documents/does-not-exist-12345",
 			BlockNumber: 1,
 			Block: &pb.Block{
 				Type:    "markdown",
@@ -273,7 +273,7 @@ func TestInvalidData(t *testing.T) {
 	t.Run("GetBlock/nonexistent_parent", func(t *testing.T) {
 		skip(t)
 		_, err := client.GetBlock(ctx, &pb.GetBlockRequest{
-			Parent:      "docs/does-not-exist-12345",
+			Parent:      "documents/does-not-exist-12345",
 			BlockNumber: 1,
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent parent")
@@ -329,7 +329,7 @@ func TestInvalidData(t *testing.T) {
 
 	t.Run("ListBlocks/nonexistent_parent", func(t *testing.T) {
 		skip(t)
-		_, err := client.ListBlocks(ctx, &pb.ListBlocksRequest{Parent: "docs/does-not-exist-12345"})
+		_, err := client.ListBlocks(ctx, &pb.ListBlocksRequest{Parent: "documents/does-not-exist-12345"})
 		requireCode(t, err, codes.NotFound, "nonexistent parent")
 	})
 
@@ -349,7 +349,7 @@ func TestInvalidData(t *testing.T) {
 	t.Run("ListBlockHistory/nonexistent_parent", func(t *testing.T) {
 		skip(t)
 		_, err := client.ListBlockHistory(ctx, &pb.ListBlockHistoryRequest{
-			Parent:      "docs/does-not-exist-12345",
+			Parent:      "documents/does-not-exist-12345",
 			BlockNumber: 1,
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent parent")

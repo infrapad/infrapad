@@ -15,14 +15,14 @@ import (
 func DocColumns() []Column {
 	return []Column{
 		{Header: "ID", Value: func(m proto.Message) string {
-			// Strip the "docs/" resource prefix for readability.
-			return strings.TrimPrefix(m.(*pb.Doc).GetName(), "docs/")
+			// Strip the "documents/" resource prefix for readability.
+			return strings.TrimPrefix(m.(*pb.Document).GetName(), "documents/")
 		}},
-		{Header: "Namespace", Value: func(m proto.Message) string { return m.(*pb.Doc).GetNamespace() }},
-		{Header: "Title", Value: func(m proto.Message) string { return m.(*pb.Doc).GetTitle() }},
-		{Header: "Status", Value: func(m proto.Message) string { return m.(*pb.Doc).GetStatus() }},
+		{Header: "Namespace", Value: func(m proto.Message) string { return m.(*pb.Document).GetNamespace() }},
+		{Header: "Title", Value: func(m proto.Message) string { return m.(*pb.Document).GetTitle() }},
+		{Header: "Status", Value: func(m proto.Message) string { return m.(*pb.Document).GetStatus() }},
 		{Header: "Created At", Value: func(m proto.Message) string {
-			ts := m.(*pb.Doc).GetCreatedAt()
+			ts := m.(*pb.Document).GetCreatedAt()
 			if ts == nil {
 				return ""
 			}

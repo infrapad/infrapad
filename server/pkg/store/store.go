@@ -23,28 +23,28 @@ type Store interface {
 }
 
 type Tx interface {
-	Docs() DocsCollection
+	Documents() DocumentsCollection
 	Blocks() BlocksCollection
 	Commit() error
 	Rollback() error
 }
 
-type DocsCollection interface {
-	Create(ctx context.Context, doc model.Doc) (model.Doc, error)
-	Get(ctx context.Context, uid model.DocUID) (model.Doc, error)
-	List(ctx context.Context) ([]model.Doc, error)
+type DocumentsCollection interface {
+	Create(ctx context.Context, doc model.Document) (model.Document, error)
+	Get(ctx context.Context, uid model.DocumentUID) (model.Document, error)
+	List(ctx context.Context) ([]model.Document, error)
 }
 
 type BlocksCollection interface {
-	Create(ctx context.Context, docUid model.DocUID, block model.Block) (model.Block, error)
+	Create(ctx context.Context, documentUid model.DocumentUID, block model.Block) (model.Block, error)
 	// Get the block by id and revision number. If revisionNumber == 0, get the latest.
 	Get(ctx context.Context,
-		docUid model.DocUID,
+		documentUid model.DocumentUID,
 		blockNumber model.BlockNumber,
 		revisionNumber model.RevisionNumber) (model.Block, error)
-	List(ctx context.Context, docUid model.DocUID) ([]model.Block, error)
+	List(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error)
 	// List all revisionions for a given block
-	ListRevisions(ctx context.Context, docUid model.DocUID, blockNumber model.BlockNumber) ([]model.Block, error)
+	ListRevisions(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber) ([]model.Block, error)
 	// List only the latest blocks inside the document.
-	ListLatest(ctx context.Context, docUid model.DocUID) ([]model.Block, error)
+	ListLatest(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error)
 }

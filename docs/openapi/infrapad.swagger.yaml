@@ -9,14 +9,14 @@ consumes:
 produces:
   - application/json
 paths:
-  /v1/docs:
+  /v1/documents:
     get:
-      operationId: InfrapadService_ListDocs
+      operationId: InfrapadService_ListDocuments
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1ListDocsResponse'
+            $ref: '#/definitions/v1ListDocumentsResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -25,12 +25,12 @@ paths:
         - InfrapadService
     post:
       summary: '----- Document operations -----'
-      operationId: InfrapadService_CreateDoc
+      operationId: InfrapadService_CreateDocument
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1CreateDocResponse'
+            $ref: '#/definitions/v1CreateDocumentResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -40,17 +40,17 @@ paths:
           in: body
           required: true
           schema:
-            $ref: '#/definitions/v1CreateDocRequest'
+            $ref: '#/definitions/v1CreateDocumentRequest'
       tags:
         - InfrapadService
   /v1/{name}:
     get:
-      operationId: InfrapadService_GetDoc
+      operationId: InfrapadService_GetDocument
       responses:
         "200":
           description: A successful response.
           schema:
-            $ref: '#/definitions/v1GetDocResponse'
+            $ref: '#/definitions/v1GetDocumentResponse'
         default:
           description: An unexpected error response.
           schema:
@@ -60,7 +60,7 @@ paths:
           in: path
           required: true
           type: string
-          pattern: docs/[^/]+
+          pattern: documents/[^/]+
       tags:
         - InfrapadService
   /v1/{parent}/blocks:
@@ -80,7 +80,7 @@ paths:
           in: path
           required: true
           type: string
-          pattern: docs/[^/]+
+          pattern: documents/[^/]+
       tags:
         - InfrapadService
     post:
@@ -100,7 +100,7 @@ paths:
           in: path
           required: true
           type: string
-          pattern: docs/[^/]+
+          pattern: documents/[^/]+
         - name: body
           in: body
           required: true
@@ -125,7 +125,7 @@ paths:
           in: path
           required: true
           type: string
-          pattern: docs/[^/]+
+          pattern: documents/[^/]+
         - name: blockNumber
           in: path
           required: true
@@ -155,7 +155,7 @@ paths:
           in: path
           required: true
           type: string
-          pattern: docs/[^/]+
+          pattern: documents/[^/]+
         - name: blockNumber
           in: path
           required: true
@@ -185,7 +185,7 @@ paths:
           in: path
           required: true
           type: string
-          pattern: docs/[^/]+
+          pattern: documents/[^/]+
         - name: blockNumber
           in: path
           required: true
@@ -249,7 +249,7 @@ definitions:
     properties:
       name:
         type: string
-        description: 'Resource name: "docs/{doc}/blocks/{block}".'
+        description: 'Resource name: "documents/{document}/blocks/{block}".'
         readOnly: true
       blockNumber:
         type: integer
@@ -280,7 +280,7 @@ definitions:
     required:
       - type
       - content
-  v1CreateDocRequest:
+  v1CreateDocumentRequest:
     type: object
     properties:
       title:
@@ -295,17 +295,17 @@ definitions:
         description: Optional initial blocks.
     required:
       - title
-  v1CreateDocResponse:
+  v1CreateDocumentResponse:
     type: object
     properties:
-      doc:
-        $ref: '#/definitions/v1Doc'
-  v1Doc:
+      document:
+        $ref: '#/definitions/v1Document'
+  v1Document:
     type: object
     properties:
       name:
         type: string
-        description: 'Resource name: "docs/{doc}".'
+        description: 'Resource name: "documents/{document}".'
         readOnly: true
       status:
         type: string
@@ -325,7 +325,7 @@ definitions:
           type: object
           $ref: '#/definitions/v1Block'
         readOnly: true
-    description: Doc represents an investigation document.
+    description: Document represents an investigation document.
     required:
       - title
   v1GetBlockResponse:
@@ -333,11 +333,11 @@ definitions:
     properties:
       block:
         $ref: '#/definitions/v1Block'
-  v1GetDocResponse:
+  v1GetDocumentResponse:
     type: object
     properties:
-      doc:
-        $ref: '#/definitions/v1Doc'
+      document:
+        $ref: '#/definitions/v1Document'
   v1ListBlockHistoryResponse:
     type: object
     properties:
@@ -354,14 +354,14 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Block'
-  v1ListDocsResponse:
+  v1ListDocumentsResponse:
     type: object
     properties:
-      docs:
+      documents:
         type: array
         items:
           type: object
-          $ref: '#/definitions/v1Doc'
+          $ref: '#/definitions/v1Document'
   v1UpdateBlockResponse:
     type: object
     properties:

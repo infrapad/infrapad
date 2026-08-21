@@ -24,10 +24,10 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Doc represents an investigation document.
-type Doc struct {
+// Document represents an investigation document.
+type Document struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Resource name: "docs/{doc}".
+	// Resource name: "documents/{document}".
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "active" | "archived"
 	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
@@ -38,20 +38,20 @@ type Doc struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Doc) Reset() {
-	*x = Doc{}
+func (x *Document) Reset() {
+	*x = Document{}
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Doc) String() string {
+func (x *Document) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Doc) ProtoMessage() {}
+func (*Document) ProtoMessage() {}
 
-func (x *Doc) ProtoReflect() protoreflect.Message {
+func (x *Document) ProtoReflect() protoreflect.Message {
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -63,47 +63,47 @@ func (x *Doc) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Doc.ProtoReflect.Descriptor instead.
-func (*Doc) Descriptor() ([]byte, []int) {
+// Deprecated: Use Document.ProtoReflect.Descriptor instead.
+func (*Document) Descriptor() ([]byte, []int) {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *Doc) GetName() string {
+func (x *Document) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *Doc) GetStatus() string {
+func (x *Document) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *Doc) GetTitle() string {
+func (x *Document) GetTitle() string {
 	if x != nil {
 		return x.Title
 	}
 	return ""
 }
 
-func (x *Doc) GetNamespace() string {
+func (x *Document) GetNamespace() string {
 	if x != nil {
 		return x.Namespace
 	}
 	return ""
 }
 
-func (x *Doc) GetCreatedAt() *timestamppb.Timestamp {
+func (x *Document) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
 	return nil
 }
 
-func (x *Doc) GetBlocks() []*Block {
+func (x *Document) GetBlocks() []*Block {
 	if x != nil {
 		return x.Blocks
 	}
@@ -113,7 +113,7 @@ func (x *Doc) GetBlocks() []*Block {
 // Block represents a single content block within a document.
 type Block struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Resource name: "docs/{doc}/blocks/{block}".
+	// Resource name: "documents/{document}/blocks/{block}".
 	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	BlockNumber    int32                  `protobuf:"varint,2,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
 	RevisionNumber int32                  `protobuf:"varint,3,opt,name=revision_number,json=revisionNumber,proto3" json:"revision_number,omitempty"`
@@ -215,7 +215,7 @@ func (x *Block) GetContent() *structpb.Struct {
 	return nil
 }
 
-type CreateDocRequest struct {
+type CreateDocumentRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Title     string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
 	Namespace string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
@@ -225,20 +225,20 @@ type CreateDocRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateDocRequest) Reset() {
-	*x = CreateDocRequest{}
+func (x *CreateDocumentRequest) Reset() {
+	*x = CreateDocumentRequest{}
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateDocRequest) String() string {
+func (x *CreateDocumentRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateDocRequest) ProtoMessage() {}
+func (*CreateDocumentRequest) ProtoMessage() {}
 
-func (x *CreateDocRequest) ProtoReflect() protoreflect.Message {
+func (x *CreateDocumentRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -250,53 +250,53 @@ func (x *CreateDocRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateDocRequest.ProtoReflect.Descriptor instead.
-func (*CreateDocRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateDocumentRequest.ProtoReflect.Descriptor instead.
+func (*CreateDocumentRequest) Descriptor() ([]byte, []int) {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CreateDocRequest) GetTitle() string {
+func (x *CreateDocumentRequest) GetTitle() string {
 	if x != nil {
 		return x.Title
 	}
 	return ""
 }
 
-func (x *CreateDocRequest) GetNamespace() string {
+func (x *CreateDocumentRequest) GetNamespace() string {
 	if x != nil {
 		return x.Namespace
 	}
 	return ""
 }
 
-func (x *CreateDocRequest) GetBlocks() []*Block {
+func (x *CreateDocumentRequest) GetBlocks() []*Block {
 	if x != nil {
 		return x.Blocks
 	}
 	return nil
 }
 
-type CreateDocResponse struct {
+type CreateDocumentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Doc           *Doc                   `protobuf:"bytes,1,opt,name=doc,proto3" json:"doc,omitempty"`
+	Document      *Document              `protobuf:"bytes,1,opt,name=document,proto3" json:"document,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateDocResponse) Reset() {
-	*x = CreateDocResponse{}
+func (x *CreateDocumentResponse) Reset() {
+	*x = CreateDocumentResponse{}
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateDocResponse) String() string {
+func (x *CreateDocumentResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateDocResponse) ProtoMessage() {}
+func (*CreateDocumentResponse) ProtoMessage() {}
 
-func (x *CreateDocResponse) ProtoReflect() protoreflect.Message {
+func (x *CreateDocumentResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -308,39 +308,39 @@ func (x *CreateDocResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateDocResponse.ProtoReflect.Descriptor instead.
-func (*CreateDocResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CreateDocumentResponse.ProtoReflect.Descriptor instead.
+func (*CreateDocumentResponse) Descriptor() ([]byte, []int) {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *CreateDocResponse) GetDoc() *Doc {
+func (x *CreateDocumentResponse) GetDocument() *Document {
 	if x != nil {
-		return x.Doc
+		return x.Document
 	}
 	return nil
 }
 
-type GetDocRequest struct {
+type GetDocumentRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetDocRequest) Reset() {
-	*x = GetDocRequest{}
+func (x *GetDocumentRequest) Reset() {
+	*x = GetDocumentRequest{}
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetDocRequest) String() string {
+func (x *GetDocumentRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetDocRequest) ProtoMessage() {}
+func (*GetDocumentRequest) ProtoMessage() {}
 
-func (x *GetDocRequest) ProtoReflect() protoreflect.Message {
+func (x *GetDocumentRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -352,39 +352,39 @@ func (x *GetDocRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetDocRequest.ProtoReflect.Descriptor instead.
-func (*GetDocRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetDocumentRequest.ProtoReflect.Descriptor instead.
+func (*GetDocumentRequest) Descriptor() ([]byte, []int) {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *GetDocRequest) GetName() string {
+func (x *GetDocumentRequest) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-type GetDocResponse struct {
+type GetDocumentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Doc           *Doc                   `protobuf:"bytes,1,opt,name=doc,proto3" json:"doc,omitempty"`
+	Document      *Document              `protobuf:"bytes,1,opt,name=document,proto3" json:"document,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetDocResponse) Reset() {
-	*x = GetDocResponse{}
+func (x *GetDocumentResponse) Reset() {
+	*x = GetDocumentResponse{}
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetDocResponse) String() string {
+func (x *GetDocumentResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetDocResponse) ProtoMessage() {}
+func (*GetDocumentResponse) ProtoMessage() {}
 
-func (x *GetDocResponse) ProtoReflect() protoreflect.Message {
+func (x *GetDocumentResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -396,38 +396,38 @@ func (x *GetDocResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetDocResponse.ProtoReflect.Descriptor instead.
-func (*GetDocResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetDocumentResponse.ProtoReflect.Descriptor instead.
+func (*GetDocumentResponse) Descriptor() ([]byte, []int) {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *GetDocResponse) GetDoc() *Doc {
+func (x *GetDocumentResponse) GetDocument() *Document {
 	if x != nil {
-		return x.Doc
+		return x.Document
 	}
 	return nil
 }
 
-type ListDocsRequest struct {
+type ListDocumentsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListDocsRequest) Reset() {
-	*x = ListDocsRequest{}
+func (x *ListDocumentsRequest) Reset() {
+	*x = ListDocumentsRequest{}
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListDocsRequest) String() string {
+func (x *ListDocumentsRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListDocsRequest) ProtoMessage() {}
+func (*ListDocumentsRequest) ProtoMessage() {}
 
-func (x *ListDocsRequest) ProtoReflect() protoreflect.Message {
+func (x *ListDocumentsRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -439,32 +439,32 @@ func (x *ListDocsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListDocsRequest.ProtoReflect.Descriptor instead.
-func (*ListDocsRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListDocumentsRequest.ProtoReflect.Descriptor instead.
+func (*ListDocumentsRequest) Descriptor() ([]byte, []int) {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{6}
 }
 
-type ListDocsResponse struct {
+type ListDocumentsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Docs          []*Doc                 `protobuf:"bytes,1,rep,name=docs,proto3" json:"docs,omitempty"`
+	Documents     []*Document            `protobuf:"bytes,1,rep,name=documents,proto3" json:"documents,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListDocsResponse) Reset() {
-	*x = ListDocsResponse{}
+func (x *ListDocumentsResponse) Reset() {
+	*x = ListDocumentsResponse{}
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListDocsResponse) String() string {
+func (x *ListDocumentsResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListDocsResponse) ProtoMessage() {}
+func (*ListDocumentsResponse) ProtoMessage() {}
 
-func (x *ListDocsResponse) ProtoReflect() protoreflect.Message {
+func (x *ListDocumentsResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -476,14 +476,14 @@ func (x *ListDocsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListDocsResponse.ProtoReflect.Descriptor instead.
-func (*ListDocsResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use ListDocumentsResponse.ProtoReflect.Descriptor instead.
+func (*ListDocumentsResponse) Descriptor() ([]byte, []int) {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *ListDocsResponse) GetDocs() []*Doc {
+func (x *ListDocumentsResponse) GetDocuments() []*Document {
 	if x != nil {
-		return x.Docs
+		return x.Documents
 	}
 	return nil
 }
@@ -981,17 +981,16 @@ var File_infrapad_v1alpha1_infrapad_proto protoreflect.FileDescriptor
 
 const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\n" +
-	" infrapad/v1alpha1/infrapad.proto\x12\vinfrapad.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9a\x02\n" +
-	"\x03Doc\x12\x1a\n" +
+	" infrapad/v1alpha1/infrapad.proto\x12\vinfrapad.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb8\x02\n" +
+	"\bDocument\x12\x1a\n" +
 	"\x04name\x18\x01 \x01(\tB\x06\xe0A\b\xe0A\x03R\x04name\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tB\x03\xe0A\x03R\x06status\x12\x19\n" +
 	"\x05title\x18\x03 \x01(\tB\x03\xe0A\x02R\x05title\x12!\n" +
 	"\tnamespace\x18\x04 \x01(\tB\x03\xe0A\x01R\tnamespace\x12>\n" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x12/\n" +
-	"\x06blocks\x18\x06 \x03(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x03R\x06blocks:+\xeaA(\n" +
-	"\x0finfrapad.io/Doc\x12\n" +
-	"docs/{doc}*\x04docs2\x03doc\"\x8b\x03\n" +
+	"\x06blocks\x18\x06 \x03(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x03R\x06blocks:D\xeaAA\n" +
+	"\x14infrapad.io/Document\x12\x14documents/{document}*\tdocuments2\bdocument\"\x95\x03\n" +
 	"\x05Block\x12\x1a\n" +
 	"\x04name\x18\x01 \x01(\tB\x06\xe0A\b\xe0A\x03R\x04name\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x03R\vblockNumber\x12,\n" +
@@ -1002,64 +1001,63 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x126\n" +
 	"\acontent\x18\n" +
-	" \x01(\v2\x17.google.protobuf.StructB\x03\xe0A\x02R\acontent:@\xeaA=\n" +
-	"\x11infrapad.io/Block\x12\x19docs/{doc}/blocks/{block}*\x06blocks2\x05block\"\x81\x01\n" +
-	"\x10CreateDocRequest\x12\x19\n" +
+	" \x01(\v2\x17.google.protobuf.StructB\x03\xe0A\x02R\acontent:J\xeaAG\n" +
+	"\x11infrapad.io/Block\x12#documents/{document}/blocks/{block}*\x06blocks2\x05block\"\x86\x01\n" +
+	"\x15CreateDocumentRequest\x12\x19\n" +
 	"\x05title\x18\x01 \x01(\tB\x03\xe0A\x02R\x05title\x12!\n" +
 	"\tnamespace\x18\x02 \x01(\tB\x03\xe0A\x01R\tnamespace\x12/\n" +
-	"\x06blocks\x18\x03 \x03(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x01R\x06blocks\"7\n" +
-	"\x11CreateDocResponse\x12\"\n" +
-	"\x03doc\x18\x01 \x01(\v2\x10.infrapad.v1.DocR\x03doc\"<\n" +
-	"\rGetDocRequest\x12+\n" +
-	"\x04name\x18\x01 \x01(\tB\x17\xe0A\x02\xfaA\x11\n" +
-	"\x0finfrapad.io/DocR\x04name\"4\n" +
-	"\x0eGetDocResponse\x12\"\n" +
-	"\x03doc\x18\x01 \x01(\v2\x10.infrapad.v1.DocR\x03doc\"\x11\n" +
-	"\x0fListDocsRequest\"8\n" +
-	"\x10ListDocsResponse\x12$\n" +
-	"\x04docs\x18\x01 \x03(\v2\x10.infrapad.v1.DocR\x04docs\"q\n" +
-	"\x0fAddBlockRequest\x12/\n" +
-	"\x06parent\x18\x01 \x01(\tB\x17\xe0A\x02\xfaA\x11\n" +
-	"\x0finfrapad.io/DocR\x06parent\x12-\n" +
+	"\x06blocks\x18\x03 \x03(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x01R\x06blocks\"K\n" +
+	"\x16CreateDocumentResponse\x121\n" +
+	"\bdocument\x18\x01 \x01(\v2\x15.infrapad.v1.DocumentR\bdocument\"F\n" +
+	"\x12GetDocumentRequest\x120\n" +
+	"\x04name\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
+	"\x14infrapad.io/DocumentR\x04name\"H\n" +
+	"\x13GetDocumentResponse\x121\n" +
+	"\bdocument\x18\x01 \x01(\v2\x15.infrapad.v1.DocumentR\bdocument\"\x16\n" +
+	"\x14ListDocumentsRequest\"L\n" +
+	"\x15ListDocumentsResponse\x123\n" +
+	"\tdocuments\x18\x01 \x03(\v2\x15.infrapad.v1.DocumentR\tdocuments\"v\n" +
+	"\x0fAddBlockRequest\x124\n" +
+	"\x06parent\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
+	"\x14infrapad.io/DocumentR\x06parent\x12-\n" +
 	"\x05block\x18\x02 \x01(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x02R\x05block\"<\n" +
 	"\x10AddBlockResponse\x12(\n" +
-	"\x05block\x18\x01 \x01(\v2\x12.infrapad.v1.BlockR\x05block\"\x9c\x01\n" +
-	"\x12UpdateBlockRequest\x12/\n" +
-	"\x06parent\x18\x01 \x01(\tB\x17\xe0A\x02\xfaA\x11\n" +
-	"\x0finfrapad.io/DocR\x06parent\x12&\n" +
+	"\x05block\x18\x01 \x01(\v2\x12.infrapad.v1.BlockR\x05block\"\xa1\x01\n" +
+	"\x12UpdateBlockRequest\x124\n" +
+	"\x06parent\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
+	"\x14infrapad.io/DocumentR\x06parent\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x02R\vblockNumber\x12-\n" +
 	"\x05block\x18\x03 \x01(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x02R\x05block\"?\n" +
 	"\x13UpdateBlockResponse\x12(\n" +
-	"\x05block\x18\x01 \x01(\v2\x12.infrapad.v1.BlockR\x05block\"\x98\x01\n" +
-	"\x0fGetBlockRequest\x12/\n" +
-	"\x06parent\x18\x01 \x01(\tB\x17\xe0A\x02\xfaA\x11\n" +
-	"\x0finfrapad.io/DocR\x06parent\x12&\n" +
+	"\x05block\x18\x01 \x01(\v2\x12.infrapad.v1.BlockR\x05block\"\x9d\x01\n" +
+	"\x0fGetBlockRequest\x124\n" +
+	"\x06parent\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
+	"\x14infrapad.io/DocumentR\x06parent\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x02R\vblockNumber\x12,\n" +
 	"\x0frevision_number\x18\x03 \x01(\x05B\x03\xe0A\x01R\x0erevisionNumber\"<\n" +
 	"\x10GetBlockResponse\x12(\n" +
-	"\x05block\x18\x01 \x01(\v2\x12.infrapad.v1.BlockR\x05block\"D\n" +
-	"\x11ListBlocksRequest\x12/\n" +
-	"\x06parent\x18\x01 \x01(\tB\x17\xe0A\x02\xfaA\x11\n" +
-	"\x0finfrapad.io/DocR\x06parent\"@\n" +
+	"\x05block\x18\x01 \x01(\v2\x12.infrapad.v1.BlockR\x05block\"I\n" +
+	"\x11ListBlocksRequest\x124\n" +
+	"\x06parent\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
+	"\x14infrapad.io/DocumentR\x06parent\"@\n" +
 	"\x12ListBlocksResponse\x12*\n" +
-	"\x06blocks\x18\x01 \x03(\v2\x12.infrapad.v1.BlockR\x06blocks\"r\n" +
-	"\x17ListBlockHistoryRequest\x12/\n" +
-	"\x06parent\x18\x01 \x01(\tB\x17\xe0A\x02\xfaA\x11\n" +
-	"\x0finfrapad.io/DocR\x06parent\x12&\n" +
+	"\x06blocks\x18\x01 \x03(\v2\x12.infrapad.v1.BlockR\x06blocks\"w\n" +
+	"\x17ListBlockHistoryRequest\x124\n" +
+	"\x06parent\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
+	"\x14infrapad.io/DocumentR\x06parent\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x02R\vblockNumber\"F\n" +
 	"\x18ListBlockHistoryResponse\x12*\n" +
-	"\x06blocks\x18\x01 \x03(\v2\x12.infrapad.v1.BlockR\x06blocks2\xb0\a\n" +
-	"\x0fInfrapadService\x12_\n" +
-	"\tCreateDoc\x12\x1d.infrapad.v1.CreateDocRequest\x1a\x1e.infrapad.v1.CreateDocResponse\"\x13\x82\xd3\xe4\x93\x02\r:\x01*\"\b/v1/docs\x12\\\n" +
-	"\x06GetDoc\x12\x1a.infrapad.v1.GetDocRequest\x1a\x1b.infrapad.v1.GetDocResponse\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/v1/{name=docs/*}\x12Y\n" +
-	"\bListDocs\x12\x1c.infrapad.v1.ListDocsRequest\x1a\x1d.infrapad.v1.ListDocsResponse\"\x10\x82\xd3\xe4\x93\x02\n" +
-	"\x12\b/v1/docs\x12n\n" +
-	"\bAddBlock\x12\x1c.infrapad.v1.AddBlockRequest\x1a\x1d.infrapad.v1.AddBlockResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/v1/{parent=docs/*}/blocks\x12\x86\x01\n" +
-	"\vUpdateBlock\x12\x1f.infrapad.v1.UpdateBlockRequest\x1a .infrapad.v1.UpdateBlockResponse\"4\x82\xd3\xe4\x93\x02.:\x01*\x1a)/v1/{parent=docs/*}/blocks/{block_number}\x12z\n" +
-	"\bGetBlock\x12\x1c.infrapad.v1.GetBlockRequest\x1a\x1d.infrapad.v1.GetBlockResponse\"1\x82\xd3\xe4\x93\x02+\x12)/v1/{parent=docs/*}/blocks/{block_number}\x12q\n" +
+	"\x06blocks\x18\x01 \x03(\v2\x12.infrapad.v1.BlockR\x06blocks2\x85\b\n" +
+	"\x0fInfrapadService\x12s\n" +
+	"\x0eCreateDocument\x12\".infrapad.v1.CreateDocumentRequest\x1a#.infrapad.v1.CreateDocumentResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/documents\x12p\n" +
+	"\vGetDocument\x12\x1f.infrapad.v1.GetDocumentRequest\x1a .infrapad.v1.GetDocumentResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/{name=documents/*}\x12m\n" +
+	"\rListDocuments\x12!.infrapad.v1.ListDocumentsRequest\x1a\".infrapad.v1.ListDocumentsResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/documents\x12s\n" +
+	"\bAddBlock\x12\x1c.infrapad.v1.AddBlockRequest\x1a\x1d.infrapad.v1.AddBlockResponse\"*\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/v1/{parent=documents/*}/blocks\x12\x8b\x01\n" +
+	"\vUpdateBlock\x12\x1f.infrapad.v1.UpdateBlockRequest\x1a .infrapad.v1.UpdateBlockResponse\"9\x82\xd3\xe4\x93\x023:\x01*\x1a./v1/{parent=documents/*}/blocks/{block_number}\x12\x7f\n" +
+	"\bGetBlock\x12\x1c.infrapad.v1.GetBlockRequest\x1a\x1d.infrapad.v1.GetBlockResponse\"6\x82\xd3\xe4\x93\x020\x12./v1/{parent=documents/*}/blocks/{block_number}\x12v\n" +
 	"\n" +
-	"ListBlocks\x12\x1e.infrapad.v1.ListBlocksRequest\x1a\x1f.infrapad.v1.ListBlocksResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/v1/{parent=docs/*}/blocks\x12\x9a\x01\n" +
-	"\x10ListBlockHistory\x12$.infrapad.v1.ListBlockHistoryRequest\x1a%.infrapad.v1.ListBlockHistoryResponse\"9\x82\xd3\xe4\x93\x023\x121/v1/{parent=docs/*}/blocks/{block_number}/historyBBZ@github.com/infrapad/infrapad/proto/gen/go/infrapad/v1;infrapadv1b\x06proto3"
+	"ListBlocks\x12\x1e.infrapad.v1.ListBlocksRequest\x1a\x1f.infrapad.v1.ListBlocksResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/v1/{parent=documents/*}/blocks\x12\x9f\x01\n" +
+	"\x10ListBlockHistory\x12$.infrapad.v1.ListBlockHistoryRequest\x1a%.infrapad.v1.ListBlockHistoryResponse\">\x82\xd3\xe4\x93\x028\x126/v1/{parent=documents/*}/blocks/{block_number}/historyBBZ@github.com/infrapad/infrapad/proto/gen/go/infrapad/v1;infrapadv1b\x06proto3"
 
 var (
 	file_infrapad_v1alpha1_infrapad_proto_rawDescOnce sync.Once
@@ -1075,14 +1073,14 @@ func file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP() []byte {
 
 var file_infrapad_v1alpha1_infrapad_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_infrapad_v1alpha1_infrapad_proto_goTypes = []any{
-	(*Doc)(nil),                      // 0: infrapad.v1.Doc
+	(*Document)(nil),                 // 0: infrapad.v1.Document
 	(*Block)(nil),                    // 1: infrapad.v1.Block
-	(*CreateDocRequest)(nil),         // 2: infrapad.v1.CreateDocRequest
-	(*CreateDocResponse)(nil),        // 3: infrapad.v1.CreateDocResponse
-	(*GetDocRequest)(nil),            // 4: infrapad.v1.GetDocRequest
-	(*GetDocResponse)(nil),           // 5: infrapad.v1.GetDocResponse
-	(*ListDocsRequest)(nil),          // 6: infrapad.v1.ListDocsRequest
-	(*ListDocsResponse)(nil),         // 7: infrapad.v1.ListDocsResponse
+	(*CreateDocumentRequest)(nil),    // 2: infrapad.v1.CreateDocumentRequest
+	(*CreateDocumentResponse)(nil),   // 3: infrapad.v1.CreateDocumentResponse
+	(*GetDocumentRequest)(nil),       // 4: infrapad.v1.GetDocumentRequest
+	(*GetDocumentResponse)(nil),      // 5: infrapad.v1.GetDocumentResponse
+	(*ListDocumentsRequest)(nil),     // 6: infrapad.v1.ListDocumentsRequest
+	(*ListDocumentsResponse)(nil),    // 7: infrapad.v1.ListDocumentsResponse
 	(*AddBlockRequest)(nil),          // 8: infrapad.v1.AddBlockRequest
 	(*AddBlockResponse)(nil),         // 9: infrapad.v1.AddBlockResponse
 	(*UpdateBlockRequest)(nil),       // 10: infrapad.v1.UpdateBlockRequest
@@ -1097,14 +1095,14 @@ var file_infrapad_v1alpha1_infrapad_proto_goTypes = []any{
 	(*structpb.Struct)(nil),          // 19: google.protobuf.Struct
 }
 var file_infrapad_v1alpha1_infrapad_proto_depIdxs = []int32{
-	18, // 0: infrapad.v1.Doc.created_at:type_name -> google.protobuf.Timestamp
-	1,  // 1: infrapad.v1.Doc.blocks:type_name -> infrapad.v1.Block
+	18, // 0: infrapad.v1.Document.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 1: infrapad.v1.Document.blocks:type_name -> infrapad.v1.Block
 	18, // 2: infrapad.v1.Block.created_at:type_name -> google.protobuf.Timestamp
 	19, // 3: infrapad.v1.Block.content:type_name -> google.protobuf.Struct
-	1,  // 4: infrapad.v1.CreateDocRequest.blocks:type_name -> infrapad.v1.Block
-	0,  // 5: infrapad.v1.CreateDocResponse.doc:type_name -> infrapad.v1.Doc
-	0,  // 6: infrapad.v1.GetDocResponse.doc:type_name -> infrapad.v1.Doc
-	0,  // 7: infrapad.v1.ListDocsResponse.docs:type_name -> infrapad.v1.Doc
+	1,  // 4: infrapad.v1.CreateDocumentRequest.blocks:type_name -> infrapad.v1.Block
+	0,  // 5: infrapad.v1.CreateDocumentResponse.document:type_name -> infrapad.v1.Document
+	0,  // 6: infrapad.v1.GetDocumentResponse.document:type_name -> infrapad.v1.Document
+	0,  // 7: infrapad.v1.ListDocumentsResponse.documents:type_name -> infrapad.v1.Document
 	1,  // 8: infrapad.v1.AddBlockRequest.block:type_name -> infrapad.v1.Block
 	1,  // 9: infrapad.v1.AddBlockResponse.block:type_name -> infrapad.v1.Block
 	1,  // 10: infrapad.v1.UpdateBlockRequest.block:type_name -> infrapad.v1.Block
@@ -1112,17 +1110,17 @@ var file_infrapad_v1alpha1_infrapad_proto_depIdxs = []int32{
 	1,  // 12: infrapad.v1.GetBlockResponse.block:type_name -> infrapad.v1.Block
 	1,  // 13: infrapad.v1.ListBlocksResponse.blocks:type_name -> infrapad.v1.Block
 	1,  // 14: infrapad.v1.ListBlockHistoryResponse.blocks:type_name -> infrapad.v1.Block
-	2,  // 15: infrapad.v1.InfrapadService.CreateDoc:input_type -> infrapad.v1.CreateDocRequest
-	4,  // 16: infrapad.v1.InfrapadService.GetDoc:input_type -> infrapad.v1.GetDocRequest
-	6,  // 17: infrapad.v1.InfrapadService.ListDocs:input_type -> infrapad.v1.ListDocsRequest
+	2,  // 15: infrapad.v1.InfrapadService.CreateDocument:input_type -> infrapad.v1.CreateDocumentRequest
+	4,  // 16: infrapad.v1.InfrapadService.GetDocument:input_type -> infrapad.v1.GetDocumentRequest
+	6,  // 17: infrapad.v1.InfrapadService.ListDocuments:input_type -> infrapad.v1.ListDocumentsRequest
 	8,  // 18: infrapad.v1.InfrapadService.AddBlock:input_type -> infrapad.v1.AddBlockRequest
 	10, // 19: infrapad.v1.InfrapadService.UpdateBlock:input_type -> infrapad.v1.UpdateBlockRequest
 	12, // 20: infrapad.v1.InfrapadService.GetBlock:input_type -> infrapad.v1.GetBlockRequest
 	14, // 21: infrapad.v1.InfrapadService.ListBlocks:input_type -> infrapad.v1.ListBlocksRequest
 	16, // 22: infrapad.v1.InfrapadService.ListBlockHistory:input_type -> infrapad.v1.ListBlockHistoryRequest
-	3,  // 23: infrapad.v1.InfrapadService.CreateDoc:output_type -> infrapad.v1.CreateDocResponse
-	5,  // 24: infrapad.v1.InfrapadService.GetDoc:output_type -> infrapad.v1.GetDocResponse
-	7,  // 25: infrapad.v1.InfrapadService.ListDocs:output_type -> infrapad.v1.ListDocsResponse
+	3,  // 23: infrapad.v1.InfrapadService.CreateDocument:output_type -> infrapad.v1.CreateDocumentResponse
+	5,  // 24: infrapad.v1.InfrapadService.GetDocument:output_type -> infrapad.v1.GetDocumentResponse
+	7,  // 25: infrapad.v1.InfrapadService.ListDocuments:output_type -> infrapad.v1.ListDocumentsResponse
 	9,  // 26: infrapad.v1.InfrapadService.AddBlock:output_type -> infrapad.v1.AddBlockResponse
 	11, // 27: infrapad.v1.InfrapadService.UpdateBlock:output_type -> infrapad.v1.UpdateBlockResponse
 	13, // 28: infrapad.v1.InfrapadService.GetBlock:output_type -> infrapad.v1.GetBlockResponse

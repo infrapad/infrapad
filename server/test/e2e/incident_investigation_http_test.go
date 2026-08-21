@@ -68,27 +68,27 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	// 1. Create a new document of type 'incident' in "payments" namespace.
 	// -----------------------------------------------------------------------
 	var createDocResp struct {
-		Doc struct {
+		Document struct {
 			Name      string `json:"name"`
 			Namespace string `json:"namespace"`
-		} `json:"doc"`
+		} `json:"document"`
 	}
-	httpDo(t, "POST", base+"/v1/docs", map[string]any{
+	httpDo(t, "POST", base+"/v1/documents", map[string]any{
 		"title":     "Payment service crash loop",
 		"namespace": "payments",
 	}, &createDocResp)
 
-	docName := createDocResp.Doc.Name
+	docName := createDocResp.Document.Name
 	if docName == "" {
-		t.Fatal("expected non-empty doc name")
+		t.Fatal("expected non-empty document name")
 	}
-	if createDocResp.Doc.Namespace != "payments" {
-		t.Fatalf("expected namespace 'payments', got %q", createDocResp.Doc.Namespace)
+	if createDocResp.Document.Namespace != "payments" {
+		t.Fatalf("expected namespace 'payments', got %q", createDocResp.Document.Namespace)
 	}
-	t.Logf("created doc %s", docName)
+	t.Logf("created document %s", docName)
 
-	// The doc name is like "docs/<id>"; for URL paths we use it directly
-	// since the gateway routes are /v1/{parent=docs/*}/...
+	// The document name is like "documents/<id>"; for URL paths we use it directly
+	// since the gateway routes are /v1/{parent=documents/*}/...
 	docURL := fmt.Sprintf("%s/v1/%s", base, docName)
 
 	// -----------------------------------------------------------------------
@@ -198,22 +198,22 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	t.Logf("updated markdown block %d to rev %d", updateMdResp.Block.BlockNumber, updateMdResp.Block.RevisionNumber)
 
 	// -----------------------------------------------------------------------
-	// Verify final state: GetDoc should return 2 blocks, each at revision 2.
+	// Verify final state: GetDocument should return 2 blocks, each at revision 2.
 	// -----------------------------------------------------------------------
 	var getDocResp struct {
-		Doc struct {
+		Document struct {
 			Blocks []struct {
 				BlockNumber    int `json:"blockNumber"`
 				RevisionNumber int `json:"revisionNumber"`
 			} `json:"blocks"`
-		} `json:"doc"`
+		} `json:"document"`
 	}
 	httpDo(t, "GET", docURL, nil, &getDocResp)
 
-	if len(getDocResp.Doc.Blocks) != 2 {
-		t.Fatalf("expected 2 blocks, got %d", len(getDocResp.Doc.Blocks))
+	if len(getDocResp.Document.Blocks) != 2 {
+		t.Fatalf("expected 2 blocks, got %d", len(getDocResp.Document.Blocks))
 	}
-	for _, blk := range getDocResp.Doc.Blocks {
+	for _, blk := range getDocResp.Document.Blocks {
 		if blk.RevisionNumber != 2 {
 			t.Errorf("block %d: expected revision 2, got %d", blk.BlockNumber, blk.RevisionNumber)
 		}
