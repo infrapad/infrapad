@@ -29,20 +29,21 @@ tasks:
       - task: test:e2e
 
   test:unit:
-    desc: Run unit tests
+    desc: "Run unit tests (PKG=./pkg/markdown/... -- -run TestName to filter)"
     cmds:
-      - go test ./...
+      - go test {{.PKG | default "./..."}} {{.CLI_ARGS}}
     sources:
       - "**/*.go"
       - go.mod
       - go.sum
 
   test:e2e:
-    desc: "Run CLI e2e tests (requires running server)"
+    desc: "Run CLI e2e tests (requires running server, TEST=markdown to filter)"
     deps: [build]
     cmds:
-      - ./test/e2e/incident_investigation_test.sh
-      - ./test/e2e/markdown_test.sh
+      - '{{if .TEST}}./test/e2e/{{.TEST}}_test.sh{{end}}'
+      - '{{if not .TEST}}./test/e2e/incident_investigation_test.sh{{end}}'
+      - '{{if not .TEST}}./test/e2e/markdown_test.sh{{end}}'
     env:
       INFRAPAD_CLI: ./{{.BINARY}}
       GRPC_ADDR: "{{.GRPC_ADDR}}"
