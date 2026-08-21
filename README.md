@@ -1,6 +1,6 @@
 # InfraPad
 
-Trusted notes about your infrastructure.
+Trusted notes about activities in the infrastructure your infrastructure.
 
 ## The problem
 
