@@ -7,7 +7,7 @@ import (
 )
 
 const testInput = `---
-doc: 42cd704a-f697-4a78-9c29-3c7235c9500f
+document: 42cd704a-f697-4a78-9c29-3c7235c9500f
 title: Payment service crash loop
 namespace: payments
 status: active
@@ -35,8 +35,8 @@ func TestParse(t *testing.T) {
 	}
 
 	// Document metadata.
-	if doc.Meta.DocID != "42cd704a-f697-4a78-9c29-3c7235c9500f" {
-		t.Errorf("DocID = %q", doc.Meta.DocID)
+	if doc.Meta.DocumentID != "42cd704a-f697-4a78-9c29-3c7235c9500f" {
+		t.Errorf("DocumentID = %q", doc.Meta.DocumentID)
 	}
 	if doc.Meta.Title != "Payment service crash loop" {
 		t.Errorf("Title = %q", doc.Meta.Title)
@@ -123,8 +123,8 @@ func TestParseExampleFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
-	if doc.Meta.DocID == "" {
-		t.Error("expected non-empty doc ID")
+	if doc.Meta.DocumentID == "" {
+		t.Error("expected non-empty document ID")
 	}
 	if len(doc.Blocks) != 3 {
 		t.Errorf("expected 3 blocks, got %d", len(doc.Blocks))
@@ -133,7 +133,7 @@ func TestParseExampleFile(t *testing.T) {
 
 func TestParseNewBlock(t *testing.T) {
 	input := `---
-doc: test-doc-id
+document: test-doc-id
 title: Test
 namespace: test
 status: active
@@ -191,8 +191,8 @@ func TestParseNoFrontmatter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
-	if doc.Meta.DocID != "" {
-		t.Errorf("expected empty doc ID, got %q", doc.Meta.DocID)
+	if doc.Meta.DocumentID != "" {
+		t.Errorf("expected empty document ID, got %q", doc.Meta.DocumentID)
 	}
 	if len(doc.Blocks) != 1 {
 		t.Fatalf("expected 1 block, got %d", len(doc.Blocks))

@@ -11,7 +11,7 @@ Infrapad is a collaborative incident/change tracking platform. Documents are sto
 
 An infrapad document consists of:
 
-- **Front matter** (YAML between `---` fences) with metadata: `doc` (ID), `title`, `namespace`, `status`.
+- **Front matter** (YAML between `---` fences) with metadata: `document` (ID), `title`, `namespace`, `status`.
 - **Blocks** — numbered content sections, each prefixed with a directive line:
 
 ```
@@ -28,7 +28,7 @@ Block types can by:
 See `deploy/example/monitored-app/tmp/incident.md` for a real-world example of an infrapad document. The general structure is:
 
     ---
-    doc: abc-123
+    document: abc-123
     title: Example incident
     namespace: monitored-app
     status: active
@@ -57,7 +57,7 @@ This is the primary workflow for reading and writing document content.
 **Pull** — download a document as infrapad-flavoured markdown:
 
 ```bash
-infrapad md pull --doc <name> --file <path>
+infrapad md pull --document <name> --file <path>
 # Omit --file to print to stdout
 ```
 
@@ -71,7 +71,7 @@ The push command auto-detects which blocks have changed (by comparing the local 
 
 ### Typical Agent Workflow
 
-1. **Pull** the document to a local file: `infrapad md pull --doc <name> --file incident.md`
+1. **Pull** the document to a local file: `infrapad md pull --document <name> --file incident.md`
 2. **Read** the file to understand the current state.
 3. **Edit** the file — modify existing blocks or append new ones.
 4. **Push** changes back: `infrapad md push --file incident.md` (auto-detects changed and new blocks).

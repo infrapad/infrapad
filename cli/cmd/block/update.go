@@ -11,7 +11,7 @@ func newUpdateCmd() *cobra.Command {
 		Use:   "update",
 		Short: "Update an existing block",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			parent, _ := cmd.Flags().GetString("doc")
+			parent, _ := cmd.Flags().GetString("document")
 			blockNumber, _ := cmd.Flags().GetInt32("block-number")
 			blockType, _ := cmd.Flags().GetString("type")
 			contentJSON, _ := cmd.Flags().GetString("content")
@@ -35,11 +35,11 @@ func newUpdateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("doc", "", "Parent document name (required)")
+	cmd.Flags().String("document", "", "Parent document name (required)")
 	cmd.Flags().Int32("block-number", 0, "Block number to update (required)")
 	cmd.Flags().String("type", "", "Block type (required)")
 	cmd.Flags().String("content", "{}", "Block content as JSON object")
-	_ = cmd.MarkFlagRequired("doc")
+	_ = cmd.MarkFlagRequired("document")
 	_ = cmd.MarkFlagRequired("block-number")
 	_ = cmd.MarkFlagRequired("type")
 

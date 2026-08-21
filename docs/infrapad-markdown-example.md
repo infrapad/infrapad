@@ -1,5 +1,5 @@
 ---
-doc: 42cd704a-f697-4a78-9c29-3c7235c9500f
+document: 42cd704a-f697-4a78-9c29-3c7235c9500f
 title: Payment service crash loop
 namespace: payments
 status: active

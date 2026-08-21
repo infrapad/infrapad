@@ -29,7 +29,7 @@ func newParseCmd() *cobra.Command {
 
 			// Print document metadata.
 			fmt.Println("Document:")
-			fmt.Printf("  doc:       %s\n", doc.Meta.DocID)
+			fmt.Printf("  document:  %s\n", doc.Meta.DocumentID)
 			fmt.Printf("  title:     %s\n", doc.Meta.Title)
 			fmt.Printf("  namespace: %s\n", doc.Meta.Namespace)
 			fmt.Printf("  status:    %s\n", doc.Meta.Status)

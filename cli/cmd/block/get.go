@@ -11,7 +11,7 @@ func newGetCmd() *cobra.Command {
 		Use:   "get",
 		Short: "Get a block by number",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			parent, _ := cmd.Flags().GetString("doc")
+			parent, _ := cmd.Flags().GetString("document")
 			blockNumber, _ := cmd.Flags().GetInt32("block-number")
 
 			c, err := cliutil.NewClient()
@@ -28,9 +28,9 @@ func newGetCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("doc", "", "Parent document name (required)")
+	cmd.Flags().String("document", "", "Parent document name (required)")
 	cmd.Flags().Int32("block-number", 0, "Block number (required)")
-	_ = cmd.MarkFlagRequired("doc")
+	_ = cmd.MarkFlagRequired("document")
 	_ = cmd.MarkFlagRequired("block-number")
 
 	return cmd

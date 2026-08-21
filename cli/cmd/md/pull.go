@@ -15,26 +15,26 @@ func newPullCmd() *cobra.Command {
 		Use:   "pull",
 		Short: "Pull a document from the server and write it as infrapad-flavoured markdown",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			docName, _ := cmd.Flags().GetString("doc")
+			docName, _ := cmd.Flags().GetString("document")
 			filePath, _ := cmd.Flags().GetString("file")
 
-			// If --doc is not provided, try to extract the doc ID from an existing file.
+			// If --document is not provided, try to extract the document ID from an existing file.
 			if docName == "" {
 				if filePath == "" {
-					return fmt.Errorf("either --doc or --file (pointing to a previously pulled file) is required")
+					return fmt.Errorf("either --document or --file (pointing to a previously pulled file) is required")
 				}
 				data, err := os.ReadFile(filePath)
 				if err != nil {
-					return fmt.Errorf("read file to extract doc ID: %w", err)
+					return fmt.Errorf("read file to extract document ID: %w", err)
 				}
 				doc, err := markdown.Parse(data)
 				if err != nil {
-					return fmt.Errorf("parse file to extract doc ID: %w", err)
+					return fmt.Errorf("parse file to extract document ID: %w", err)
 				}
-				if doc.Meta.DocID == "" {
-					return fmt.Errorf("file %s has no doc ID in frontmatter; use --doc to specify", filePath)
+				if doc.Meta.DocumentID == "" {
+					return fmt.Errorf("file %s has no document ID in frontmatter; use --document to specify", filePath)
 				}
-				docName = doc.Meta.DocID
+				docName = doc.Meta.DocumentID
 			}
 
 			c, err := cliutil.NewClient()
@@ -43,9 +43,9 @@ func newPullCmd() *cobra.Command {
 			}
 			defer c.Close()
 
-			doc, err := c.GetDoc(cmd.Context(), docName)
+			doc, err := c.GetDocument(cmd.Context(), docName)
 			if err != nil {
-				return fmt.Errorf("get doc: %w", err)
+				return fmt.Errorf("get document: %w", err)
 			}
 
 			blocks, err := c.ListBlocks(cmd.Context(), docName)
@@ -76,7 +76,7 @@ func newPullCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("doc", "", "Document name or ID (required for new files)")
+	cmd.Flags().String("document", "", "Document name or ID (required for new files)")
 	cmd.Flags().String("file", "", "Output file path (writes to stdout if omitted)")
 
 	return cmd

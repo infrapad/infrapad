@@ -1,12 +1,12 @@
-// Package doc implements the `infrapad doc` command and its sub-commands.
-package doc
+// Package document implements the `infrapad document` command and its sub-commands.
+package document
 
 import "github.com/spf13/cobra"
 
-// NewCmd builds the `doc` command tree.
+// NewCmd builds the `document` command tree.
 func NewCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "doc",
+		Use:   "document",
 		Short: "Manage documents",
 	}
 

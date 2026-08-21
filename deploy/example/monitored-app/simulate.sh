@@ -148,7 +148,7 @@ cmd_incident_start() {
   log "Creating infrapad document..."
 
   local create_output
-  create_output=$(${INFRAPAD_CLI} doc create \
+  create_output=$(${INFRAPAD_CLI} document create \
     --title "Monitored app incident on $(date '+%Y-%m-%d %H:%M:%S')" \
     --namespace "monitored-app" \
     -o json)
@@ -173,14 +173,14 @@ cmd_incident_start() {
   }')
 
   ${INFRAPAD_CLI} block add \
-    --doc "$doc_name" \
+    --document "$doc_name" \
     --type alerts_matcher \
     --content "$content"
 
   log "  alerts_matcher block added."
 
   # 5. Pull the document to markdown.
-  ${INFRAPAD_CLI} md pull --doc "$doc_name" --file "$INCIDENT_FILE"
+  ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
 
   log "Incident started. Document written to ${INCIDENT_FILE}"
 }
@@ -220,7 +220,7 @@ cmd_incident_resolve() {
   until=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
   # Pull latest to get current state.
-  ${INFRAPAD_CLI} md pull --doc "$doc_name" --file "$INCIDENT_FILE"
+  ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
 
   # Read the Since value from the current file.
   local since

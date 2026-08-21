@@ -39,14 +39,14 @@ with the current server state. Only changed existing blocks and new blocks
 			}
 			defer c.Close()
 
-			docName := doc.Meta.DocID
+			docName := doc.Meta.DocumentID
 
 			serverBlocks, err := c.ListBlocks(cmd.Context(), docName)
 			if err != nil {
 				return fmt.Errorf("list server blocks: %w", err)
 			}
 
-			remote := markdown.NewRemoteDoc(docName, serverBlocks)
+			remote := markdown.NewRemoteDocument(docName, serverBlocks)
 
 			// 3. Detect changed and new blocks.
 			actions, err := markdown.DiffBlocks(doc, remote)
@@ -88,9 +88,9 @@ with the current server state. Only changed existing blocks and new blocks
 			}
 
 			// 5. Pull to get the latest version of the file after save.
-			serverDoc, err := c.GetDoc(cmd.Context(), docName)
+			serverDoc, err := c.GetDocument(cmd.Context(), docName)
 			if err != nil {
-				return fmt.Errorf("get doc after update: %w", err)
+				return fmt.Errorf("get document after update: %w", err)
 			}
 
 			blocks, err := c.ListBlocks(cmd.Context(), docName)

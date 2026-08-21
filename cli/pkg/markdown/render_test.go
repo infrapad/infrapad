@@ -50,8 +50,8 @@ func TestRender(t *testing.T) {
 	}
 
 	// Frontmatter.
-	if !strings.Contains(out, "doc: 796756c0-1829-41ae-91c2-3cdc531e3d59") {
-		t.Error("missing doc ID in frontmatter")
+	if !strings.Contains(out, "document: 796756c0-1829-41ae-91c2-3cdc531e3d59") {
+		t.Error("missing document ID in frontmatter")
 	}
 	if !strings.Contains(out, "title: Payment service crash loop") {
 		t.Error("missing title in frontmatter")
@@ -89,8 +89,8 @@ func TestRender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse of rendered output failed: %v", err)
 	}
-	if parsed.Meta.DocID != "796756c0-1829-41ae-91c2-3cdc531e3d59" {
-		t.Errorf("round-trip DocID = %q", parsed.Meta.DocID)
+	if parsed.Meta.DocumentID != "796756c0-1829-41ae-91c2-3cdc531e3d59" {
+		t.Errorf("round-trip DocumentID = %q", parsed.Meta.DocumentID)
 	}
 	if len(parsed.Blocks) != 2 {
 		t.Fatalf("round-trip got %d blocks, want 2", len(parsed.Blocks))

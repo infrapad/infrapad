@@ -12,7 +12,7 @@ func newListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List blocks for a document",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			parent, _ := cmd.Flags().GetString("doc")
+			parent, _ := cmd.Flags().GetString("document")
 
 			c, err := cliutil.NewClient()
 			if err != nil {
@@ -32,8 +32,8 @@ func newListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("doc", "", "Parent document name (required)")
-	_ = cmd.MarkFlagRequired("doc")
+	cmd.Flags().String("document", "", "Parent document name (required)")
+	_ = cmd.MarkFlagRequired("document")
 
 	return cmd
 }

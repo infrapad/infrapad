@@ -1,16 +1,16 @@
-package doc
+package document
 
 import (
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
 	"github.com/infrapad/infrapad/cli/pkg/output"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 )
 
-func newListCmd() *cobra.Command {
+func newGetCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List all documents",
+		Use:   "get [name]",
+		Short: "Get a document by name",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := cliutil.NewClient()
 			if err != nil {
@@ -18,15 +18,11 @@ func newListCmd() *cobra.Command {
 			}
 			defer c.Close()
 
-			docs, err := c.ListDocs(cmd.Context())
+			doc, err := c.GetDocument(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
-			msgs := make([]proto.Message, len(docs))
-			for i, d := range docs {
-				msgs[i] = d
-			}
-			return cliutil.NewPrinter().PrintResourceList(msgs, output.DocColumns())
+			return cliutil.NewPrinter().PrintResource(doc, output.DocumentColumns())
 		},
 	}
 }

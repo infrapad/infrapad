@@ -12,9 +12,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DocMeta holds document-level metadata from the YAML frontmatter.
-type DocMeta struct {
-	DocID     string
+// DocumentMeta holds document-level metadata from the YAML frontmatter.
+type DocumentMeta struct {
+	DocumentID string
 	Title     string
 	Namespace string
 	Status    string
@@ -37,23 +37,23 @@ type ParsedBlock struct {
 
 
 
-// ParsedDoc is the result of parsing an infrapad markdown file.
-type ParsedDoc struct {
-	Meta   DocMeta
+// ParsedDocument is the result of parsing an infrapad markdown file.
+type ParsedDocument struct {
+	Meta   DocumentMeta
 	Blocks []ParsedBlock
 }
 
 // Parse parses an infrapad-flavoured markdown document and returns the
 // document metadata and ordered list of blocks.
-func Parse(src []byte) (*ParsedDoc, error) {
+func Parse(src []byte) (*ParsedDocument, error) {
 	// Parse with goldmark-meta (frontmatter) + our directive extension.
 	md := goldmark.New(goldmark.WithExtensions(meta.Meta, InfrapadDirectives))
 	ctx := parser.NewContext()
 	reader := text.NewReader(src)
 	tree := md.Parser().Parse(reader, parser.WithContext(ctx))
 
-	doc := &ParsedDoc{
-		Meta: docMetaFromMap(meta.Get(ctx)),
+	doc := &ParsedDocument{
+		Meta: documentMetaFromMap(meta.Get(ctx)),
 	}
 
 	// Iterate over the document's top-level children. Each InfrapadBlock
@@ -112,11 +112,11 @@ func Parse(src []byte) (*ParsedDoc, error) {
 	return doc, nil
 }
 
-// docMetaFromMap converts the frontmatter map to DocMeta.
-func docMetaFromMap(m map[string]interface{}) DocMeta {
-	var dm DocMeta
-	if v, ok := m["doc"].(string); ok {
-		dm.DocID = v
+// documentMetaFromMap converts the frontmatter map to DocumentMeta.
+func documentMetaFromMap(m map[string]interface{}) DocumentMeta {
+	var dm DocumentMeta
+	if v, ok := m["document"].(string); ok {
+		dm.DocumentID = v
 	}
 	if v, ok := m["title"].(string); ok {
 		dm.Title = v

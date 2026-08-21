@@ -18,18 +18,19 @@ type RemoteBlock struct {
 	Content        map[string]any
 }
 
-// RemoteDoc is the server-side counterpart of ParsedDoc. It holds document
-// metadata and the list of blocks fetched from the server, converted from
-// protobuf types into plain Go values.
-type RemoteDoc struct {
-	DocID  string
-	Blocks []RemoteBlock
+// RemoteDocument is the server-side counterpart of ParsedDocument. It holds
+// document metadata and the list of blocks fetched from the server, converted
+// from protobuf types into plain Go values.
+type RemoteDocument struct {
+	DocumentID string
+	Blocks     []RemoteBlock
 }
 
-// NewRemoteDoc builds a RemoteDoc from the protobuf blocks returned by the
-// server. docID is the short document identifier (without the "documents/" prefix).
-func NewRemoteDoc(docID string, blocks []*pb.Block) *RemoteDoc {
-	rd := &RemoteDoc{DocID: docID}
+// NewRemoteDocument builds a RemoteDocument from the protobuf blocks returned
+// by the server. docID is the short document identifier (without the
+// "documents/" prefix).
+func NewRemoteDocument(docID string, blocks []*pb.Block) *RemoteDocument {
+	rd := &RemoteDocument{DocumentID: docID}
 	for _, b := range blocks {
 		var content map[string]any
 		if b.GetContent() != nil {
@@ -47,7 +48,7 @@ func NewRemoteDoc(docID string, blocks []*pb.Block) *RemoteDoc {
 }
 
 // blockByNumber returns the remote block with the given number, or nil.
-func (rd *RemoteDoc) blockByNumber(n int) *RemoteBlock {
+func (rd *RemoteDocument) blockByNumber(n int) *RemoteBlock {
 	for i := range rd.Blocks {
 		if rd.Blocks[i].BlockNumber == n {
 			return &rd.Blocks[i]
@@ -65,7 +66,7 @@ type SyncAction struct {
 // DiffBlocks compares a locally-parsed document against the remote server
 // state and returns the list of blocks that need to be pushed (new blocks
 // and existing blocks whose content has changed).
-func DiffBlocks(local *ParsedDoc, remote *RemoteDoc) ([]SyncAction, error) {
+func DiffBlocks(local *ParsedDocument, remote *RemoteDocument) ([]SyncAction, error) {
 	var actions []SyncAction
 
 	for i := range local.Blocks {

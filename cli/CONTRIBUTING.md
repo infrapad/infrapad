@@ -5,7 +5,7 @@
 ```
 cli/
 ├── cmd/                     # Cobra command tree (root + sub-commands per resource)
-│   ├── doc/                 #   `infrapad doc` sub-commands
+│   ├── document/            #   `infrapad document` sub-commands
 │   ├── block/               #   `infrapad block` sub-commands
 │   └── md/                  #   `infrapad md` sub-commands
 ├── pkg/
@@ -45,3 +45,12 @@ task test:unit PKG=./pkg/markdown/ -- -run TestX     # single test function
 
 Unit tests live next to the code they test (e.g. `pkg/markdown/parse_test.go`).
 
+### Other code depending on the cli
+
+The demo application in ../deploy/example/monitored-app/ depends on the cli as well.
+Make sure to check the compatiblity after doing external facing chanages. This
+includes both the simulate.sh script, as well as the
+../deploy/example/monitored-app/.agents/skills.
+
+Call task `cli:install` when in need to have the fresh build available inside
+the GOPATH (so that the example doesn't use the old build).

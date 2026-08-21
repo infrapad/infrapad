@@ -28,7 +28,7 @@ echo ""
 # -----------------------------------------------------------------------
 echo "Step 2: Pull document as markdown"
 MD_FILE="${TMPDIR_E2E}/${DOC_ID}.md"
-PULL_OUT=$($CLI md pull --doc "$DOC_ID" --file "$MD_FILE" 2>&1)
+PULL_OUT=$($CLI md pull --document "$DOC_ID" --file "$MD_FILE" 2>&1)
 assert_contains "pull reports output file" "$PULL_OUT" "Written to"
 
 MD_CONTENT=$(cat "$MD_FILE")
@@ -39,7 +39,7 @@ echo ""
 # 3. Verify frontmatter
 # -----------------------------------------------------------------------
 echo "Step 3: Verify frontmatter"
-assert_contains "frontmatter has doc id" "$MD_CONTENT" "doc: $DOC_ID"
+assert_contains "frontmatter has doc id" "$MD_CONTENT" "document: $DOC_ID"
 assert_contains "frontmatter has title" "$MD_CONTENT" "title: Payment service crash loop"
 assert_contains "frontmatter has namespace" "$MD_CONTENT" "namespace: payments"
 assert_contains "frontmatter has status" "$MD_CONTENT" "status: active"
@@ -65,7 +65,7 @@ echo "Step 5: Parse the pulled markdown (round-trip)"
 PARSE_OUT=$($CLI md parse --file "$MD_FILE")
 echo "$PARSE_OUT"
 
-assert_contains "parsed doc id" "$PARSE_OUT" "doc:       $DOC_ID"
+assert_contains "parsed doc id" "$PARSE_OUT" "document:  $DOC_ID"
 assert_contains "parsed title" "$PARSE_OUT" "title:     Payment service crash loop"
 assert_contains "parsed namespace" "$PARSE_OUT" "namespace: payments"
 assert_contains "parsed status" "$PARSE_OUT" "status:    active"
@@ -80,7 +80,7 @@ echo ""
 # 6. Pull to stdout (no --file flag)
 # -----------------------------------------------------------------------
 echo "Step 6: Pull to stdout"
-STDOUT_OUT=$($CLI md pull --doc "$DOC_ID")
+STDOUT_OUT=$($CLI md pull --document "$DOC_ID")
 assert_equals "stdout matches file content" "$STDOUT_OUT" "$MD_CONTENT"
 echo ""
 
@@ -104,7 +104,7 @@ echo ""
 # -----------------------------------------------------------------------
 echo "Step 8: Verify file refreshed after push"
 PUSHED_CONTENT=$(cat "$MD_FILE")
-assert_contains "refreshed file has doc id" "$PUSHED_CONTENT" "doc: $DOC_ID"
+assert_contains "refreshed file has doc id" "$PUSHED_CONTENT" "document: $DOC_ID"
 assert_contains "refreshed file has block 2 directive" "$PUSHED_CONTENT" "::infrapad_block{block=2"
 assert_contains "refreshed file has pushed content" "$PUSHED_CONTENT" "Additional notes from local edit."
 assert_contains "refreshed file has original content" "$PUSHED_CONTENT" "root cause identified"
@@ -117,7 +117,7 @@ echo ""
 # -----------------------------------------------------------------------
 echo "Step 9: Independent pull to verify server state"
 VERIFY_FILE="${TMPDIR_E2E}/${DOC_ID}_verify.md"
-$CLI md pull --doc "$DOC_ID" --file "$VERIFY_FILE" 2>/dev/null
+$CLI md pull --document "$DOC_ID" --file "$VERIFY_FILE" 2>/dev/null
 VERIFY_CONTENT=$(cat "$VERIFY_FILE")
 assert_contains "independent pull has pushed content" "$VERIFY_CONTENT" "Additional notes from local edit."
 assert_contains "independent pull has original content" "$VERIFY_CONTENT" "root cause identified"
@@ -166,7 +166,7 @@ echo ""
 # -----------------------------------------------------------------------
 echo "Step 12: Verify new block assigned a real block number after push"
 PUSHED_NEW_CONTENT=$(cat "$MD_FILE")
-assert_contains "refreshed file has doc id" "$PUSHED_NEW_CONTENT" "doc: $DOC_ID"
+assert_contains "refreshed file has doc id" "$PUSHED_NEW_CONTENT" "document: $DOC_ID"
 assert_not_contains "refreshed file has no block=new directive" "$PUSHED_NEW_CONTENT" "block=new"
 assert_contains "refreshed file has new block content" "$PUSHED_NEW_CONTENT" "This was a red-herring."
 assert_contains "refreshed file has new block heading" "$PUSHED_NEW_CONTENT" "# Additional notes from the investigation"
@@ -183,7 +183,7 @@ echo ""
 # -----------------------------------------------------------------------
 echo "Step 13: Independent pull to verify new block on server"
 VERIFY_NEW_FILE="${TMPDIR_E2E}/${DOC_ID}_verify_new.md"
-$CLI md pull --doc "$DOC_ID" --file "$VERIFY_NEW_FILE" 2>/dev/null
+$CLI md pull --document "$DOC_ID" --file "$VERIFY_NEW_FILE" 2>/dev/null
 VERIFY_NEW_CONTENT=$(cat "$VERIFY_NEW_FILE")
 assert_contains "independent pull has 3 blocks" "$VERIFY_NEW_CONTENT" "::infrapad_block{block=3"
 assert_contains "independent pull has new block content" "$VERIFY_NEW_CONTENT" "This was a red-herring."
@@ -270,7 +270,7 @@ echo ""
 # -----------------------------------------------------------------------
 echo "Step 17: Independent pull to verify both new blocks on server"
 VERIFY_TWO_FILE="${TMPDIR_E2E}/${DOC_ID}_verify_two.md"
-$CLI md pull --doc "$DOC_ID" --file "$VERIFY_TWO_FILE" 2>/dev/null
+$CLI md pull --document "$DOC_ID" --file "$VERIFY_TWO_FILE" 2>/dev/null
 VERIFY_TWO_CONTENT=$(cat "$VERIFY_TWO_FILE")
 assert_contains "independent pull has block 4" "$VERIFY_TWO_CONTENT" "::infrapad_block{block=4"
 assert_contains "independent pull has block 5" "$VERIFY_TWO_CONTENT" "::infrapad_block{block=5"
@@ -296,13 +296,13 @@ assert_contains "parsed recommended actions content" "$PARSE_TWO" "Recommended A
 echo ""
 
 # -----------------------------------------------------------------------
-# 19. Pull with --file only (no --doc) to refresh a previously pulled file
+# 19. Pull with --file only (no --document) to refresh a previously pulled file
 # -----------------------------------------------------------------------
-echo "Step 19: Pull with --file only (no --doc)"
+echo "Step 19: Pull with --file only (no --document)"
 PULL_FILEONLY_OUT=$($CLI md pull --file "$MD_FILE" 2>&1)
 assert_contains "pull --file-only reports output file" "$PULL_FILEONLY_OUT" "Written to"
 FILEONLY_CONTENT=$(cat "$MD_FILE")
-assert_contains "file-only pull has doc id" "$FILEONLY_CONTENT" "doc: $DOC_ID"
+assert_contains "file-only pull has doc id" "$FILEONLY_CONTENT" "document: $DOC_ID"
 assert_contains "file-only pull has block 1" "$FILEONLY_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
 assert_contains "file-only pull has block 2" "$FILEONLY_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
 assert_contains "file-only pull has block 5" "$FILEONLY_CONTENT" "::infrapad_block{block=5"
@@ -310,12 +310,12 @@ assert_contains "file-only pull has original content" "$FILEONLY_CONTENT" "Crash
 echo ""
 
 # -----------------------------------------------------------------------
-# 20. Pull with neither --doc nor --file should fail
+# 20. Pull with neither --document nor --file should fail
 # -----------------------------------------------------------------------
 echo "Step 20: Pull with --file only for non-existing file should fail"
 PULL_NOFILE_OUT=$($CLI md pull --file "${TMPDIR_E2E}/does_not_exist.md" 2>&1) && PULL_NOFILE_RC=0 || PULL_NOFILE_RC=$?
 assert_not_contains "pull non-existing file exits non-zero" "_${PULL_NOFILE_RC}_" "_0_"
-assert_contains "pull non-existing file reports read error" "$PULL_NOFILE_OUT" "read file to extract doc ID"
+assert_contains "pull non-existing file reports read error" "$PULL_NOFILE_OUT" "read file to extract document ID"
 echo ""
 
 # -----------------------------------------------------------------------

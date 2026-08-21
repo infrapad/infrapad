@@ -11,7 +11,7 @@ func newAddCmd() *cobra.Command {
 		Use:   "add",
 		Short: "Add a block to a document",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			parent, _ := cmd.Flags().GetString("doc")
+			parent, _ := cmd.Flags().GetString("document")
 			blockType, _ := cmd.Flags().GetString("type")
 			contentJSON, _ := cmd.Flags().GetString("content")
 
@@ -34,10 +34,10 @@ func newAddCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("doc", "", "Parent document name (required)")
+	cmd.Flags().String("document", "", "Parent document name (required)")
 	cmd.Flags().String("type", "", "Block type (required)")
 	cmd.Flags().String("content", "{}", "Block content as JSON object")
-	_ = cmd.MarkFlagRequired("doc")
+	_ = cmd.MarkFlagRequired("document")
 	_ = cmd.MarkFlagRequired("type")
 
 	return cmd

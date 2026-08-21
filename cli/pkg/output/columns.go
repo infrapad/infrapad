@@ -11,8 +11,8 @@ import (
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 )
 
-// DocColumns returns the default table columns for documents.
-func DocColumns() []Column {
+// DocumentColumns returns the default table columns for documents.
+func DocumentColumns() []Column {
 	return []Column{
 		{Header: "ID", Value: func(m proto.Message) string {
 			// Strip the "documents/" resource prefix for readability.

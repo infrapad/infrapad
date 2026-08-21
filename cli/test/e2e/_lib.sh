@@ -96,31 +96,31 @@ table_cell() {
 #
 # Usage: create_test_doc
 create_test_doc() {
-  CREATE_OUT=$($CLI doc create --title "Payment service crash loop" --namespace payments)
+  CREATE_OUT=$($CLI document create --title "Payment service crash loop" --namespace payments)
   DOC_ID=$(table_cell "$CREATE_OUT" "ID")
 
   # Add alerts_matcher block (block 1).
   $CLI block add \
-    --doc "$DOC_ID" \
+    --document "$DOC_ID" \
     --type alerts_matcher \
     --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}]}' > /dev/null
 
   # Update alerts_matcher to add KubeNodeNotReady (rev 2).
   $CLI block update \
-    --doc "$DOC_ID" \
+    --document "$DOC_ID" \
     --block-number 1 \
     --type alerts_matcher \
     --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]}' > /dev/null
 
   # Add markdown block (block 2).
   $CLI block add \
-    --doc "$DOC_ID" \
+    --document "$DOC_ID" \
     --type markdown \
     --content '{"text": "initial investigation writeup\nneeds further analysis"}' > /dev/null
 
   # Update markdown block (rev 2).
   $CLI block update \
-    --doc "$DOC_ID" \
+    --document "$DOC_ID" \
     --block-number 2 \
     --type markdown \
     --content '{"text": "updated investigation writeup\nroot cause identified"}' > /dev/null

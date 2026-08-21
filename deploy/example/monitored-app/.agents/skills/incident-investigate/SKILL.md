@@ -16,7 +16,7 @@ Before proceeding, read the [infrapad skill](../infrapad/SKILL.md) to understand
 Given the document name (or ID), pull it to a local file:
 
 ```bash
-infrapad md pull --doc <doc-name> --file incident.md
+infrapad md pull --document <document-name> --file incident.md
 ```
 
 Read the file to understand:

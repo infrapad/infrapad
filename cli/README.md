@@ -21,12 +21,12 @@ task install
 
 ## Commands
 
-### `infrapad doc`: Manage documents
+### `infrapad document`: Manage documents
 
 **Create a document:**
 
 ```bash
-infrapad doc create --title "Payment service crash loop" --namespace payments
+infrapad document create --title "Payment service crash loop" --namespace payments
 ```
 
 | Flag | Required | Description |
@@ -37,13 +37,13 @@ infrapad doc create --title "Payment service crash loop" --namespace payments
 **List all documents:**
 
 ```bash
-infrapad doc list
+infrapad document list
 ```
 
 **Get a document by name:**
 
 ```bash
-infrapad doc get <id>
+infrapad document get <id>
 ```
 
 ### `infrapad block`: Manage blocks within a document
@@ -55,26 +55,26 @@ that increments on every update.
 **Add a block:**
 
 ```bash
-infrapad block add --doc docs/<id> --type markdown \
+infrapad block add --document <id> --type markdown \
   --content '{"text": "initial investigation writeup\nneeds further analysis"}'
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--doc` | yes | Parent document name |
+| `--document` | yes | Parent document name |
 | `--type` | yes | Block type (e.g. `markdown`, `alerts_matcher`) |
 | `--content` | no | Block content as a JSON object (default `{}`) |
 
 **Update a block:**
 
 ```bash
-infrapad block update --doc <id> --block-number 1 --type alerts_matcher \
+infrapad block update --document <id> --block-number 1 --type alerts_matcher \
   --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]}'
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--doc` | yes | Parent document name |
+| `--document` | yes | Parent document name |
 | `--block-number` | yes | Block number to update |
 | `--type` | yes | Block type |
 | `--content` | no | Block content as a JSON object (default `{}`) |
@@ -82,19 +82,19 @@ infrapad block update --doc <id> --block-number 1 --type alerts_matcher \
 **Get a block:**
 
 ```bash
-infrapad block get --doc <id> --block-number 1
+infrapad block get --document <id> --block-number 1
 ```
 
 **List blocks in a document:**
 
 ```bash
-infrapad block list --doc <id>
+infrapad block list --document <id>
 ```
 
 **Show revision history for a block:**
 
 ```bash
-infrapad block history --doc <id> --block-number 1
+infrapad block history --document <id> --block-number 1
 ```
 
 ### `infrapad md`: Markdown workflow
@@ -107,7 +107,7 @@ directives.
 #### Document format
 
     ---
-    doc: 1e7c6823-8d2a-4013-907b-7a42144b765d
+    document: 1e7c6823-8d2a-4013-907b-7a42144b765d
     title: Monitored app incident
     namespace: monitored-app
     status: active
@@ -125,7 +125,7 @@ directives.
 
     Both endpoints are returning HTTP 500.
 
-- **Front matter** contains the document metadata (`doc`, `title`, `namespace`, `status`).
+- **Front matter** contains the document metadata (`document`, `title`, `namespace`, `status`).
 - **Block directives** (`::infrapad_block{block=N rev=R type=T}`) mark the start of each block.
 - **Structured blocks** (e.g. `alerts_matcher`) wrap their content in a `` ```yaml `` fence.
 - **Markdown blocks** contain free-form markdown text.
@@ -134,10 +134,10 @@ directives.
 
 ```bash
 # Write to a file
-infrapad md pull --doc <name-or-id> --file incident.md
+infrapad md pull --document <id> --file incident.md
 
 # Print to stdout
-infrapad md pull --doc <name-or-id>
+infrapad md pull --document <id>
 
 # Pull latest changes to a previously synchronized file
 infrapad md pull --file incident.md
@@ -145,7 +145,7 @@ infrapad md pull --file incident.md
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--doc` | yes for new files | Document name or ID |
+| `--document` | yes for new files | Document name or ID |
 | `--file` | no | Output file path (prints to stdout if omitted) |
 
 #### Push: upload local changes back to the server
@@ -182,7 +182,7 @@ The standard workflow for working with infrapad documents:
 
 ```bash
 # 1. Pull the document
-infrapad md pull --doc <id> --file incident.md
+infrapad md pull --document <id> --file incident.md
 
 # 2. Read and edit the file locally
 #    (modify existing blocks or append new ones)

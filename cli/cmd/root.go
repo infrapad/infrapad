@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/infrapad/infrapad/cli/cmd/block"
-	"github.com/infrapad/infrapad/cli/cmd/doc"
+	"github.com/infrapad/infrapad/cli/cmd/document"
 	"github.com/infrapad/infrapad/cli/cmd/md"
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
 	"github.com/infrapad/infrapad/cli/pkg/output"
@@ -28,7 +28,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cliutil.GRPCAddr, "grpc-addr", defaultAddr, "gRPC server address")
 	rootCmd.PersistentFlags().StringVarP(&cliutil.OutputFormat, "output", "o", "table", "Output format: table, json")
 
-	rootCmd.AddCommand(doc.NewCmd(), block.NewCmd(), md.NewCmd())
+	rootCmd.AddCommand(document.NewCmd(), block.NewCmd(), md.NewCmd())
 }
 
 // Execute runs the root command.

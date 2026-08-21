@@ -1,4 +1,4 @@
-package doc
+package document
 
 import (
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
@@ -20,11 +20,11 @@ func newCreateCmd() *cobra.Command {
 			}
 			defer c.Close()
 
-			doc, err := c.CreateDoc(cmd.Context(), title, namespace)
+			doc, err := c.CreateDocument(cmd.Context(), title, namespace)
 			if err != nil {
 				return err
 			}
-			return cliutil.NewPrinter().PrintResource(doc, output.DocColumns())
+			return cliutil.NewPrinter().PrintResource(doc, output.DocumentColumns())
 		},
 	}
 

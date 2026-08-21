@@ -31,8 +31,8 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// CreateDoc creates a new document.
-func (c *Client) CreateDoc(ctx context.Context, title, namespace string) (*pb.Document, error) {
+// CreateDocument creates a new document.
+func (c *Client) CreateDocument(ctx context.Context, title, namespace string) (*pb.Document, error) {
 	resp, err := c.svc.CreateDocument(ctx, &pb.CreateDocumentRequest{
 		Title:     title,
 		Namespace: namespace,
@@ -43,8 +43,8 @@ func (c *Client) CreateDoc(ctx context.Context, title, namespace string) (*pb.Do
 	return resp.GetDocument(), nil
 }
 
-// GetDoc retrieves a document by name.
-func (c *Client) GetDoc(ctx context.Context, name string) (*pb.Document, error) {
+// GetDocument retrieves a document by name.
+func (c *Client) GetDocument(ctx context.Context, name string) (*pb.Document, error) {
 	resp, err := c.svc.GetDocument(ctx, &pb.GetDocumentRequest{Name: name})
 	if err != nil {
 		return nil, err
@@ -52,8 +52,8 @@ func (c *Client) GetDoc(ctx context.Context, name string) (*pb.Document, error) 
 	return resp.GetDocument(), nil
 }
 
-// ListDocs lists all documents.
-func (c *Client) ListDocs(ctx context.Context) ([]*pb.Document, error) {
+// ListDocuments lists all documents.
+func (c *Client) ListDocuments(ctx context.Context) ([]*pb.Document, error) {
 	resp, err := c.svc.ListDocuments(ctx, &pb.ListDocumentsRequest{})
 	if err != nil {
 		return nil, err

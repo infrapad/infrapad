@@ -18,7 +18,7 @@ func Render(doc *pb.Document, blocks []*pb.Block) (string, error) {
 	// --- YAML frontmatter ---
 	docID := strings.TrimPrefix(doc.GetName(), "documents/")
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("doc: %s\n", docID))
+	sb.WriteString(fmt.Sprintf("document: %s\n", docID))
 	sb.WriteString(fmt.Sprintf("title: %s\n", doc.GetTitle()))
 	sb.WriteString(fmt.Sprintf("namespace: %s\n", doc.GetNamespace()))
 	sb.WriteString(fmt.Sprintf("status: %s\n", doc.GetStatus()))

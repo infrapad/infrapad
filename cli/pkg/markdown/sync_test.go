@@ -5,8 +5,8 @@ import (
 )
 
 func TestDiffBlocks_NoChanges(t *testing.T) {
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta:    BlockMeta{Type: "markdown", BlockNumber: 1},
@@ -19,8 +19,8 @@ func TestDiffBlocks_NoChanges(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID: "test-doc",
+	remote := &RemoteDocument{
+		DocumentID: "test-doc",
 		Blocks: []RemoteBlock{
 			{BlockNumber: 1, Type: "markdown", Content: map[string]any{"text": "Hello world\n"}},
 			{BlockNumber: 2, Type: "markdown", Content: map[string]any{"text": "Second block\n"}},
@@ -37,8 +37,8 @@ func TestDiffBlocks_NoChanges(t *testing.T) {
 }
 
 func TestDiffBlocks_ModifiedBlock(t *testing.T) {
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta:    BlockMeta{Type: "markdown", BlockNumber: 1},
@@ -51,8 +51,8 @@ func TestDiffBlocks_ModifiedBlock(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID: "test-doc",
+	remote := &RemoteDocument{
+		DocumentID: "test-doc",
 		Blocks: []RemoteBlock{
 			{BlockNumber: 1, Type: "markdown", Content: map[string]any{"text": "Hello world\n"}},
 			{BlockNumber: 2, Type: "markdown", Content: map[string]any{"text": "Second block\n"}},
@@ -75,8 +75,8 @@ func TestDiffBlocks_ModifiedBlock(t *testing.T) {
 }
 
 func TestDiffBlocks_NewBlock(t *testing.T) {
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta:    BlockMeta{Type: "markdown", BlockNumber: 1},
@@ -89,8 +89,8 @@ func TestDiffBlocks_NewBlock(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID: "test-doc",
+	remote := &RemoteDocument{
+		DocumentID: "test-doc",
 		Blocks: []RemoteBlock{
 			{BlockNumber: 1, Type: "markdown", Content: map[string]any{"text": "Hello world\n"}},
 		},
@@ -109,8 +109,8 @@ func TestDiffBlocks_NewBlock(t *testing.T) {
 }
 
 func TestDiffBlocks_TrailingNewlineIgnored(t *testing.T) {
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta:    BlockMeta{Type: "markdown", BlockNumber: 1},
@@ -119,8 +119,8 @@ func TestDiffBlocks_TrailingNewlineIgnored(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID: "test-doc",
+	remote := &RemoteDocument{
+		DocumentID: "test-doc",
 		Blocks: []RemoteBlock{
 			{BlockNumber: 1, Type: "markdown", Content: map[string]any{"text": "Hello world\n"}},
 		},
@@ -136,8 +136,8 @@ func TestDiffBlocks_TrailingNewlineIgnored(t *testing.T) {
 }
 
 func TestDiffBlocks_NonMarkdownChanged(t *testing.T) {
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta: BlockMeta{Type: "alerts_matcher", BlockNumber: 1},
@@ -150,8 +150,8 @@ func TestDiffBlocks_NonMarkdownChanged(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID: "test-doc",
+	remote := &RemoteDocument{
+		DocumentID: "test-doc",
 		Blocks: []RemoteBlock{
 			{
 				BlockNumber: 1, Type: "alerts_matcher",
@@ -184,8 +184,8 @@ func TestDiffBlocks_NonMarkdownUnchanged(t *testing.T) {
 		},
 	}
 
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta:    BlockMeta{Type: "alerts_matcher", BlockNumber: 1},
@@ -194,8 +194,8 @@ func TestDiffBlocks_NonMarkdownUnchanged(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID: "test-doc",
+	remote := &RemoteDocument{
+		DocumentID: "test-doc",
 		Blocks: []RemoteBlock{
 			{BlockNumber: 1, Type: "alerts_matcher", Content: content},
 		},
@@ -211,8 +211,8 @@ func TestDiffBlocks_NonMarkdownUnchanged(t *testing.T) {
 }
 
 func TestDiffBlocks_MissingServerBlock(t *testing.T) {
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta:    BlockMeta{Type: "markdown", BlockNumber: 99},
@@ -221,8 +221,8 @@ func TestDiffBlocks_MissingServerBlock(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID:  "test-doc",
+	remote := &RemoteDocument{
+		DocumentID:  "test-doc",
 		Blocks: nil,
 	}
 
@@ -233,8 +233,8 @@ func TestDiffBlocks_MissingServerBlock(t *testing.T) {
 }
 
 func TestDiffBlocks_MixedActions(t *testing.T) {
-	local := &ParsedDoc{
-		Meta: DocMeta{DocID: "test-doc"},
+	local := &ParsedDocument{
+		Meta: DocumentMeta{DocumentID: "test-doc"},
 		Blocks: []ParsedBlock{
 			{
 				Meta:    BlockMeta{Type: "markdown", BlockNumber: 1},
@@ -251,8 +251,8 @@ func TestDiffBlocks_MixedActions(t *testing.T) {
 		},
 	}
 
-	remote := &RemoteDoc{
-		DocID: "test-doc",
+	remote := &RemoteDocument{
+		DocumentID: "test-doc",
 		Blocks: []RemoteBlock{
 			{BlockNumber: 1, Type: "markdown", Content: map[string]any{"text": "Unchanged\n"}},
 			{BlockNumber: 2, Type: "markdown", Content: map[string]any{"text": "Original\n"}},
