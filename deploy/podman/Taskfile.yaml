@@ -11,16 +11,16 @@ tasks:
   dev:run:
     desc: Start all dev services (PostgreSQL + monitored app)
     cmds:
-      - ./scripts/start.sh -f postgres.yaml -f monitored-app.yaml
+      - ./scripts/start.sh -f all.yaml
   dev:start:
     desc: Start all dev services in background (detached)
     cmds:
-      - ./scripts/start.sh -f postgres.yaml -f monitored-app.yaml -- -d
+      - ./scripts/start.sh -f all.yaml -- -d
   dev:stop:
     desc: Stop all dev services
     cmds:
-      - podman compose -f postgres.yaml -f monitored-app.yaml down
+      - podman compose -f all.yaml down
   dev:logs:
     desc: Follow logs of all dev services
     cmds:
-      - podman compose -f postgres.yaml -f monitored-app.yaml logs -f
+      - podman compose -f all.yaml logs -f

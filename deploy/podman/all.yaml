@@ -1,0 +1,5 @@
+# Combined development environment. Compose resolves each included file relative
+# to its own directory, so their build contexts and bind mounts remain valid.
+include:
+  - path: postgres.yaml
+  - path: monitored-app.yaml
