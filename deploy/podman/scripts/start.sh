@@ -64,4 +64,10 @@ for arg in "$@"; do
   fi
 done
 
+# In foreground mode, abort all containers when any one exits so failures
+# are immediately visible instead of silently ignored.
+if [[ ! " ${up_args[*]} " =~ " -d " ]] && [[ ! " ${up_args[*]} " =~ " --detach " ]]; then
+  up_args+=("--abort-on-container-exit")
+fi
+
 podman compose "${compose_args[@]}" up "${up_args[@]}"

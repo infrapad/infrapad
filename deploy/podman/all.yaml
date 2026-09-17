@@ -3,3 +3,4 @@
 include:
   - path: postgres.yaml
   - path: monitored-app.yaml
+  - path: oauth-proxy.yaml
