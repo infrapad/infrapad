@@ -2,6 +2,8 @@
 
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 ensure_podman_ready() {
   # On Linux, the podman API socket is managed by a systemd user unit.
   # Start it if it isn't active — docker-compose needs it.
@@ -46,8 +48,6 @@ ensure_podman_ready() {
 
 }
 
-ensure_podman_ready
-
 # Split arguments at "--": before goes to compose, after goes to up.
 compose_args=()
 up_args=()
@@ -63,6 +63,73 @@ for arg in "$@"; do
     compose_args+=("$arg")
   fi
 done
+
+# Authentication only applies to the combined environment and the focused
+# OAuth proxy composition. Other focused compositions ignore INFRAPAD_AUTH.
+auth_composition=""
+expect_compose_file=false
+for arg in "${compose_args[@]}"; do
+  if $expect_compose_file; then
+    compose_file="${arg##*/}"
+    expect_compose_file=false
+  else
+    case "$arg" in
+      -f|--file)
+        expect_compose_file=true
+        continue
+        ;;
+      --file=*)
+        compose_file="${arg#--file=}"
+        compose_file="${compose_file##*/}"
+        ;;
+      *)
+        continue
+        ;;
+    esac
+  fi
+
+  case "$compose_file" in
+    all.yaml)
+      auth_composition="all"
+      ;;
+    oauth-proxy.yaml)
+      if [[ "$auth_composition" != "all" ]]; then
+        auth_composition="oauth-proxy"
+      fi
+      ;;
+  esac
+done
+
+case "$auth_composition" in
+  all)
+    auth_mode="${INFRAPAD_AUTH:-none}"
+    ;;
+  oauth-proxy)
+    auth_mode="openshift"
+    ;;
+  *)
+    auth_mode="none"
+    ;;
+esac
+
+case "$auth_mode" in
+  none)
+    ;;
+  openshift)
+    "$SCRIPT_DIR/openshift-oauth-bootstrap.sh"
+    compose_args+=("--profile" "auth-openshift")
+    ;;
+  dummy)
+    echo "ERROR: INFRAPAD_AUTH=dummy is not implemented yet; use 'none' or 'openshift'." >&2
+    exit 1
+    ;;
+  *)
+    echo "ERROR: Invalid INFRAPAD_AUTH value '$auth_mode'; accepted values: none, openshift, dummy." >&2
+    exit 1
+    ;;
+esac
+
+ensure_podman_ready
 
 # In foreground mode, abort all containers when any one exits so failures
 # are immediately visible instead of silently ignored.

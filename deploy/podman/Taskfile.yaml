@@ -9,25 +9,22 @@ tasks:
     cmds:
       - ./scripts/start.sh -f monitored-app.yaml
   oauth-proxy:
-    desc: Start the OAuth proxy
+    desc: Start the OpenShift OAuth proxy
     cmds:
-      - ./scripts/openshift-oauth-bootstrap.sh
       - ./scripts/start.sh -f oauth-proxy.yaml
   dev:run:
     desc: Start all dev services (PostgreSQL + monitored app + OAuth proxy)
     cmds:
-      - ./scripts/openshift-oauth-bootstrap.sh
       - ./scripts/start.sh -f all.yaml
   dev:start:
     desc: Start all dev services in background (detached)
     cmds:
-      - ./scripts/openshift-oauth-bootstrap.sh
       - ./scripts/start.sh -f all.yaml -- -d
   dev:stop:
     desc: Stop all dev services
     cmds:
-      - podman compose -f all.yaml down
+      - podman compose -f all.yaml --profile "*" down
   dev:logs:
     desc: Follow logs of all dev services
     cmds:
-      - podman compose -f all.yaml logs -f
+      - podman compose -f all.yaml --profile "*" logs -f

@@ -1,3 +1,7 @@
+networks:
+  infrapad:
+    name: infrapad
+
 services:
   monitored-app:
     build:

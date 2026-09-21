@@ -4,6 +4,8 @@ networks:
 
 services:
   oauth-proxy:
+    profiles:
+      - auth-openshift
     image: quay.io/openshift/origin-oauth-proxy:5.0
     command:
       - --config=/etc/oauth-proxy/oauth-proxy.cfg
