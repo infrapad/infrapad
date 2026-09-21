@@ -1,0 +1,22 @@
+networks:
+  infrapad:
+    name: infrapad
+
+services:
+  dummy-auth-proxy:
+    profiles:
+      - auth-dummy
+    build:
+      context: ./dummy-auth
+      dockerfile: Containerfile
+    ports:
+      - "127.0.0.1:8089:8080"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "/dummy-auth", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - infrapad

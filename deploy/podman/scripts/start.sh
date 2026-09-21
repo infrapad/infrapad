@@ -65,7 +65,8 @@ for arg in "$@"; do
 done
 
 # Authentication only applies to the combined environment and the focused
-# OAuth proxy composition. Other focused compositions ignore INFRAPAD_AUTH.
+# authentication proxy compositions. Other focused compositions ignore
+# INFRAPAD_AUTH.
 auth_composition=""
 expect_compose_file=false
 for arg in "${compose_args[@]}"; do
@@ -97,15 +98,23 @@ for arg in "${compose_args[@]}"; do
         auth_composition="oauth-proxy"
       fi
       ;;
+    dummy-auth-proxy.yaml)
+      if [[ "$auth_composition" != "all" ]]; then
+        auth_composition="dummy-auth-proxy"
+      fi
+      ;;
   esac
 done
 
 case "$auth_composition" in
   all)
-    auth_mode="${INFRAPAD_AUTH:-none}"
+    auth_mode="${INFRAPAD_AUTH:-dummy}"
     ;;
   oauth-proxy)
     auth_mode="openshift"
+    ;;
+  dummy-auth-proxy)
+    auth_mode="dummy"
     ;;
   *)
     auth_mode="none"
@@ -120,8 +129,7 @@ case "$auth_mode" in
     compose_args+=("--profile" "auth-openshift")
     ;;
   dummy)
-    echo "ERROR: INFRAPAD_AUTH=dummy is not implemented yet; use 'none' or 'openshift'." >&2
-    exit 1
+    compose_args+=("--profile" "auth-dummy")
     ;;
   *)
     echo "ERROR: Invalid INFRAPAD_AUTH value '$auth_mode'; accepted values: none, openshift, dummy." >&2

@@ -9,15 +9,29 @@ tasks:
     cmds:
       - ./scripts/start.sh -f monitored-app.yaml
   oauth-proxy:
-    desc: Start the OpenShift OAuth proxy
+    desc: Start the OpenShift OAuth proxy at https://localhost:8443
     cmds:
       - ./scripts/start.sh -f oauth-proxy.yaml
+  dummy-auth-proxy:
+    desc: Start the insecure dummy auth proxy at http://localhost:8089
+    cmds:
+      - ./scripts/start.sh -f dummy-auth-proxy.yaml
+  dummy-auth:token:
+    desc: Generate an unsigned dummy token (pass --username and optional --email after --)
+    dir: ./dummy-auth
+    cmds:
+      - GOWORK=off go run . token {{.CLI_ARGS}}
+  dummy-auth:test:
+    desc: Run dummy auth proxy tests
+    dir: ./dummy-auth
+    cmds:
+      - GOWORK=off go test ./...
   dev:run:
-    desc: Start all dev services (PostgreSQL + monitored app + OAuth proxy)
+    desc: Start all dev services (dummy auth by default; INFRAPAD_AUTH=none opts out)
     cmds:
       - ./scripts/start.sh -f all.yaml
   dev:start:
-    desc: Start all dev services in background (detached)
+    desc: Start all dev services in background (dummy auth by default; INFRAPAD_AUTH=none opts out)
     cmds:
       - ./scripts/start.sh -f all.yaml -- -d
   dev:stop:
