@@ -11,7 +11,7 @@ tasks:
   oauth-proxy:
     desc: Start the OpenShift OAuth proxy at https://localhost:8443
     cmds:
-      - ./scripts/start.sh -f oauth-proxy.yaml
+      - ./scripts/start.sh -f openshift-oauth-proxy.yaml
   dummy-auth-proxy:
     desc: Start the insecure dummy auth proxy at http://localhost:8089
     cmds:

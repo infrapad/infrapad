@@ -1,7 +1,3 @@
-networks:
-  infrapad:
-    name: infrapad
-
 services:
   oauth-proxy:
     profiles:
@@ -10,8 +6,11 @@ services:
     command:
       - --config=/etc/oauth-proxy/oauth-proxy.cfg
       - --kubeconfig=/etc/oauth-proxy/kubeconfig
-    ports:
-      - "127.0.0.1:8443:8443"
+    # Using host mode to reach out to backend on host,
+    # host-gateway had some issues. We might get rid of it once
+    # we settle down on running the server in podman as well (once the development
+    # stabilizes a bit)
+    network_mode: host
     volumes:
       - ./generated/oauth-proxy.cfg:/etc/oauth-proxy/oauth-proxy.cfg:ro,z
       - ./generated/kubeconfig:/etc/oauth-proxy/kubeconfig:ro,z
@@ -21,12 +20,8 @@ services:
       - ./generated/tls.crt:/etc/oauth-proxy/tls.crt:ro,z
       - ./generated/tls.key:/etc/oauth-proxy/tls.key:ro,z
     userns_mode: keep-id
-    extra_hosts:
-      - "host.containers.internal:host-gateway"
     healthcheck:
-      test: ["CMD", "curl", "-kfs", "https://localhost:8443/oauth/healthz"]
+      test: ["CMD", "curl", "-kfs", "https://127.0.0.1:8443/oauth/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
-    networks:
-      - infrapad

@@ -93,7 +93,7 @@ for arg in "${compose_args[@]}"; do
     all.yaml)
       auth_composition="all"
       ;;
-    oauth-proxy.yaml)
+    openshift-oauth-proxy.yaml)
       if [[ "$auth_composition" != "all" ]]; then
         auth_composition="oauth-proxy"
       fi

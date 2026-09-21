@@ -1,7 +1,3 @@
-networks:
-  infrapad:
-    name: infrapad
-
 services:
   dummy-auth-proxy:
     profiles:
@@ -9,14 +5,18 @@ services:
     build:
       context: ./dummy-auth
       dockerfile: Containerfile
-    ports:
-      - "127.0.0.1:8089:8080"
-    extra_hosts:
-      - "host.containers.internal:host-gateway"
+    # See openshift-oauth-proxy.yaml for explanation
+    network_mode: host
+    command:
+      - proxy
+      - --listen=127.0.0.1:8089
+      - --upstream=http://127.0.0.1:8088
     healthcheck:
-      test: ["CMD", "/dummy-auth", "healthcheck"]
+      test:
+        - CMD
+        - /dummy-auth
+        - healthcheck
+        - --url=http://127.0.0.1:8089/oauth/healthz
       interval: 10s
       timeout: 5s
       retries: 3
-    networks:
-      - infrapad

@@ -266,7 +266,7 @@ cat > "$GEN_DIR/oauth-proxy.cfg.tmp" <<EOCFG
 provider = "openshift"
 proxy_prefix = "/oauth"
 http_address = ""
-https_address = ":8443"
+https_address = "127.0.0.1:8443"
 tls_cert_file = "${CONTAINER_MOUNT}/tls.crt"
 tls_key_file = "${CONTAINER_MOUNT}/tls.key"
 client_id = "${CLIENT_ID}"
@@ -279,7 +279,7 @@ login_url = "${AUTHORIZATION_ENDPOINT}"
 redeem_url = "${TOKEN_ENDPOINT}"
 validate_url = "${API_URL}/apis/user.openshift.io/v1/users/~"
 redirect_url = "${REDIRECT_VALUE}"
-upstreams = ["http://host.containers.internal:8088"]
+upstreams = ["http://127.0.0.1:8088"]
 request_logging = true
 pass_user_headers = true
 pass_access_token = false
