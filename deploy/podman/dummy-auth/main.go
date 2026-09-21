@@ -6,8 +6,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -20,7 +22,65 @@ const (
 	defaultListenAddress = ":8080"
 	defaultUpstreamURL   = "http://host.containers.internal:8088"
 	defaultHealthURL     = "http://127.0.0.1:8080/oauth/healthz"
+	sessionCookieName    = "infrapad_dummy_auth"
 )
+
+var authPageTemplate = template.Must(template.New("auth").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InfraPad dummy authentication</title>
+  <style>
+    body { color: #202124; font: 16px/1.5 sans-serif; margin: 2rem auto; max-width: 42rem; padding: 0 1rem; }
+    form, dl { display: grid; gap: .75rem; }
+    input, textarea, button { box-sizing: border-box; font: inherit; padding: .5rem; width: 100%; }
+    textarea { min-height: 7rem; overflow-wrap: anywhere; }
+    .actions { display: flex; gap: .75rem; }
+    .warning { background: #fff3cd; border: 1px solid #ffe69c; padding: .75rem; }
+    dt { font-weight: bold; }
+    dd { margin: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>InfraPad dummy authentication</h1>
+    <p class="warning"><strong>Warning:</strong> Dummy authentication provides no security and is for local development only.</p>
+    {{if .Authenticated}}
+      <h2>Current session</h2>
+      <dl>
+        <div><dt>Username</dt><dd>{{.Username}}</dd></div>
+        {{if .HasEmail}}<div><dt>Email</dt><dd>{{.Email}}</dd></div>{{end}}
+      </dl>
+      <label for="token">Bearer token</label>
+      <textarea id="token" readonly>{{.Token}}</textarea>
+      <form method="post" action="/auth/logout">
+        <button type="submit">Log out</button>
+      </form>
+    {{else}}
+      <form method="post" action="/auth/login">
+        <label for="username">Username</label>
+        <input id="username" name="username" required>
+        <label for="email">Email (optional)</label>
+        <input id="email" name="email">
+        <div class="actions">
+          <button type="submit">Log in</button>
+          <button type="submit" formaction="/auth/token">Get token</button>
+        </div>
+      </form>
+    {{end}}
+  </main>
+</body>
+</html>
+`))
+
+type authPageData struct {
+	Authenticated bool
+	Username      string
+	Email         string
+	HasEmail      bool
+	Token         string
+}
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -125,6 +185,10 @@ func runHealthcheck(args []string) error {
 }
 
 func generateToken(username, email string, includeEmail bool) (string, error) {
+	if username == "" {
+		return "", errors.New("username is required and must not be empty")
+	}
+
 	header := struct {
 		Algorithm string `json:"alg"`
 		Type      string `json:"typ"`
@@ -167,7 +231,11 @@ func identityFromAuthorization(value string) (identity, error) {
 		return identity{}, errors.New("authorization must use the Bearer scheme with one token")
 	}
 
-	parts := strings.Split(fields[1], ".")
+	return identityFromToken(fields[1])
+}
+
+func identityFromToken(token string) (identity, error) {
+	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return identity{}, errors.New("bearer token must have three compact JWT segments")
 	}
@@ -217,6 +285,21 @@ func newProxy(upstream *url.URL) http.Handler {
 	reverseProxy := httputil.NewSingleHostReverseProxy(upstream)
 
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/auth":
+			handleAuthPage(response, request)
+			return
+		case "/auth/login":
+			handleAuthLogin(response, request)
+			return
+		case "/auth/token":
+			handleAuthToken(response, request)
+			return
+		case "/auth/logout":
+			handleAuthLogout(response, request)
+			return
+		}
+
 		if request.Method == http.MethodGet && request.URL.Path == "/oauth/healthz" {
 			response.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			response.WriteHeader(http.StatusOK)
@@ -225,20 +308,37 @@ func newProxy(upstream *url.URL) http.Handler {
 		}
 
 		authorizationValues, authorizationPresent := valuesForHeader(request.Header, "Authorization")
+		sessionCookie, sessionCookieErr := request.Cookie(sessionCookieName)
 		removeHeader(request.Header, "Authorization")
 		removeHeader(request.Header, "X-Forwarded-User")
 		removeHeader(request.Header, "X-Forwarded-Email")
+		removeCookie(request, sessionCookieName)
 
+		var derivedIdentity identity
+		var authenticated bool
 		if authorizationPresent {
 			if len(authorizationValues) != 1 {
 				http.Error(response, "invalid authorization", http.StatusBadRequest)
 				return
 			}
-			derivedIdentity, err := identityFromAuthorization(authorizationValues[0])
+			var err error
+			derivedIdentity, err = identityFromAuthorization(authorizationValues[0])
 			if err != nil {
 				http.Error(response, "invalid authorization", http.StatusBadRequest)
 				return
 			}
+			authenticated = true
+		} else if sessionCookieErr == nil {
+			var err error
+			derivedIdentity, err = identityFromToken(sessionCookie.Value)
+			if err != nil {
+				expireSessionCookie(response)
+			} else {
+				authenticated = true
+			}
+		}
+
+		if authenticated {
 			request.Header.Set("X-Forwarded-User", derivedIdentity.username)
 			if derivedIdentity.hasEmail {
 				request.Header.Set("X-Forwarded-Email", derivedIdentity.email)
@@ -247,6 +347,146 @@ func newProxy(upstream *url.URL) http.Handler {
 
 		reverseProxy.ServeHTTP(response, request)
 	})
+}
+
+func handleAuthPage(response http.ResponseWriter, request *http.Request) {
+	setAuthResponseHeaders(response)
+	if !allowMethod(response, request, http.MethodGet) {
+		return
+	}
+
+	data := authPageData{}
+	if sessionCookie, err := request.Cookie(sessionCookieName); err == nil {
+		derivedIdentity, err := identityFromToken(sessionCookie.Value)
+		if err != nil {
+			expireSessionCookie(response)
+		} else {
+			data = authPageData{
+				Authenticated: true,
+				Username:      derivedIdentity.username,
+				Email:         derivedIdentity.email,
+				HasEmail:      derivedIdentity.hasEmail,
+				Token:         sessionCookie.Value,
+			}
+		}
+	}
+
+	response.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := authPageTemplate.Execute(response, data); err != nil {
+		log.Printf("render authentication page: %v", err)
+	}
+}
+
+func handleAuthLogin(response http.ResponseWriter, request *http.Request) {
+	setAuthResponseHeaders(response)
+	if !allowMethod(response, request, http.MethodPost) {
+		return
+	}
+
+	username, email, includeEmail, ok := parseIdentityForm(response, request)
+	if !ok {
+		return
+	}
+	token, err := generateToken(username, email, includeEmail)
+	if err != nil {
+		http.Error(response, "invalid form data", http.StatusBadRequest)
+		return
+	}
+	http.SetCookie(response, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(response, request, "/auth", http.StatusSeeOther)
+}
+
+func handleAuthToken(response http.ResponseWriter, request *http.Request) {
+	setAuthResponseHeaders(response)
+	if !allowMethod(response, request, http.MethodPost) {
+		return
+	}
+
+	username, email, includeEmail, ok := parseIdentityForm(response, request)
+	if !ok {
+		return
+	}
+	token, err := generateToken(username, email, includeEmail)
+	if err != nil {
+		http.Error(response, "invalid form data", http.StatusBadRequest)
+		return
+	}
+	response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = fmt.Fprintln(response, token)
+}
+
+func handleAuthLogout(response http.ResponseWriter, request *http.Request) {
+	setAuthResponseHeaders(response)
+	if !allowMethod(response, request, http.MethodPost) {
+		return
+	}
+
+	expireSessionCookie(response)
+	http.Redirect(response, request, "/auth", http.StatusSeeOther)
+}
+
+func setAuthResponseHeaders(response http.ResponseWriter) {
+	response.Header().Set("Cache-Control", "no-store")
+}
+
+func allowMethod(response http.ResponseWriter, request *http.Request, allowed string) bool {
+	if request.Method == allowed {
+		return true
+	}
+	response.Header().Set("Allow", allowed)
+	http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+	return false
+}
+
+func parseIdentityForm(response http.ResponseWriter, request *http.Request) (string, string, bool, bool) {
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/x-www-form-urlencoded" {
+		http.Error(response, "invalid form data", http.StatusBadRequest)
+		return "", "", false, false
+	}
+	if err := request.ParseForm(); err != nil {
+		http.Error(response, "invalid form data", http.StatusBadRequest)
+		return "", "", false, false
+	}
+
+	usernames := request.PostForm["username"]
+	emails := request.PostForm["email"]
+	if len(usernames) != 1 || usernames[0] == "" || len(emails) > 1 {
+		http.Error(response, "invalid form data", http.StatusBadRequest)
+		return "", "", false, false
+	}
+	if len(emails) == 0 || emails[0] == "" {
+		return usernames[0], "", false, true
+	}
+	return usernames[0], emails[0], true, true
+}
+
+func expireSessionCookie(response http.ResponseWriter) {
+	http.SetCookie(response, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(1, 0).UTC(),
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func removeCookie(request *http.Request, name string) {
+	cookies := request.Cookies()
+	removeHeader(request.Header, "Cookie")
+	for _, cookie := range cookies {
+		if cookie.Name != name {
+			request.AddCookie(cookie)
+		}
+	}
 }
 
 func valuesForHeader(header http.Header, name string) ([]string, bool) {
