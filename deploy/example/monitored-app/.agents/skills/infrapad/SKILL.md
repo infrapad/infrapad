@@ -54,13 +54,6 @@ local-development default is `http://localhost:8089`; override it with
 sends its opaque value as a bearer credential on every remote request. It sends
 no authorization header when the variable is unset or empty.
 
-`simulate.sh` inherits both environment variables and never replaces a
-non-empty token. With no token and the exact local dummy endpoint (allowing a
-trailing slash), it makes one best-effort request for a token using a fixed
-monitored-app development identity. If that request fails it warns and
-continues anonymously. It does not acquire tokens for custom, direct-gateway,
-or OpenShift URLs.
-
 ### Markdown Pull/Push Workflow
 
 This is the primary workflow for reading and writing document content.

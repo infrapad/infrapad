@@ -67,6 +67,22 @@ as an infrapad document.
 5. Pulls the document to `./tmp/incident.md` and remembers the doc name in
    `./tmp/.doc_name` for the resolve step.
 
+### Agent invocation
+
+When the simulation automatically acquires an InfraPad credential, it saves the
+credential in the ignored `.env` file. From this directory, make it available
+to an agent of your choice before launching the agent:
+
+```bash
+source .env
+# Launch the chosen agent, then ask it to:
+# /incident-investigate tmp/incident.md
+```
+
+Configure the agent to use the skills from `./.agents/skills`. If you supplied
+`INFRAPAD_TOKEN` yourself, the simulation does not access `.env`; launch the
+agent from the environment that already contains the token.
+
 ### `incident-resolve`
 
 1. Sets both endpoints back to `ok`.
@@ -85,13 +101,24 @@ as an infrapad document.
 
 ### Configuration
 
-The simulation passes `INFRAPAD_API_URL` and `INFRAPAD_TOKEN` through to every
-CLI subprocess. A non-empty caller-supplied token is never replaced. When no
-token is supplied and the effective API URL is exactly the built-in local dummy
-proxy (`http://localhost:8089`, with an optional trailing slash), the script
-makes one best-effort token request using its fixed development identity. A
-failure emits a warning and continues anonymously. Custom, direct-gateway, and
-OpenShift URLs never trigger automatic token acquisition.
+The simulation passes `INFRAPAD_API_URL` and `INFRAPAD_TOKEN` to every CLI
+subprocess. It configures authentication as follows:
+
+- **Caller-provided token:** A non-empty `INFRAPAD_TOKEN` is used unchanged.
+  The simulation does not read, create, or modify `.env`.
+- **Saved token:** If no token was provided and `.env` exists, the simulation
+  sources the file and reuses its token. An invalid file stops the command with
+  instructions to remove the file and try again.
+- **Automatic acquisition:** If `.env` does not exist, the simulation requests
+  a token from `/auth/token` at the effective API URL. A successful token is
+  exported for the current command and saved in `.env` with restrictive
+  permissions.
+- **Anonymous fallback:** If the request fails or returns an empty response, the
+  simulation warns and continues without a token. It does not create `.env`.
+  This is expected when the server does not provide the development token
+  route.
+
+Delete `.env` to acquire and save a new token on the next simulation command.
 
 | Variable               | Default                  | Purpose                                      |
 |------------------------|--------------------------|----------------------------------------------|

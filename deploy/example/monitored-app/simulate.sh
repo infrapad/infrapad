@@ -13,11 +13,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TMP_DIR="${SCRIPT_DIR}/tmp"
 INCIDENT_FILE="${TMP_DIR}/incident.md"
 DOC_NAME_FILE="${TMP_DIR}/.doc_name"
+INFRAPAD_ENV_FILE="${SCRIPT_DIR}/.env"
 
 MONITORED_APP_URL="${MONITORED_APP_URL:-http://localhost:8080}"
 PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
 
 INFRAPAD_PROJECT_DIR="${INFRAPAD_PROJECT_DIR:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
+
+declare -g AUTH_USE_ENV
 
 # ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -25,29 +28,70 @@ log() { echo "==> $*"; }
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
-# Use a fixed development identity with the known local dummy proxy when the
-# caller did not supply credentials. Custom and production endpoints never
-# trigger automatic token acquisition.
+auth_env_error() {
+  fail "${INFRAPAD_ENV_FILE} could not provide a non-empty INFRAPAD_TOKEN. Remove it and rerun the command to regenerate it."
+}
+
+persist_infrapad_token() {
+  local token="$1"
+  local temp_file quoted_token
+
+  # Prepare the complete file with restrictive permissions before publishing it.
+  # A hard link creates the final name atomically and cannot replace a file that
+  # appeared while the token request was in progress.
+  temp_file=$(mktemp "${INFRAPAD_ENV_FILE}.tmp.XXXXXX") || \
+    fail "Could not create a temporary InfraPad environment file."
+  chmod 600 "$temp_file" || {
+    rm -f -- "$temp_file"
+    fail "Could not restrict permissions on the temporary InfraPad environment file."
+  }
+  trap "rm -f -- $(printf '%q' "$temp_file")" EXIT
+
+  quoted_token=${token//\'/\'\\\'\'}
+  if ! printf "export INFRAPAD_TOKEN='%s'\n" "$quoted_token" > "$temp_file"; then
+    fail "Could not write the temporary InfraPad environment file."
+  fi
+  if ! ln "$temp_file" "$INFRAPAD_ENV_FILE"; then
+    fail "Could not create ${INFRAPAD_ENV_FILE}; it was not overwritten."
+  fi
+
+  rm -f -- "$temp_file"
+  trap - EXIT
+}
+
+# Preserve caller credentials, reuse a previously acquired development token,
+# or make one best-effort acquisition attempt against the effective API URL.
 configure_infrapad_auth() {
   if [ -n "${INFRAPAD_TOKEN:-}" ]; then
     return
   fi
 
+  if [ -e "$INFRAPAD_ENV_FILE" ] || [ -L "$INFRAPAD_ENV_FILE" ]; then
+    if ! source "$INFRAPAD_ENV_FILE"; then
+      auth_env_error
+    fi
+    if [ -z "${INFRAPAD_TOKEN:-}" ]; then
+      auth_env_error
+    fi
+
+    AUTH_USE_ENV=true
+    export INFRAPAD_TOKEN
+    return
+  fi
+
   local api_url="${INFRAPAD_API_URL:-http://localhost:8089}"
-  case "$api_url" in
-    http://localhost:8089|http://localhost:8089/)
-      local token
-      if token=$(curl --fail --silent --show-error \
-        --connect-timeout 2 --max-time 10 \
-        --data-urlencode 'username=monitored-app-simulation' \
-        "http://localhost:8089/auth/token" 2>/dev/null) && [ -n "$token" ]; then
-        INFRAPAD_TOKEN="$token"
-        export INFRAPAD_TOKEN
-      else
-        echo "WARNING: could not obtain a token from the local dummy authentication proxy; continuing anonymously." >&2
-      fi
-      ;;
-  esac
+  local token
+  if token=$(curl --fail --silent --show-error \
+    --connect-timeout 2 --max-time 10 \
+    --data-urlencode 'username=monitored-app-simulation' \
+    "${api_url%/}/auth/token" 2>/dev/null) && [ -n "$token" ]; then
+    persist_infrapad_token "$token"
+    INFRAPAD_TOKEN="$token"
+    AUTH_USE_ENV=true
+    export INFRAPAD_TOKEN
+  else
+    echo "WARNING: could not obtain an InfraPad development token; continuing anonymously." >&2
+  fi
 }
 
 # Resolve the infrapad CLI to use. Prefer building from source when this
@@ -208,6 +252,10 @@ cmd_incident_start() {
   ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
 
   log "Incident started. Document written to ${INCIDENT_FILE}"
+
+  if [ -n "${AUTH_USE_ENV}" ]; then
+      echo "For authentication, source .env file before running the agent: \`source .env; AGENT_CMD\`"
+  fi
 }
 
 # ─── incident-resolve ──────────────────────────────────────────────────────
