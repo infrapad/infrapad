@@ -3,7 +3,7 @@
 # E2E test for the markdown pull/parse round-trip via the infrapad CLI.
 #
 # Prerequisites:
-#   - infrapad server running (GRPC_ADDR defaults to localhost:50061)
+#   - InfraPad HTTP gateway running (INFRAPAD_API_URL defaults to http://localhost:8088)
 #   - infrapad CLI binary built (set INFRAPAD_CLI or it uses ../../../cli/infrapad)
 #
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -74,6 +74,10 @@ assert_contains "parsed alerts_matcher type" "$PARSE_OUT" "type:   alerts_matche
 assert_contains "parsed markdown type" "$PARSE_OUT" "type:   markdown"
 assert_contains "parsed alerts block number" "$PARSE_OUT" "block:  1"
 assert_contains "parsed markdown block number" "$PARSE_OUT" "block:  2"
+
+# Local parsing must not validate or contact the configured API endpoint.
+LOCAL_PARSE_OUT=$(${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url 'not a URL' md parse --file "$MD_FILE")
+assert_contains "parse ignores invalid API URL" "$LOCAL_PARSE_OUT" "Blocks (2):"
 echo ""
 
 # -----------------------------------------------------------------------

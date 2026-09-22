@@ -16,8 +16,12 @@ task install
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--grpc-addr` | `localhost:50061` | gRPC server address (also `GRPC_ADDR` env var) |
+| `--api-url` | `http://localhost:8088` | InfraPad HTTP API URL (also `INFRAPAD_API_URL` env var) |
 | `-o, --output` | `table` | Output format: `table` or `json` |
+
+An explicit `--api-url` overrides `INFRAPAD_API_URL`. The URL may include a base
+path when the gateway is mounted below an origin. Local-only commands such as
+`infrapad md parse` do not connect to or validate the configured API URL.
 
 ## Commands
 
@@ -223,8 +227,11 @@ block numbers and revision 1.
 # Unit tests
 task test:unit
 
-# E2E tests (requires a running infrapad server)
+# E2E tests (requires the InfraPad HTTP gateway on http://localhost:8088)
 task test:e2e
+
+# Target a gateway at another URL
+INFRAPAD_API_URL=http://localhost:8088 task test:e2e
 
 # All tests
 task test:all

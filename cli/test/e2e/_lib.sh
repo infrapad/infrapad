@@ -10,7 +10,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="${SCRIPT_DIR:?SCRIPT_DIR must be set before sourcing _lib.sh}"
-CLI="${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --grpc-addr ${GRPC_ADDR:-localhost:50061}"
+CLI="${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url ${INFRAPAD_API_URL:-http://localhost:8088}"
 
 pass=0
 fail=0

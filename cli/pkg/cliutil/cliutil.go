@@ -1,5 +1,5 @@
 // Package cliutil holds state and helpers shared across the CLI's command
-// packages (e.g. the global --grpc-addr and --output flags).
+// packages (e.g. the global --api-url and --output flags).
 package cliutil
 
 import (
@@ -10,15 +10,15 @@ import (
 )
 
 var (
-	// GRPCAddr is bound to the persistent --grpc-addr flag on the root command.
-	GRPCAddr string
+	// APIURL is bound to the persistent --api-url flag on the root command.
+	APIURL string
 	// OutputFormat is bound to the persistent --output flag on the root command.
 	OutputFormat string
 )
 
-// NewClient returns a gRPC client configured from the global --grpc-addr flag.
+// NewClient returns an HTTP client configured from the global --api-url flag.
 func NewClient() (*client.Client, error) {
-	return client.New(GRPCAddr)
+	return client.New(APIURL)
 }
 
 // NewPrinter returns a Printer configured from the global --output flag.

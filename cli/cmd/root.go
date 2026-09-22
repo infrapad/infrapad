@@ -21,11 +21,11 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	defaultAddr := "localhost:50061"
-	if s := os.Getenv("GRPC_ADDR"); s != "" {
-		defaultAddr = s
+	defaultURL := "http://localhost:8088"
+	if s := os.Getenv("INFRAPAD_API_URL"); s != "" {
+		defaultURL = s
 	}
-	rootCmd.PersistentFlags().StringVar(&cliutil.GRPCAddr, "grpc-addr", defaultAddr, "gRPC server address")
+	rootCmd.PersistentFlags().StringVar(&cliutil.APIURL, "api-url", defaultURL, "InfraPad HTTP API URL")
 	rootCmd.PersistentFlags().StringVarP(&cliutil.OutputFormat, "output", "o", "table", "Output format: table, json")
 
 	rootCmd.AddCommand(document.NewCmd(), block.NewCmd(), md.NewCmd())
