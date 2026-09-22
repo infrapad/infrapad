@@ -16,12 +16,36 @@ task install
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--api-url` | `http://localhost:8088` | InfraPad HTTP API URL (also `INFRAPAD_API_URL` env var) |
+| `--api-url` | `http://localhost:8089` | InfraPad HTTP API URL (also `INFRAPAD_API_URL` env var) |
 | `-o, --output` | `table` | Output format: `table` or `json` |
 
-An explicit `--api-url` overrides `INFRAPAD_API_URL`. The URL may include a base
-path when the gateway is mounted below an origin. Local-only commands such as
-`infrapad md parse` do not connect to or validate the configured API URL.
+An explicit `--api-url` overrides `INFRAPAD_API_URL`, which overrides the
+built-in local-development default. The URL may include a base path when the
+gateway is mounted below an origin. Direct local gateway access remains
+available explicitly with `INFRAPAD_API_URL=http://localhost:8088`.
+Local-only commands such as `infrapad md parse` do not connect to or validate
+the configured API URL.
+
+## Authentication
+
+Set `INFRAPAD_TOKEN` to an externally acquired access token when the selected
+endpoint requires authentication. The CLI treats the value as opaque and sends
+it on every remote request as `Authorization: Bearer <token>`. If the variable
+is unset or empty, no authorization header is sent and the proxy or server
+decides whether anonymous access is allowed.
+
+For example, to use an OpenShift-style HTTPS endpoint with a token obtained
+from its identity provider:
+
+```bash
+INFRAPAD_API_URL=https://localhost:8443 \
+INFRAPAD_TOKEN="$TOKEN_FROM_IDENTITY_PROVIDER" \
+infrapad document list
+```
+
+HTTPS uses the system certificate trust store and standard certificate
+verification. The CLI does not acquire, inspect, refresh, or persist tokens;
+it provides no login flow or credential store.
 
 ## Commands
 
@@ -227,11 +251,13 @@ block numbers and revision 1.
 # Unit tests
 task test:unit
 
-# E2E tests (requires the InfraPad HTTP gateway on http://localhost:8088)
+# E2E tests (requires InfraPad and the dummy auth proxy on http://localhost:8089)
 task test:e2e
 
-# Target a gateway at another URL
-INFRAPAD_API_URL=http://localhost:8088 task test:e2e
+# Target another proxy/server with a caller-supplied token
+INFRAPAD_API_URL=https://infrapad.example.com \
+INFRAPAD_TOKEN="$TOKEN_FROM_IDENTITY_PROVIDER" \
+task test:e2e
 
 # All tests
 task test:all

@@ -26,7 +26,7 @@ func TestNewValidatesAPIURLAndPreservesBasePath(t *testing.T) {
 	}
 	for input, expected := range accepted {
 		t.Run(input, func(t *testing.T) {
-			client, err := New(input)
+			client, err := New(input, "")
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}
@@ -49,7 +49,7 @@ func TestNewValidatesAPIURLAndPreservesBasePath(t *testing.T) {
 	}
 	for _, input := range rejected {
 		t.Run("reject_"+input, func(t *testing.T) {
-			if _, err := New(input); err == nil {
+			if _, err := New(input, ""); err == nil {
 				t.Fatalf("New(%q) unexpectedly succeeded", input)
 			}
 		})
@@ -102,7 +102,7 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(server.URL + "/gateway/")
+	client, err := New(server.URL+"/gateway/", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestDocumentNameNormalization(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(server.URL)
+	client, err := New(server.URL, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,6 +162,50 @@ func TestDocumentNameNormalization(t *testing.T) {
 	}
 }
 
+func TestAuthorizationHeader(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		token       string
+		want        string
+		wantPresent bool
+	}{
+		{name: "present", token: "opaque token", want: "Bearer opaque token", wantPresent: true},
+		{name: "absent", token: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			type observedHeader struct {
+				value   string
+				present bool
+			}
+			authorization := make(chan observedHeader, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, present := r.Header["Authorization"]
+				authorization <- observedHeader{value: r.Header.Get("Authorization"), present: present}
+				_, _ = io.WriteString(w, `{}`)
+			}))
+			defer server.Close()
+
+			client, err := New(server.URL, test.token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.ListDocuments(context.Background()); err != nil {
+				t.Fatalf("ListDocuments() error = %v", err)
+			}
+			got := <-authorization
+			if got.present != test.wantPresent || got.value != test.want {
+				t.Fatalf("Authorization = (%q, present %t), want (%q, present %t)",
+					got.value, got.present, test.want, test.wantPresent)
+			}
+		})
+	}
+}
+
 func TestGatewayErrors(t *testing.T) {
 	t.Parallel()
 
@@ -177,7 +221,7 @@ func TestGatewayErrors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(server.URL)
+	client, err := New(server.URL, "")
 	if err != nil {
 		t.Fatal(err)
 	}

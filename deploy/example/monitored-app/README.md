@@ -85,9 +85,19 @@ as an infrapad document.
 
 ### Configuration
 
-| Variable               | Default                 | Purpose                              |
-|------------------------|--------------------------|---------------------------------------|
-| `MONITORED_APP_URL`    | `http://localhost:8080` | Base URL of the monitored app         |
-| `PROMETHEUS_URL`       | `http://localhost:9090` | Base URL of Prometheus                |
-| `INFRAPAD_PROJECT_DIR` | repo root (auto-detected)| Used to locate `./cli` for `go run`  |
-| `INFRAPAD_CLI`         | auto-detected            | Overrides CLI invocation entirely     |
+The simulation passes `INFRAPAD_API_URL` and `INFRAPAD_TOKEN` through to every
+CLI subprocess. A non-empty caller-supplied token is never replaced. When no
+token is supplied and the effective API URL is exactly the built-in local dummy
+proxy (`http://localhost:8089`, with an optional trailing slash), the script
+makes one best-effort token request using its fixed development identity. A
+failure emits a warning and continues anonymously. Custom, direct-gateway, and
+OpenShift URLs never trigger automatic token acquisition.
+
+| Variable               | Default                  | Purpose                                      |
+|------------------------|--------------------------|----------------------------------------------|
+| `MONITORED_APP_URL`    | `http://localhost:8080`  | Base URL of the monitored app                |
+| `PROMETHEUS_URL`       | `http://localhost:9090`  | Base URL of Prometheus                       |
+| `INFRAPAD_API_URL`     | CLI default (`http://localhost:8089`) | InfraPad proxy/server URL        |
+| `INFRAPAD_TOKEN`       | unset                    | Optional bearer token for InfraPad requests  |
+| `INFRAPAD_PROJECT_DIR` | repo root (auto-detected)| Used to locate `./cli` for `go run`          |
+| `INFRAPAD_CLI`         | auto-detected            | Overrides CLI invocation entirely            |

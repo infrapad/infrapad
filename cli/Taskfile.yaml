@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   BINARY: infrapad
-  INFRAPAD_API_URL: '{{.INFRAPAD_API_URL | default "http://localhost:8088"}}'
+  INFRAPAD_API_URL: '{{.INFRAPAD_API_URL | default "http://localhost:8089"}}'
 
 tasks:
   build:
@@ -38,7 +38,7 @@ tasks:
       - go.sum
 
   test:e2e:
-    desc: "Run CLI e2e tests (requires running server, TEST=markdown to filter)"
+    desc: "Run CLI e2e tests (requires InfraPad and dummy auth proxy, TEST=markdown to filter)"
     deps: [build]
     cmds:
       - '{{if .TEST}}./test/e2e/{{.TEST}}_test.sh{{end}}'

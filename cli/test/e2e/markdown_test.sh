@@ -3,7 +3,7 @@
 # E2E test for the markdown pull/parse round-trip via the infrapad CLI.
 #
 # Prerequisites:
-#   - InfraPad HTTP gateway running (INFRAPAD_API_URL defaults to http://localhost:8088)
+#   - InfraPad and the dummy auth proxy running (default http://localhost:8089)
 #   - infrapad CLI binary built (set INFRAPAD_CLI or it uses ../../../cli/infrapad)
 #
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

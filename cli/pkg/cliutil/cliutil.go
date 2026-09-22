@@ -16,9 +16,10 @@ var (
 	OutputFormat string
 )
 
-// NewClient returns an HTTP client configured from the global --api-url flag.
+// NewClient returns an HTTP client configured from the global --api-url flag
+// and the optional INFRAPAD_TOKEN environment variable.
 func NewClient() (*client.Client, error) {
-	return client.New(APIURL)
+	return client.New(APIURL, os.Getenv("INFRAPAD_TOKEN"))
 }
 
 // NewPrinter returns a Printer configured from the global --output flag.

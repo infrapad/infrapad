@@ -25,6 +25,31 @@ log() { echo "==> $*"; }
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
+# Use a fixed development identity with the known local dummy proxy when the
+# caller did not supply credentials. Custom and production endpoints never
+# trigger automatic token acquisition.
+configure_infrapad_auth() {
+  if [ -n "${INFRAPAD_TOKEN:-}" ]; then
+    return
+  fi
+
+  local api_url="${INFRAPAD_API_URL:-http://localhost:8089}"
+  case "$api_url" in
+    http://localhost:8089|http://localhost:8089/)
+      local token
+      if token=$(curl --fail --silent --show-error \
+        --connect-timeout 2 --max-time 10 \
+        --data-urlencode 'username=monitored-app-simulation' \
+        "http://localhost:8089/auth/token" 2>/dev/null) && [ -n "$token" ]; then
+        INFRAPAD_TOKEN="$token"
+        export INFRAPAD_TOKEN
+      else
+        echo "WARNING: could not obtain a token from the local dummy authentication proxy; continuing anonymously." >&2
+      fi
+      ;;
+  esac
+}
+
 # Resolve the infrapad CLI to use. Prefer building from source when this
 # script lives inside the infrapad project checkout (./cli exists); this is
 # not the case when the monitored-app directory is copied/used standalone
@@ -260,9 +285,11 @@ EOF
 
 case "${1:-}" in
   incident-start)
+    configure_infrapad_auth
     cmd_incident_start
     ;;
   incident-resolve)
+    configure_infrapad_auth
     cmd_incident_resolve
     ;;
   *)

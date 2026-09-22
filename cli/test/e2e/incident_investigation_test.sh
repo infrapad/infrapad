@@ -4,13 +4,20 @@
 # Mirrors server/test/e2e/incident_investigation_test.go
 #
 # Prerequisites:
-#   - InfraPad HTTP gateway running (INFRAPAD_API_URL defaults to http://localhost:8088)
+#   - InfraPad and the dummy auth proxy running (default http://localhost:8089)
 #   - infrapad CLI binary built (set INFRAPAD_CLI or it uses ../../../cli/infrapad)
 #
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/_lib.sh"
 
 echo "=== Incident Investigation E2E Test ==="
+echo ""
+
+# A malformed environment credential must reach the dummy proxy and be rejected.
+echo "Authentication preflight: reject malformed bearer token"
+AUTH_REJECT_OUT=$(INFRAPAD_TOKEN='not-a-valid-dummy-token' $CLI document list 2>&1) && AUTH_REJECT_RC=0 || AUTH_REJECT_RC=$?
+assert_not_contains "malformed token exits non-zero" "_${AUTH_REJECT_RC}_" "_0_"
+assert_contains "malformed token is rejected by proxy" "$AUTH_REJECT_OUT" "HTTP 400 Bad Request"
 echo ""
 
 # -----------------------------------------------------------------------

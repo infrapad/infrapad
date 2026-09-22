@@ -48,7 +48,18 @@ See `deploy/example/monitored-app/tmp/incident.md` for a real-world example of a
 
 ## CLI Commands
 
-The infrapad CLI communicates with the HTTP gateway directly (default `http://localhost:8088`, override with `--api-url` or `INFRAPAD_API_URL`).
+The infrapad CLI communicates with the configured HTTP proxy or server. Its
+local-development default is `http://localhost:8089`; override it with
+`--api-url` or `INFRAPAD_API_URL`. If `INFRAPAD_TOKEN` is non-empty, the CLI
+sends its opaque value as a bearer credential on every remote request. It sends
+no authorization header when the variable is unset or empty.
+
+`simulate.sh` inherits both environment variables and never replaces a
+non-empty token. With no token and the exact local dummy endpoint (allowing a
+trailing slash), it makes one best-effort request for a token using a fixed
+monitored-app development identity. If that request fails it warns and
+continues anonymously. It does not acquire tokens for custom, direct-gateway,
+or OpenShift URLs.
 
 ### Markdown Pull/Push Workflow
 

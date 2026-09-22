@@ -21,11 +21,12 @@ const maxErrorBody = 8 * 1024
 // Client calls the InfraPad HTTP/JSON gateway.
 type Client struct {
 	baseURL    *url.URL
+	token      string
 	httpClient *http.Client
 }
 
-// New creates an HTTP gateway client for apiURL.
-func New(apiURL string) (*Client, error) {
+// New creates an HTTP gateway client for apiURL and an optional bearer token.
+func New(apiURL, token string) (*Client, error) {
 	baseURL, err := parseAPIURL(apiURL)
 	if err != nil {
 		return nil, err
@@ -33,6 +34,7 @@ func New(apiURL string) (*Client, error) {
 
 	return &Client{
 		baseURL:    baseURL,
+		token:      token,
 		httpClient: &http.Client{},
 	}, nil
 }
@@ -226,6 +228,9 @@ func (c *Client) do(ctx context.Context, operation, method string, route []strin
 		return fmt.Errorf("%s: construct request: %w", operation, err)
 	}
 	req.Header.Set("Accept", "application/json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 	if request != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

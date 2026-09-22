@@ -27,13 +27,47 @@ cli/
 they document the expected behaviour and will catch regressions. Add or update
 e2e test cases to cover your changes.
 
+Start InfraPad and the dummy authentication proxy from the repository root in
+one terminal:
+
 ```bash
-task test:e2e                  # requires a running infrapad server
+task pd:dev:run
+```
+
+in separate terminal
+
+```
+task server:run
+```
+
+Then run the tests from `cli/` in another terminal:
+
+```bash
+task test:e2e
 task test:e2e TEST=markdown    # run only markdown_test.sh
 ```
 
+The default endpoint is `http://localhost:8089`. For debugging, a dummy token
+can be obtained manually while the development stack is running:
+
+```bash
+curl --fail --silent --show-error \
+  --data-urlencode 'username=cli-contributor' \
+  http://localhost:8089/auth/token
+```
+
+Optional overrides can select another endpoint or preserve a caller-supplied
+token:
+
+```bash
+INFRAPAD_API_URL=https://infrapad.example.com \
+INFRAPAD_TOKEN="$TOKEN" \
+task test:e2e
+```
+
 E2E tests are bash scripts in `test/e2e/`. They exercise the built CLI binary
-against a live server and use the assertion helpers from `_lib.sh`.
+against live InfraPad and proxy services and use the assertion helpers from
+`_lib.sh`.
 
 ### Unit tests
 

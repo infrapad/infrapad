@@ -21,7 +21,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	defaultURL := "http://localhost:8088"
+	defaultURL := "http://localhost:8089"
 	if s := os.Getenv("INFRAPAD_API_URL"); s != "" {
 		defaultURL = s
 	}

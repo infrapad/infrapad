@@ -10,7 +10,27 @@
 set -euo pipefail
 
 SCRIPT_DIR="${SCRIPT_DIR:?SCRIPT_DIR must be set before sourcing _lib.sh}"
-CLI="${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url ${INFRAPAD_API_URL:-http://localhost:8088}"
+API_URL="${INFRAPAD_API_URL:-http://localhost:8089}"
+
+if [[ -z "${INFRAPAD_TOKEN:-}" ]]; then
+  TOKEN_URL="${API_URL%/}/auth/token"
+  if ! INFRAPAD_TOKEN=$(curl --fail --silent --show-error \
+    --connect-timeout 2 --max-time 10 \
+    --data-urlencode 'username=infrapad-cli-e2e' \
+    --data-urlencode 'email=infrapad-cli-e2e@example.com' \
+    "$TOKEN_URL"); then
+    echo "ERROR: could not obtain an e2e token from ${TOKEN_URL}." >&2
+    echo "       Start InfraPad and the dummy authentication proxy, or set INFRAPAD_TOKEN." >&2
+    exit 1
+  fi
+  if [[ -z "$INFRAPAD_TOKEN" ]]; then
+    echo "ERROR: dummy authentication proxy returned an empty e2e token from ${TOKEN_URL}." >&2
+    exit 1
+  fi
+  export INFRAPAD_TOKEN
+fi
+
+CLI="${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url ${API_URL}"
 
 pass=0
 fail=0
