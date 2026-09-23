@@ -10,7 +10,7 @@ services:
     command:
       - proxy
       - --listen=127.0.0.1:8089
-      - --upstream=http://127.0.0.1:8088
+      - --upstream=${INFRAPAD_AUTH_UPSTREAM:-http://127.0.0.1:8088}
     healthcheck:
       test:
         - CMD

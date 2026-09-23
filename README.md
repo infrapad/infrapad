@@ -2,6 +2,10 @@
 
 Trusted notes about activities in the infrastructure your infrastructure.
 
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for local backend and standalone UI workflows.
+
 ## The problem
 
 The more components there are in the infrastructure, the more signal gets produced.

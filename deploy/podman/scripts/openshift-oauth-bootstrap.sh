@@ -12,11 +12,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GEN_DIR="$DEPLOY_DIR/generated"
-
-if [ -s "$GEN_DIR/oauth-proxy.cfg" ]; then
-  echo "$GEN_DIR/oauth-proxy.cfg already exists. Skipping…"
-  exit
-fi
+CONFIG_TEMPLATE="$DEPLOY_DIR/oauth-proxy.cfg.template"
+METADATA_FILE="$GEN_DIR/oauth-metadata.json"
+INFRAPAD_AUTH_UPSTREAM="${INFRAPAD_AUTH_UPSTREAM:-http://127.0.0.1:8088}"
 
 # Cluster-side names
 NAMESPACE="infrapad-local"
@@ -24,10 +22,6 @@ SA_NAME="infrapad-oauth-proxy"
 TOKEN_SECRET="infrapad-oauth-proxy-token"
 REDIRECT_ANNOTATION="serviceaccounts.openshift.io/oauth-redirecturi.localhost"
 REDIRECT_VALUE="https://localhost:8443/oauth/callback"
-CLIENT_ID="system:serviceaccount:${NAMESPACE}:${SA_NAME}"
-
-# Container mount root
-CONTAINER_MOUNT="/etc/oauth-proxy"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,8 +32,93 @@ require_tool() {
   command -v "$1" &>/dev/null || die "'$1' is required but not found in PATH."
 }
 
+load_oauth_metadata() {
+  local values
+  values="$(jq -er '
+    [.apiUrl, .authorizationEndpoint, .tokenEndpoint]
+    | if all(.[]; type == "string" and length > 0)
+      then @tsv
+      else error("OAuth metadata fields must be non-empty strings")
+      end
+  ' "$METADATA_FILE")" || return 1
+
+  IFS=$'\t' read -r API_URL AUTHORIZATION_ENDPOINT TOKEN_ENDPOINT <<< "$values"
+}
+
+has_complete_cache() {
+  local artifact
+  local artifacts=(
+    "$METADATA_FILE"
+    "$GEN_DIR/client-secret"
+    "$GEN_DIR/kubeconfig"
+    "$GEN_DIR/cluster-ca.crt"
+    "$GEN_DIR/cookie-secret"
+    "$GEN_DIR/tls.crt"
+    "$GEN_DIR/tls.key"
+  )
+
+  for artifact in "${artifacts[@]}"; do
+    [ -s "$artifact" ] || return 1
+  done
+}
+
+write_oauth_metadata() {
+  jq -n \
+    --arg api_url "$API_URL" \
+    --arg authorization_endpoint "$AUTHORIZATION_ENDPOINT" \
+    --arg token_endpoint "$TOKEN_ENDPOINT" \
+    '{
+      apiUrl: $api_url,
+      authorizationEndpoint: $authorization_endpoint,
+      tokenEndpoint: $token_endpoint
+    }' > "$METADATA_FILE.tmp"
+  chmod 0644 "$METADATA_FILE.tmp"
+  mv -f "$METADATA_FILE.tmp" "$METADATA_FILE"
+}
+
+render_oauth_proxy_config() {
+  [ -r "$CONFIG_TEMPLATE" ] || die "OAuth proxy config template ($CONFIG_TEMPLATE) is not readable."
+
+  echo "Writing oauth-proxy.cfg…"
+  jq -Rrs \
+    --arg api_url "$API_URL" \
+    --arg authorization_endpoint "$AUTHORIZATION_ENDPOINT" \
+    --arg token_endpoint "$TOKEN_ENDPOINT" \
+    --arg auth_upstream "$INFRAPAD_AUTH_UPSTREAM" \
+    '
+      gsub("@API_URL@"; $api_url)
+      | gsub("@AUTHORIZATION_ENDPOINT@"; $authorization_endpoint)
+      | gsub("@TOKEN_ENDPOINT@"; $token_endpoint)
+      | gsub("@INFRAPAD_AUTH_UPSTREAM@"; $auth_upstream)
+      | if contains("@API_URL@")
+          or contains("@AUTHORIZATION_ENDPOINT@")
+          or contains("@TOKEN_ENDPOINT@")
+          or contains("@INFRAPAD_AUTH_UPSTREAM@")
+        then error("unresolved placeholder in OAuth proxy config template")
+        else .
+        end
+    ' "$CONFIG_TEMPLATE" > "$GEN_DIR/oauth-proxy.cfg.tmp"
+  chmod 0644 "$GEN_DIR/oauth-proxy.cfg.tmp"
+  mv -f "$GEN_DIR/oauth-proxy.cfg.tmp" "$GEN_DIR/oauth-proxy.cfg"
+}
+
 # ---------------------------------------------------------------------------
-# Prerequisite checks
+# Cached offline path
+# ---------------------------------------------------------------------------
+require_tool jq
+
+if has_complete_cache; then
+  if load_oauth_metadata; then
+    echo "Using cached OpenShift OAuth metadata and generated credentials."
+    render_oauth_proxy_config
+    echo "OAuth bootstrap complete. Regenerated $GEN_DIR/oauth-proxy.cfg without contacting OpenShift."
+    exit 0
+  fi
+  echo "Cached OAuth metadata is invalid; falling back to online bootstrap." >&2
+fi
+
+# ---------------------------------------------------------------------------
+# Online prerequisite checks
 # ---------------------------------------------------------------------------
 require_tool oc
 require_tool mkcert
@@ -92,10 +171,9 @@ echo "Querying OAuth discovery endpoint…"
 OAUTH_META="$(oc get --raw '/.well-known/oauth-authorization-server' 2>/dev/null)" \
   || die "OAuth discovery failed. Is this an OpenShift cluster?"
 
-# Use oc/python to parse JSON portably (jq may not be present).
 extract_json() {
   local json="$1" key="$2"
-  echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin)['$key'])" 2>/dev/null
+  echo "$json" | jq -er --arg key "$key" '.[$key] | strings' 2>/dev/null
 }
 
 AUTHORIZATION_ENDPOINT="$(extract_json "$OAUTH_META" authorization_endpoint)" \
@@ -210,8 +288,8 @@ if [ -s "$GEN_DIR/cookie-secret" ]; then
   echo "Reusing existing cookie-secret."
 else
   echo "Generating cookie-secret…"
-  python3 -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode(), end='')" \
-    > "$GEN_DIR/cookie-secret.tmp"
+  require_tool openssl
+  openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' > "$GEN_DIR/cookie-secret.tmp"
   chmod 0644 "$GEN_DIR/cookie-secret.tmp"
   mv -f "$GEN_DIR/cookie-secret.tmp" "$GEN_DIR/cookie-secret"
 fi
@@ -258,35 +336,10 @@ else
   trap - EXIT
 fi
 
-# ---------------------------------------------------------------------------
-# oauth-proxy.cfg
-# ---------------------------------------------------------------------------
-echo "Writing oauth-proxy.cfg…"
-cat > "$GEN_DIR/oauth-proxy.cfg.tmp" <<EOCFG
-provider = "openshift"
-proxy_prefix = "/oauth"
-http_address = ""
-https_address = "127.0.0.1:8443"
-tls_cert_file = "${CONTAINER_MOUNT}/tls.crt"
-tls_key_file = "${CONTAINER_MOUNT}/tls.key"
-client_id = "${CLIENT_ID}"
-client_secret_file = "${CONTAINER_MOUNT}/client-secret"
-cookie_secret_file = "${CONTAINER_MOUNT}/cookie-secret"
-cookie_secure = true
-cookie_httponly = true
-openshift_ca = ["${CONTAINER_MOUNT}/cluster-ca.crt"]
-login_url = "${AUTHORIZATION_ENDPOINT}"
-redeem_url = "${TOKEN_ENDPOINT}"
-validate_url = "${API_URL}/apis/user.openshift.io/v1/users/~"
-redirect_url = "${REDIRECT_VALUE}"
-upstreams = ["http://127.0.0.1:8088"]
-request_logging = true
-pass_user_headers = true
-pass_access_token = false
-skip_provider_button = true
-email_domains = "*"
-EOCFG
-chmod 0644 "$GEN_DIR/oauth-proxy.cfg.tmp"
-mv -f "$GEN_DIR/oauth-proxy.cfg.tmp" "$GEN_DIR/oauth-proxy.cfg"
+# Cache only after the complete online reconciliation succeeds. This prevents a
+# partially failed run from making stale credentials eligible for offline use.
+echo "Writing OAuth metadata cache…"
+write_oauth_metadata
+render_oauth_proxy_config
 
 echo "OAuth bootstrap complete. Generated files in $GEN_DIR"

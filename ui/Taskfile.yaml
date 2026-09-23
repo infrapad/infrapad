@@ -1,0 +1,7 @@
+version: '3'
+
+tasks:
+  dev:
+    desc: Start the standalone Vite development server
+    cmds:
+      - npm run dev

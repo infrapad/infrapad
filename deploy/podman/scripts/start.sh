@@ -122,18 +122,49 @@ case "$auth_composition" in
 esac
 
 case "$auth_mode" in
-  none)
+  none|openshift|dummy)
     ;;
+  *)
+    echo "ERROR: Invalid INFRAPAD_AUTH value '$auth_mode'; accepted values: none, openshift, dummy." >&2
+    exit 1
+    ;;
+esac
+
+# UI mode only applies when an authentication composition is active. This
+# deliberately leaves focused services such as PostgreSQL independent from UI
+# development settings in the caller's environment.
+if [[ -n "$auth_composition" ]]; then
+  ui_mode="${INFRAPAD_UI:-}"
+  case "$ui_mode" in
+    "")
+      mode_upstream="http://127.0.0.1:8088"
+      ;;
+    hot-reload)
+      if [[ "$auth_mode" == "none" ]]; then
+        echo "ERROR: INFRAPAD_UI=hot-reload requires an authentication proxy; INFRAPAD_AUTH=none is not supported by the standalone UI." >&2
+        exit 1
+      fi
+      mode_upstream="http://127.0.0.1:5173"
+      ;;
+    *)
+      echo "ERROR: Invalid INFRAPAD_UI value '$ui_mode'; accepted values: unset, empty, hot-reload." >&2
+      exit 1
+      ;;
+  esac
+
+  # An explicit upstream is an advanced override for either proxy mode.
+  if [[ -z "${INFRAPAD_AUTH_UPSTREAM:-}" ]]; then
+    export INFRAPAD_AUTH_UPSTREAM="$mode_upstream"
+  fi
+fi
+
+case "$auth_mode" in
   openshift)
     "$SCRIPT_DIR/openshift-oauth-bootstrap.sh"
     compose_args+=("--profile" "auth-openshift")
     ;;
   dummy)
     compose_args+=("--profile" "auth-dummy")
-    ;;
-  *)
-    echo "ERROR: Invalid INFRAPAD_AUTH value '$auth_mode'; accepted values: none, openshift, dummy." >&2
-    exit 1
     ;;
 esac
 

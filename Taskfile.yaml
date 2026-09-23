@@ -13,6 +13,9 @@ includes:
   server:
     taskfile: ./server/Taskfile.yaml
     dir: ./server
+  ui:
+    taskfile: ./ui/Taskfile.yaml
+    dir: ./ui
   proto:
     taskfile: ./proto/Taskfile.yaml
     dir: ./proto

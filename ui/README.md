@@ -15,23 +15,7 @@ The standalone output is written to `apps/standalone/dist/`. The production bund
 
 ## Authenticated development
 
-Only one process may own port 8089. Stop a Compose-managed development proxy first if one is running (for example, `task podman:dev:stop` from the repository root). Then use two terminals from the repository root:
-
-```sh
-# Terminal 1
-cd ui
-npm run dev
-
-# Terminal 2
-cd deploy/podman/dummy-auth
-GOWORK=off go run . proxy \
-  --listen=127.0.0.1:8089 \
-  --upstream=http://127.0.0.1:5173
-```
-
-Open `http://localhost:8089/documents`. Anonymous users are sent to the dummy login page and returned to the original local URL after login. Vite proxies `/v1` to the Go gateway at `http://127.0.0.1:8088`; start the server separately when using real document data.
-
-Both page traffic and Vite's WebSocket hot updates pass through dummy auth. For a quick HMR smoke check, keep the browser open after login, change `.standalone-brand` in `apps/standalone/src/styles.css`, and verify that the masthead updates without a reload or another login.
+See the repository's [development guide](../DEVELOPMENT.md) for the canonical three-terminal dummy and OpenShift hot-reload workflows.
 
 ## Browser journey
 

@@ -39,7 +39,26 @@ function runtimeConfiguration(): Plugin {
 }
 
 const vitePort = Number(process.env.INFRAPAD_VITE_PORT ?? "5173");
-const authPort = Number(process.env.INFRAPAD_AUTH_PORT ?? "8089");
+const authMode = process.env.INFRAPAD_AUTH ?? "dummy";
+
+let hmrProtocol: "ws" | "wss";
+let defaultAuthPort: string;
+switch (authMode) {
+  case "dummy":
+    hmrProtocol = "ws";
+    defaultAuthPort = "8089";
+    break;
+  case "openshift":
+    hmrProtocol = "wss";
+    defaultAuthPort = "8443";
+    break;
+  case "none":
+    throw new Error("INFRAPAD_AUTH=none is not supported by the standalone UI; use dummy or openshift");
+  default:
+    throw new Error(`Invalid INFRAPAD_AUTH value '${authMode}'; accepted values: dummy, openshift`);
+}
+
+const authPort = Number(process.env.INFRAPAD_AUTH_PORT ?? defaultAuthPort);
 
 export default defineConfig({
   plugins: [react(), runtimeConfiguration()],
@@ -48,7 +67,7 @@ export default defineConfig({
     port: vitePort,
     strictPort: true,
     hmr: {
-      protocol: "ws",
+      protocol: hmrProtocol,
       host: "localhost",
       clientPort: authPort,
     },

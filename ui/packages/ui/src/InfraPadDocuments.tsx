@@ -244,7 +244,7 @@ function DocumentDetail({ services }: InfraPadDocumentsProps) {
           Documents
         </Link>
         <span aria-hidden="true"> / </span>
-        <span>{document.title} hello</span>
+        <span>{document.title}</span>
       </nav>
       <Title headingLevel="h1">{document.title}</Title>
       <div className="infrapad-ui-document-meta pf-v6-u-mt-sm pf-v6-u-mb-lg">
