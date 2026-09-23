@@ -1,0 +1,39 @@
+.infrapad-ui-loading {
+  min-height: 16rem;
+}
+
+.infrapad-ui-document-list,
+.infrapad-ui-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-t--global--spacer--md);
+}
+
+.infrapad-ui-document-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--pf-t--global--spacer--sm);
+  color: var(--pf-t--global--text--color--subtle);
+}
+
+.infrapad-ui-breadcrumb {
+  margin-bottom: var(--pf-t--global--spacer--md);
+}
+
+.infrapad-ui-block-meta {
+  margin-left: var(--pf-t--global--spacer--sm);
+  color: var(--pf-t--global--text--color--subtle);
+  font-size: var(--pf-t--global--font--size--sm);
+}
+
+.infrapad-ui-markdown,
+.infrapad-ui-json {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.infrapad-ui-json {
+  margin: 0;
+  font-family: var(--pf-t--global--font--family--mono);
+}

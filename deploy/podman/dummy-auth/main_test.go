@@ -87,6 +87,67 @@ func TestBrowserSessionJourney(t *testing.T) {
 	}
 }
 
+func TestLoginReturnTo(t *testing.T) {
+	proxy := httptest.NewServer(newProxy(mustParseURL(t, "http://127.0.0.1:1")))
+	defer proxy.Close()
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	t.Run("preserves a local target", func(t *testing.T) {
+		const returnTo = "/documents/doc-1?view=history#revision-2"
+		response, err := client.Get(proxy.URL + "/auth?returnTo=" + url.QueryEscape(returnTo))
+		if err != nil {
+			t.Fatalf("load login page: %v", err)
+		}
+		page := readBody(t, response)
+		if !strings.Contains(page, `name="returnTo" value="`+returnTo+`"`) {
+			t.Fatalf("login page did not preserve returnTo: %q", page)
+		}
+
+		response, err = client.PostForm(proxy.URL+"/auth/login", url.Values{
+			"username": {"alice"},
+			"email":    {""},
+			"returnTo": {returnTo},
+		})
+		if err != nil {
+			t.Fatalf("log in: %v", err)
+		}
+		_ = readBody(t, response)
+		if response.StatusCode != http.StatusSeeOther {
+			t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusSeeOther)
+		}
+		if got := response.Header.Get("Location"); got != "/documents/doc-1?view=history#revision-2" {
+			t.Errorf("Location = %q, want local return target", got)
+		}
+	})
+
+	for _, unsafe := range []string{
+		"https://example.com/steal",
+		"//example.com/steal",
+		"/%2Fexample.com/steal",
+		"/\\example.com/steal",
+		"/%5Cexample.com/steal",
+	} {
+		t.Run("rejects "+unsafe, func(t *testing.T) {
+			response, err := client.PostForm(proxy.URL+"/auth/login", url.Values{
+				"username": {"alice"},
+				"email":    {""},
+				"returnTo": {unsafe},
+			})
+			if err != nil {
+				t.Fatalf("log in: %v", err)
+			}
+			_ = readBody(t, response)
+			if got := response.Header.Get("Location"); got != "/auth" {
+				t.Errorf("Location = %q, want /auth", got)
+			}
+		})
+	}
+}
+
 func TestTokenBearerJourney(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if got := request.Header.Get("X-Forwarded-User"); got != "alice" {

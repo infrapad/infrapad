@@ -59,6 +59,7 @@ var authPageTemplate = template.Must(template.New("auth").Parse(`<!doctype html>
       </form>
     {{else}}
       <form method="post" action="/auth/login">
+        {{if .HasReturnTo}}<input type="hidden" name="returnTo" value="{{.ReturnTo}}">{{end}}
         <label for="username">Username</label>
         <input id="username" name="username" required>
         <label for="email">Email (optional)</label>
@@ -80,6 +81,8 @@ type authPageData struct {
 	Email         string
 	HasEmail      bool
 	Token         string
+	ReturnTo      string
+	HasReturnTo   bool
 }
 
 func main() {
@@ -356,18 +359,20 @@ func handleAuthPage(response http.ResponseWriter, request *http.Request) {
 	}
 
 	data := authPageData{}
+	if returnTo := request.URL.Query().Get("returnTo"); isSafeReturnTo(returnTo) {
+		data.ReturnTo = returnTo
+		data.HasReturnTo = true
+	}
 	if sessionCookie, err := request.Cookie(sessionCookieName); err == nil {
 		derivedIdentity, err := identityFromToken(sessionCookie.Value)
 		if err != nil {
 			expireSessionCookie(response)
 		} else {
-			data = authPageData{
-				Authenticated: true,
-				Username:      derivedIdentity.username,
-				Email:         derivedIdentity.email,
-				HasEmail:      derivedIdentity.hasEmail,
-				Token:         sessionCookie.Value,
-			}
+			data.Authenticated = true
+			data.Username = derivedIdentity.username
+			data.Email = derivedIdentity.email
+			data.HasEmail = derivedIdentity.hasEmail
+			data.Token = sessionCookie.Value
 		}
 	}
 
@@ -399,7 +404,22 @@ func handleAuthLogin(response http.ResponseWriter, request *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(response, request, "/auth", http.StatusSeeOther)
+	redirectTarget := "/auth"
+	if returnToValues := request.PostForm["returnTo"]; len(returnToValues) == 1 && isSafeReturnTo(returnToValues[0]) {
+		redirectTarget = returnToValues[0]
+	}
+	http.Redirect(response, request, redirectTarget, http.StatusSeeOther)
+}
+
+func isSafeReturnTo(value string) bool {
+	if !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") || strings.Contains(value, "\\") {
+		return false
+	}
+	parsed, err := url.Parse(value)
+	return err == nil &&
+		!parsed.IsAbs() && parsed.Host == "" && parsed.Opaque == "" &&
+		strings.HasPrefix(parsed.Path, "/") && !strings.HasPrefix(parsed.Path, "//") &&
+		!strings.Contains(parsed.Path, "\\")
 }
 
 func handleAuthToken(response http.ResponseWriter, request *http.Request) {
