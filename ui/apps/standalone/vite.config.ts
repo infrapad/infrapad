@@ -1,38 +1,18 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
-function headerValue(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) return value[0];
-  return value;
-}
-
-function runtimeConfiguration(): Plugin {
+function rootRedirect(): Plugin {
   return {
-    name: "infrapad-runtime-configuration",
+    name: "infrapad-root-redirect",
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        const requestUrl = new URL(request.url ?? "/", "http://localhost");
-        if (request.method !== "GET" || requestUrl.pathname !== "/ui/config") {
+        if (new URL(request.url ?? "/", "http://localhost").pathname !== "/") {
           next();
           return;
         }
-
-        const username = headerValue(request.headers["x-forwarded-user"]);
-        const email = headerValue(request.headers["x-forwarded-email"]);
-        const identity = username
-          ? { username, ...(email ? { email } : {}) }
-          : null;
-
-        response.statusCode = 200;
-        response.setHeader("Cache-Control", "no-store");
-        response.setHeader("Content-Type", "application/json; charset=utf-8");
-        response.end(JSON.stringify({
-          identity,
-          services: {
-            infrapadApiBaseUrl: "/v1",
-            prometheusApiBaseUrl: "http://localhost:9090",
-          },
-        }));
+        response.statusCode = 302;
+        response.setHeader("Location", "/ui/documents");
+        response.end();
       });
     },
   };
@@ -61,7 +41,8 @@ switch (authMode) {
 const authPort = Number(process.env.INFRAPAD_AUTH_PORT ?? defaultAuthPort);
 
 export default defineConfig({
-  plugins: [react(), runtimeConfiguration()],
+  base: "/ui/",
+  plugins: [react(), rootRedirect()],
   server: {
     host: "127.0.0.1",
     port: vitePort,
@@ -73,6 +54,9 @@ export default defineConfig({
     },
     proxy: {
       "/v1": {
+        target: "http://127.0.0.1:8088",
+      },
+      "/ui/config": {
         target: "http://127.0.0.1:8088",
       },
     },

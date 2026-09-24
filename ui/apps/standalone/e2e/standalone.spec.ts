@@ -59,7 +59,7 @@ async function mockServices(page: Page) {
 }
 
 async function openAuthenticatedDocument(page: Page) {
-  await page.goto("/documents/doc-1");
+  await page.goto("/ui/documents/doc-1");
   await expect(page).toHaveURL(/\/auth\?returnTo=/);
   await page.getByLabel("Username").fill("alice");
   await page.getByRole("button", { name: "Log in" }).click();
@@ -69,8 +69,12 @@ async function openAuthenticatedDocument(page: Page) {
 test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
   await mockServices(page);
 
+  // Vite's root resolves to the same canonical UI route as built Go serving.
+  await page.goto("/");
+  await expect(page.locator('input[name="returnTo"]')).toHaveValue("/ui/documents");
+
   // Unauthenticated deep links should retain their full return path.
-  const deepPath = "/documents/doc-1?view=history#revision-2";
+  const deepPath = "/ui/documents/doc-1?view=history#revision-2";
   await page.goto(deepPath);
 
   await expect(page).toHaveURL(/\/auth\?returnTo=/);
@@ -95,16 +99,20 @@ test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
 
   await expect(page).toHaveURL(`${authOrigin}${deepPath}`);
   await expect(page.getByLabel("Signed in as alice")).toBeVisible();
+  // The configuration is supplied by Go through Vite and the authentication proxy.
+  const config = await page.evaluate(async () => (await fetch("/ui/config")).json());
+  expect(config.identity).toEqual({ username: "alice", email: "alice@example.com" });
+  expect(config.services).toEqual({ infrapadApiBaseUrl: "/v1", prometheusApiBaseUrl: "http://localhost:9090" });
   await expect(page.getByRole("heading", { name: document.title })).toBeVisible();
 
   // List/detail navigation should render the document content.
   await page.getByRole("link", { name: "Documents" }).click();
-  await expect(page).toHaveURL(`${authOrigin}/documents`);
+  await expect(page).toHaveURL(`${authOrigin}/ui/documents`);
   await expect(page.getByRole("grid", { name: "Infrapad documents" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Namespace" })).toBeVisible();
   await expect(page.getByRole("link", { name: document.title })).toBeVisible();
   await page.getByRole("link", { name: document.title }).click();
-  await expect(page).toHaveURL(`${authOrigin}/documents/doc-1`);
+  await expect(page).toHaveURL(`${authOrigin}/ui/documents/doc-1`);
   await expect(page.locator(".infrapad-markdown-content strong")).toHaveText("Service recovered");
   expect(await page.evaluate(() => (window as Window & { infrapadXss?: boolean }).infrapadXss)).toBeUndefined();
   await expect(page.locator(".infrapad-markdown-content script")).toHaveCount(0);

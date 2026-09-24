@@ -126,7 +126,7 @@ function NotFound() {
     <PageSection>
       <EmptyState titleText="Page not found" headingLevel="h1">
         <EmptyStateBody>The requested InfraPad page does not exist.</EmptyStateBody>
-        <Button component="a" href="/documents" variant="primary">View documents</Button>
+        <Button component="a" href="/ui/documents" variant="primary">View documents</Button>
       </EmptyState>
     </PageSection>
   );
@@ -151,7 +151,7 @@ function ReadyApplication({ config }: { config: UIConfig & { identity: UIIdentit
   );
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/ui">
       <Page masthead={masthead}>
         <Routes>
           <Route path="/" element={<Navigate replace to="/documents" />} />

@@ -23,15 +23,19 @@ import (
 )
 
 var (
-	flagDBString string
-	flagPort     int
-	flagHTTPAddr string
+	flagDBString      string
+	flagPort          int
+	flagHTTPAddr      string
+	flagUIDir         string
+	flagPrometheusURL string
 )
 
 func init() {
 	startCmd.Flags().StringVar(&flagDBString, "db", "", "PostgreSQL connection string (or INFRAPAD_DBSTRING env)")
 	startCmd.Flags().IntVar(&flagPort, "port", grpcTransport.DefaultPort, "gRPC listen port")
 	startCmd.Flags().StringVar(&flagHTTPAddr, "http-addr", ":8088", "HTTP/JSON gateway listen address")
+	startCmd.Flags().StringVar(&flagUIDir, "ui-dir", "", "built standalone UI directory (or INFRAPAD_UI_DIR env)")
+	startCmd.Flags().StringVar(&flagPrometheusURL, "prometheus-url", "", "browser-reachable Prometheus base URL (or INFRAPAD_PROMETHEUS_URL env)")
 	rootCmd.AddCommand(startCmd)
 }
 
@@ -90,6 +94,18 @@ var startCmd = &cobra.Command{
 		topMux := nethttp.NewServeMux()
 		transporthttp.RegisterHealthRoutes(topMux, readiness)
 		topMux.Handle("/v1/", gwMux)
+		uiDir := flagUIDir
+		if !cmd.Flags().Changed("ui-dir") {
+			uiDir = os.Getenv("INFRAPAD_UI_DIR")
+		}
+		prometheusURL := flagPrometheusURL
+		if !cmd.Flags().Changed("prometheus-url") {
+			prometheusURL = os.Getenv("INFRAPAD_PROMETHEUS_URL")
+		}
+		if prometheusURL == "" {
+			prometheusURL = "http://localhost:9090"
+		}
+		transporthttp.RegisterUIRoutes(topMux, uiDir, prometheusURL)
 
 		// 5. HTTP server with CORS + body-limit middleware.
 		httpServer := &nethttp.Server{
