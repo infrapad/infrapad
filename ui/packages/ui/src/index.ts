@@ -1,7 +1,3 @@
-export { InfraPadDocuments } from "./InfraPadDocuments";
-export type {
-  InfraPadDocumentsProps,
-  InfraPadServices,
-  InfrapadBlock,
-  InfrapadDocument,
-} from "./InfraPadDocuments";
+export { InfraPadDocuments } from "./InfraPadDocuments.js";
+export type { InfraPadDocumentsProps } from "./InfraPadDocuments.js";
+export type { InfraPadServices, InfrapadBlock, InfrapadDocument } from "./api.js";

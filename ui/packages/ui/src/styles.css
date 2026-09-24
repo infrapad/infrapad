@@ -1,39 +1,268 @@
-.infrapad-ui-loading {
-  min-height: 16rem;
+/* Document header */
+.infrapad-doc-header {
+    margin-bottom: var(--pf-t--global--spacer--lg);
 }
 
-.infrapad-ui-document-list,
-.infrapad-ui-block-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--pf-t--global--spacer--md);
+.infrapad-doc-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm);
+    flex-wrap: wrap;
 }
 
-.infrapad-ui-document-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--pf-t--global--spacer--sm);
-  color: var(--pf-t--global--text--color--subtle);
+/* Block card compact header – subtle grey bar like overview widget tiles */
+.infrapad-block-header.pf-v6-c-card__header {
+    background-color: var(--pf-t--global--background--color--secondary--default);
+    padding: var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--md);
+    min-height: 0;
 }
 
-.infrapad-ui-breadcrumb {
-  margin-bottom: var(--pf-t--global--spacer--md);
+.infrapad-block-header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm);
 }
 
-.infrapad-ui-block-meta {
-  margin-left: var(--pf-t--global--spacer--sm);
-  color: var(--pf-t--global--text--color--subtle);
-  font-size: var(--pf-t--global--font--size--sm);
+/* Block cards */
+.infrapad-blocks-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pf-t--global--spacer--md);
 }
 
-.infrapad-ui-markdown,
-.infrapad-ui-json {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.infrapad-block-card {
+    /* subtle left border to give blocks a "section" feel */
+    border-left: 3px solid var(--pf-t--global--border--color--default);
 }
 
-.infrapad-ui-json {
-  margin: 0;
-  font-family: var(--pf-t--global--font--family--mono);
+.infrapad-block-card > .pf-v6-c-card__body {
+    padding-top: var(--pf-t--global--spacer--md);
+}
+
+.infrapad-block-title {
+    display: flex;
+    align-items: center;
+}
+
+.infrapad-block-meta {
+    font-size: var(--pf-t--global--font--size--sm);
+    color: var(--pf-t--global--text--color--subtle);
+}
+
+/* Markdown content styling */
+.infrapad-markdown-content {
+    line-height: 1.6;
+}
+
+.infrapad-markdown-content > *:first-child {
+    /* The padding is added from the markdown rendering */
+    margin-top: 0;
+}
+
+.infrapad-markdown-content h1 {
+    font-size: var(--pf-t--global--font--size--2xl);
+    font-weight: var(--pf-t--global--font--weight--bold);
+    margin-top: var(--pf-t--global--spacer--md);
+    margin-bottom: var(--pf-t--global--spacer--sm);
+}
+
+.infrapad-markdown-content h2 {
+    font-size: var(--pf-t--global--font--size--xl);
+    font-weight: var(--pf-t--global--font--weight--bold);
+    margin-top: var(--pf-t--global--spacer--md);
+    margin-bottom: var(--pf-t--global--spacer--sm);
+}
+
+.infrapad-markdown-content h3 {
+    font-size: var(--pf-t--global--font--size--lg);
+    font-weight: var(--pf-t--global--font--weight--bold);
+    margin-top: var(--pf-t--global--spacer--sm);
+    margin-bottom: var(--pf-t--global--spacer--xs);
+}
+
+.infrapad-markdown-content p {
+    margin-bottom: var(--pf-t--global--spacer--sm);
+}
+
+.infrapad-markdown-content ul,
+.infrapad-markdown-content ol {
+    padding-left: var(--pf-t--global--spacer--lg);
+    margin-bottom: var(--pf-t--global--spacer--sm);
+}
+
+.infrapad-markdown-content ul {
+    list-style-type: disc;
+}
+
+.infrapad-markdown-content ul ul {
+    list-style-type: circle;
+}
+
+.infrapad-markdown-content ol {
+    list-style-type: decimal;
+}
+
+.infrapad-markdown-content li {
+    margin-bottom: var(--pf-t--global--spacer--xs);
+    display: list-item;
+}
+
+.infrapad-markdown-content code {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 0.9em;
+    background-color: var(
+        --pf-t--global--background--color--secondary--default
+    );
+    padding: 0.15em 0.35em;
+    border-radius: var(--pf-t--global--border--radius--small);
+}
+
+.infrapad-markdown-content pre {
+    background-color: var(
+        --pf-t--global--background--color--secondary--default
+    );
+    padding: var(--pf-t--global--spacer--md);
+    border-radius: var(--pf-t--global--border--radius--small);
+    overflow-x: auto;
+    margin-bottom: var(--pf-t--global--spacer--sm);
+}
+
+.infrapad-markdown-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.infrapad-markdown-content strong {
+    font-weight: var(--pf-t--global--font--weight--bold);
+}
+
+/* Alert matchers */
+.infrapad-alert-matchers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pf-t--global--spacer--xs);
+}
+
+/* Revision toggle button — inherit the subtle meta styling */
+.infrapad-rev-toggle.pf-v6-c-button {
+    font-size: var(--pf-t--global--font--size--sm);
+    color: var(--pf-t--global--text--color--link--default);
+    padding: 0;
+}
+
+/* Revisions panel (second CardBody) */
+.infrapad-revisions-panel.pf-v6-c-card__body {
+    border-top: 1px solid var(--pf-t--global--border--color--default);
+    background-color: var(--pf-t--global--background--color--secondary--default);
+}
+
+.infrapad-revisions-loading {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm);
+    color: var(--pf-t--global--text--color--subtle);
+    font-size: var(--pf-t--global--font--size--sm);
+}
+
+.infrapad-revisions-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pf-t--global--spacer--md);
+}
+
+.infrapad-revision-entry {
+    border-left: 2px solid var(--pf-t--global--border--color--default);
+    padding-left: var(--pf-t--global--spacer--md);
+}
+
+.infrapad-revision-header {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm);
+    margin-bottom: var(--pf-t--global--spacer--xs);
+}
+
+.infrapad-revision-content {
+    font-size: var(--pf-t--global--font--size--sm);
+}
+
+/* Textual / YAML revision content — monospace pre block */
+.infrapad-revision-text-content {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: var(--pf-t--global--font--size--sm);
+    background-color: var(
+        --pf-t--global--background--color--secondary--default
+    );
+    padding: var(--pf-t--global--spacer--md);
+    border-radius: var(--pf-t--global--border--radius--small);
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+/* Diff view for revision history */
+.infrapad-revision-diff-content {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: var(--pf-t--global--font--size--sm);
+    background-color: var(
+        --pf-t--global--background--color--secondary--default
+    );
+    padding: var(--pf-t--global--spacer--md);
+    border-radius: var(--pf-t--global--border--radius--small);
+    overflow-x: auto;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.infrapad-diff-line {
+    display: block;
+}
+
+.infrapad-diff-line--added {
+    background-color: rgba(56, 142, 60, 0.15);
+    color: var(--pf-t--global--color--status--success--default);
+}
+
+.infrapad-diff-line--removed {
+    background-color: rgba(211, 47, 47, 0.12);
+    color: var(--pf-t--global--color--status--danger--default);
+    text-decoration: line-through;
+}
+
+.infrapad-diff-line--context {
+    color: var(--pf-t--global--text--color--subtle);
+}
+
+.infrapad-diff-line--hunk-header {
+    color: var(--pf-t--global--text--color--link--default);
+    font-weight: var(--pf-t--global--font--weight--bold);
+    margin-top: var(--pf-t--global--spacer--xs);
+}
+
+/* Alerts timeline chart */
+.infrapad-alerts-chart-container {
+    margin-top: var(--pf-t--global--spacer--md);
+    min-height: 100px;
+}
+
+/* Victory's inline SVG text fill takes precedence unless explicitly overridden. */
+.infrapad-alerts-chart-container svg text {
+    fill: var(--pf-t--global--text--color--regular) !important;
+}
+
+/* Generic JSON fallback */
+.infrapad-json-content {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: var(--pf-t--global--font--size--sm);
+    background-color: var(
+        --pf-t--global--background--color--secondary--default
+    );
+    padding: var(--pf-t--global--spacer--md);
+    border-radius: var(--pf-t--global--border--radius--small);
+    overflow-x: auto;
+    margin: 0;
 }

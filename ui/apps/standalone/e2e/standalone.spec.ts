@@ -13,10 +13,21 @@ const document = {
     {
       name: "documents/doc-1/blocks/1",
       blockNumber: 1,
-      revisionNumber: 1,
+      revisionNumber: 2,
       type: "markdown",
       status: "published",
-      content: { text: "Service recovered after the deployment was rolled back." },
+      content: { text: "**Service recovered** after the deployment was rolled back. <script>window.infrapadXss = true</script>" },
+    },
+    {
+      name: "documents/doc-1/blocks/2",
+      blockNumber: 2,
+      revisionNumber: 1,
+      type: "alerts_matcher",
+      content: {
+        LabelsMatchers: [{ name: ["EndpointDown"], severity: ["critical"] }],
+        Since: "2025-01-02T03:00:00Z",
+        Until: "2025-01-02T03:05:00Z",
+      },
     },
   ],
 };
@@ -25,15 +36,24 @@ const document = {
 async function mockServices(page: Page) {
   await page.route("**/v1/documents**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify(path === "/v1/documents" ? { documents: [document] } : { document }),
-    });
+    const body = path.endsWith("/blocks/1/history")
+      ? { blocks: [document.blocks[0], { ...document.blocks[0], revisionNumber: 1, content: { text: "Service down." } }] }
+      : path === "/v1/documents" ? { documents: [document] } : { document };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.route("http://localhost:9090/**", async (route) => {
+    const url = new URL(route.request().url());
+    expect(url.pathname).toBe("/api/v1/query_range");
+    expect(url.searchParams.get("query")).toBe('ALERTS{alertname="EndpointDown", severity="critical"}');
+    expect(url.searchParams.get("step")).toBe("15s");
+    const start = Number(url.searchParams.get("start"));
+    expect(start).toBe(Math.floor(Date.parse("2025-01-02T03:00:00Z") / 1000) - 120);
+    expect(Number(url.searchParams.get("end"))).toBe(Math.floor(Date.parse("2025-01-02T03:05:00Z") / 1000) + 120);
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ status: "success", data: { resultType: "matrix", result: [] } }),
+      body: JSON.stringify({ status: "success", data: { resultType: "matrix", result: [
+        { metric: { alertname: "EndpointDown", severity: "critical" }, values: [[start + 120, "1"]] },
+      ] } }),
     });
   });
 }
@@ -80,10 +100,20 @@ test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
   // List/detail navigation should render the document content.
   await page.getByRole("link", { name: "Documents" }).click();
   await expect(page).toHaveURL(`${authOrigin}/documents`);
+  await expect(page.getByRole("grid", { name: "Infrapad documents" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Namespace" })).toBeVisible();
   await expect(page.getByRole("link", { name: document.title })).toBeVisible();
   await page.getByRole("link", { name: document.title }).click();
   await expect(page).toHaveURL(`${authOrigin}/documents/doc-1`);
-  await expect(page.getByText("Service recovered after the deployment was rolled back.")).toBeVisible();
+  await expect(page.locator(".infrapad-markdown-content strong")).toHaveText("Service recovered");
+  expect(await page.evaluate(() => (window as Window & { infrapadXss?: boolean }).infrapadXss)).toBeUndefined();
+  await expect(page.locator(".infrapad-markdown-content script")).toHaveCount(0);
+  await expect(page.getByText("name=EndpointDown, severity=critical")).toBeVisible();
+  await expect(page.locator(".infrapad-alerts-chart-container svg").first()).toBeVisible();
+  await page.getByRole("button", { name: /rev 2/ }).click();
+  await expect(page.getByText("Revision History")).toBeVisible();
+  await expect(page.locator(".infrapad-revision-text-content")).toHaveText("Service down.");
+  await expect(page.locator(".infrapad-diff-line--added").first()).toContainText("Service recovered");
 
   // Directly reloading the detail route should still load the document.
   await page.reload();
@@ -107,8 +137,13 @@ test("appearance settings apply across documents and persist", async ({ page }) 
   await page.emulateMedia({ colorScheme: "light", forcedColors: "none" });
   await expect(root).not.toHaveClass(/pf-v6-theme-dark|pf-v6-theme-high-contrast/);
   const original = await backgrounds();
-  await page.emulateMedia({ colorScheme: "dark", forcedColors: "active" });
+  const axisLabel = page.locator(".infrapad-alerts-chart-container svg text").first();
+  await expect(axisLabel).toBeVisible();
+  const lightAxisColor = await axisLabel.evaluate((node) => getComputedStyle(node).fill);
+  await page.emulateMedia({ colorScheme: "dark", forcedColors: "none" });
   await expect(root).toHaveClass(/pf-v6-theme-dark/);
+  await expect.poll(() => axisLabel.evaluate((node) => getComputedStyle(node).fill)).not.toBe(lightAxisColor);
+  await page.emulateMedia({ forcedColors: "active" });
   await expect(root).toHaveClass(/pf-v6-theme-high-contrast/);
   await page.emulateMedia({ colorScheme: "light", forcedColors: "none" });
   await expect(root).not.toHaveClass(/pf-v6-theme-dark|pf-v6-theme-high-contrast/);
@@ -130,7 +165,8 @@ test("appearance settings apply across documents and persist", async ({ page }) 
   await expect(picker).toBeHidden();
   await page.getByRole("link", { name: "Documents" }).click();
   await expect(page.getByRole("link", { name: document.title })).toBeVisible();
-  expect(await card.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(updated.document);
+  await expect(root).toHaveClass(/pf-v6-theme-dark/);
+  await expect(page.getByRole("grid", { name: "Infrapad documents" })).toBeVisible();
   await page.getByRole("link", { name: document.title }).click();
 
   // Reload should restore all three choices before showing the document.

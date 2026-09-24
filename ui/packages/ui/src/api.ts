@@ -1,0 +1,81 @@
+// Hosts provide both service locations; this package has no runtime globals.
+export interface InfraPadServices {
+  infrapadApiBaseUrl: string;
+  prometheusApiBaseUrl: string;
+}
+
+async function infrapadFetch<T>(
+  baseUrl: string,
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, init);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg =
+      (body as Record<string, string>).message ||
+      (body as Record<string, string>).error ||
+      `Infrapad API error (${res.status})`;
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+// ---- Domain types (matching the swagger / proto definitions) ----
+
+export interface InfrapadBlock {
+  name: string;
+  blockNumber: number;
+  revisionNumber: number;
+  authorId?: string;
+  type: string;
+  status?: string; // "progressing" | "published" | "deleted"
+  createdAt?: string;
+  content: Record<string, unknown>;
+}
+
+export interface InfrapadDocument {
+  name: string; // "documents/{id}"
+  status: string; // "active" | "archived"
+  title: string;
+  namespace?: string;
+  createdAt?: string;
+  blocks: InfrapadBlock[];
+}
+
+// ---- Get document ----
+
+export interface GetDocumentResponse {
+  document: InfrapadDocument;
+}
+
+export function getDocument(baseUrl: string, docId: string): Promise<GetDocumentResponse> {
+  return infrapadFetch(baseUrl, `/documents/${encodeURIComponent(docId)}`);
+}
+
+// ---- List documents ----
+
+export interface ListDocumentsResponse {
+  documents: InfrapadDocument[];
+}
+
+export function listDocuments(baseUrl: string): Promise<ListDocumentsResponse> {
+  return infrapadFetch(baseUrl, "/documents");
+}
+
+// ---- Block history ----
+
+export interface ListBlockHistoryResponse {
+  blocks: InfrapadBlock[];
+}
+
+export function listBlockHistory(
+  baseUrl: string,
+  docId: string,
+  blockNumber: number,
+): Promise<ListBlockHistoryResponse> {
+  return infrapadFetch(
+    baseUrl,
+    `/documents/${encodeURIComponent(docId)}/blocks/${blockNumber}/history`,
+  );
+}

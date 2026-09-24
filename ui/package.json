@@ -6,10 +6,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @infrapad/standalone",
+    "dev": "npm run build --workspace @infrapad/ui && npm run dev --workspace @infrapad/standalone",
     "build": "npm run build --workspace @infrapad/ui && npm run build --workspace @infrapad/standalone",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:rspack": "node scripts/check-rspack.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
