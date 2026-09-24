@@ -15,7 +15,13 @@ tasks:
   build:
     desc: Build the server binary
     cmds:
-      - go build -o ./infrapad-server .
+      # Making sure it's atomic, as watch depends on it.
+      - |
+        set -eu
+        tmp=$(mktemp ./infrapad-server.XXXXXX)
+        trap 'rm -f "$tmp"' EXIT
+        go build -o "$tmp" .
+        mv -f "$tmp" ./infrapad-server
     sources:
       - ./**/*.go
       - go.mod
@@ -28,6 +34,13 @@ tasks:
     deps: [build]
     cmds:
       - ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
+
+  watch:
+    desc: Run the server and restart after a manual server:build
+    deps: [build]
+    cmds:
+      - go build -o ./infrapad-server-watch ./cmd/watch
+      - ./infrapad-server-watch ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
 
   db:migrate:status:
     desc: Show status of migrations

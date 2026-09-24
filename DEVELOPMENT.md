@@ -55,3 +55,7 @@ INFRAPAD_AUTH=openshift task ui:dev
 Open [https://localhost:8443/documents](https://localhost:8443/documents). OpenShift bootstrap requires a logged-in `oc` context on its first run. Later starts can reuse the generated local credentials and cached discovery metadata while regenerating the proxy configuration for the selected UI upstream.
 
 For the normal non-hot-reload environment, omit `INFRAPAD_UI`; authentication proxies then forward to the Go server on port 8088 as before.
+
+## Optional server binary reload
+
+In either three-terminal workflow, you can use `task server:watch` instead of `task server:run` in the server terminal. It builds and starts the server once, then waits for a newly published `server/infrapad-server`. After changing Go code, run `task server:build` separately (in another terminal). A successful build atomically publishes the binary; the watcher gracefully stops the old server before starting the new one. Failed builds leave the running server untouched. The watcher does **not** rebuild on source changes; `task server:run` and root `task dev` retain their usual behavior.
