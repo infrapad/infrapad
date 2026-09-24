@@ -15,8 +15,11 @@ body,
 }
 
 .standalone-brand {
-  font-size: var(--pf-t--global--font--size--lg);
+  font-family: var(--pf-t--global--font--family--heading);
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
   font-weight: var(--pf-t--global--font--weight--bold);
+  letter-spacing: -0.025em;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -24,10 +27,38 @@ body,
   display: flex;
   align-items: center;
   gap: var(--pf-t--global--spacer--sm);
-  margin-left: auto;
+  min-width: 0;
+  max-width: min(40vw, 16rem);
   white-space: nowrap;
 }
 
-.pf-v6-c-masthead__content {
+.standalone-user span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.standalone-user svg {
+  flex: none;
+}
+
+.standalone-masthead .pf-v6-c-masthead__content {
   justify-content: flex-end;
+  align-items: center;
+  gap: var(--pf-t--global--spacer--sm);
+  min-width: 0;
+}
+
+.standalone-theme-options {
+  display: grid;
+  gap: var(--pf-t--global--spacer--md);
+}
+
+.standalone-theme-options .pf-v6-c-title {
+  margin-bottom: var(--pf-t--global--spacer--xs);
+}
+
+@media (max-width: 480px) {
+  .standalone-user {
+    max-width: 28vw;
+  }
 }

@@ -18,6 +18,8 @@ import {
   Spinner,
 } from "@patternfly/react-core";
 import { UserIcon } from "@patternfly/react-icons";
+import { initializeAppearance } from "./appearance";
+import { ThemeSettings } from "./ThemeSettings";
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
@@ -132,13 +134,14 @@ function NotFound() {
 
 function ReadyApplication({ config }: { config: UIConfig & { identity: UIIdentity } }) {
   const masthead = (
-    <Masthead>
+    <Masthead className="standalone-masthead">
       <MastheadMain>
         <MastheadBrand>
           <span className="standalone-brand">InfraPad</span>
         </MastheadBrand>
       </MastheadMain>
       <MastheadContent>
+        <ThemeSettings />
         <div className="standalone-user" aria-label={`Signed in as ${config.identity.username}`}>
           <UserIcon aria-hidden="true" />
           <span>{config.identity.username}</span>
@@ -199,6 +202,8 @@ function Bootstrap() {
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing application root element");
+
+initializeAppearance();
 
 createRoot(root).render(
   <StrictMode>
