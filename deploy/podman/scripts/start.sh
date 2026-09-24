@@ -136,7 +136,7 @@ esac
 if [[ -n "$auth_composition" ]]; then
   ui_mode="${INFRAPAD_UI:-}"
   case "$ui_mode" in
-    "")
+    ""|prod)
       mode_upstream="http://127.0.0.1:8088"
       ;;
     hot-reload)
@@ -147,7 +147,7 @@ if [[ -n "$auth_composition" ]]; then
       mode_upstream="http://127.0.0.1:5173"
       ;;
     *)
-      echo "ERROR: Invalid INFRAPAD_UI value '$ui_mode'; accepted values: unset, empty, hot-reload." >&2
+      echo "ERROR: Invalid INFRAPAD_UI value '$ui_mode'; accepted values: unset, empty, prod, hot-reload." >&2
       exit 1
       ;;
   esac

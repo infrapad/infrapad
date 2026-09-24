@@ -5,3 +5,24 @@ tasks:
     desc: Start the standalone Vite development server
     cmds:
       - npm run dev
+
+  build:
+    desc: Build the shared UI package and standalone production assets
+    cmds:
+      - npm run build
+
+  test:unit:
+    desc: Run shared UI Vitest tests (no Go server required)
+    cmds:
+      - npm run test --workspace @infrapad/ui
+
+  test:e2e:
+    desc: Run authenticated Playwright journey (requires Go on 8088 and database)
+    cmds:
+      - npm run test:e2e
+
+  test:all:
+    desc: Run UI unit and authenticated browser tests
+    cmds:
+      - task: test:unit
+      - task: test:e2e

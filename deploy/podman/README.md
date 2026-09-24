@@ -10,7 +10,7 @@ The combined development environment (`task dev` or `task podman:dev:start`) use
 
 Direct InfraPad HTTP at `http://localhost:8088` and gRPC at `localhost:50061` remain available in every mode.
 
-For standalone UI development, `INFRAPAD_UI=hot-reload` makes the active authentication proxy forward to Vite on port 5173 instead of the Go server on port 8088. It requires either dummy or OpenShift authentication. `INFRAPAD_AUTH_UPSTREAM` is an advanced override for the selected proxy's upstream. UI settings are ignored by unrelated focused compositions such as `task podman:postgres`.
+For standalone UI development, `INFRAPAD_UI=hot-reload` makes the active authentication proxy forward to Vite on port 5173 instead of the Go server on port 8088. Unset/empty or explicit `INFRAPAD_UI=prod` forwards to Go on 8088. Hot reload requires either dummy or OpenShift authentication. `INFRAPAD_AUTH_UPSTREAM` is an advanced override for the selected proxy's upstream. UI settings are ignored by unrelated focused compositions such as `task podman:postgres`. See the [development guide](../../DEVELOPMENT.md) for the full task-based UI workflows.
 
 The dummy proxy performs **no signature, issuer, audience, or expiry validation and provides no security**. Use it only for trusted local testing.
 

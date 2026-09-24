@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { fileURLToPath, URL } from "node:url";
 
 function rootRedirect(): Plugin {
   return {
@@ -40,9 +41,25 @@ switch (authMode) {
 
 const authPort = Number(process.env.INFRAPAD_AUTH_PORT ?? defaultAuthPort);
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: "/ui/",
   plugins: [react(), rootRedirect()],
+  // Only the dev server reads shared sources. Production and other consumers
+  // keep using the package's built ESM and CSS exports.
+  resolve: command === "serve"
+    ? {
+        alias: [
+          {
+            find: /^@infrapad\/ui\/styles\.css$/,
+            replacement: fileURLToPath(new URL("../../packages/ui/src/styles.css", import.meta.url)),
+          },
+          {
+            find: /^@infrapad\/ui$/,
+            replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)),
+          },
+        ],
+      }
+    : undefined,
   server: {
     host: "127.0.0.1",
     port: vitePort,
@@ -64,4 +81,4 @@ export default defineConfig({
   build: {
     outDir: "dist",
   },
-});
+}));

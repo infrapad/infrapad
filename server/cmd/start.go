@@ -116,6 +116,11 @@ var startCmd = &cobra.Command{
 			return fmt.Errorf("listen HTTP on %s: %w", flagHTTPAddr, err)
 		}
 		log.Printf("starting HTTP gateway on %s", httpLis.Addr())
+		if uiDir == "" {
+			log.Print("standalone UI static serving disabled (/ui/config remains available)")
+		} else {
+			log.Printf("serving standalone UI at /ui/ from %q", uiDir)
+		}
 		go func() {
 			if err := httpServer.Serve(httpLis); err != nil && err != nethttp.ErrServerClosed {
 				log.Printf("HTTP server error: %v", err)

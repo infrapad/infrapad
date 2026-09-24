@@ -30,17 +30,29 @@ tasks:
       - ./infrapad-server
 
   run:
-    desc: Start the gRPC + HTTP server
+    desc: Start the gRPC + HTTP server (serve built UI when available in prod mode)
     deps: [build]
     cmds:
-      - ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
+      - |
+        if [ "${INFRAPAD_UI:-prod}" = prod ] &&
+           [ -z "${INFRAPAD_UI_DIR:-}" ] &&
+           [ -f ../ui/apps/standalone/dist/index.html ]; then
+          export INFRAPAD_UI_DIR=../ui/apps/standalone/dist/
+        fi
+        ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
 
   watch:
-    desc: Run the server and restart after a manual server:build
+    desc: Run the server and restart after a manual server:build (serve built UI when available in prod mode)
     deps: [build]
     cmds:
       - go build -o ./infrapad-server-watch ./cmd/watch
-      - ./infrapad-server-watch ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
+      - |
+        if [ "${INFRAPAD_UI:-prod}" = prod ] &&
+           [ -z "${INFRAPAD_UI_DIR:-}" ] &&
+           [ -f ../ui/apps/standalone/dist/index.html ]; then
+          export INFRAPAD_UI_DIR=../ui/apps/standalone/dist/
+        fi
+        ./infrapad-server-watch ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
 
   db:migrate:status:
     desc: Show status of migrations

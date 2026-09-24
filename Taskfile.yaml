@@ -33,3 +33,4 @@ tasks:
     cmds:
       - task: cli:test:all
       - task: server:test:all
+      - task: ui:test:all
