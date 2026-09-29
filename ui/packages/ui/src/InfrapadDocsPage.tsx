@@ -25,7 +25,7 @@ import {
 import { DataViewToolbar } from "@patternfly/react-data-view/dist/dynamic/DataViewToolbar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { type InfraPadServices, type InfrapadDocument, listDocuments } from "./api.js";
+import { type InfraPadFetch, type InfraPadServices, type InfrapadDocument, listDocuments } from "./api.js";
 
 const columns: DataViewTh[] = ["Title", "Status", "Namespace", "Created"];
 
@@ -51,7 +51,7 @@ function statusColor(
   }
 }
 
-const InfrapadDocsPage = ({ services }: { services: InfraPadServices }) => {
+const InfrapadDocsPage = ({ services, fetch: hostFetch }: { services: InfraPadServices; fetch?: InfraPadFetch }) => {
   const [documents, setDocuments] = useState<InfrapadDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,7 @@ const InfrapadDocsPage = ({ services }: { services: InfraPadServices }) => {
     setLoading(true);
     setError(null);
     try {
-      const resp = await listDocuments(services.infrapadApiBaseUrl);
+      const resp = await listDocuments(services.infrapadApiBaseUrl, hostFetch);
       setDocuments(resp.documents ?? []);
     } catch (err) {
       setError(
@@ -69,7 +69,7 @@ const InfrapadDocsPage = ({ services }: { services: InfraPadServices }) => {
     } finally {
       setLoading(false);
     }
-  }, [services.infrapadApiBaseUrl]);
+  }, [services.infrapadApiBaseUrl, hostFetch]);
 
   useEffect(() => {
     fetchDocuments();

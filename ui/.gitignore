@@ -4,3 +4,4 @@ apps/standalone/dist/
 packages/ui/dist/
 playwright-report/
 test-results/
+**/.vite

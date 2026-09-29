@@ -1,5 +1,7 @@
 // Prometheus HTTP API helpers for querying ALERTS metric data.
 
+import type { InfraPadFetch } from "./api.js";
+
 // ---- Types ----
 
 /** A single label matcher from the infrapad alerts_matcher block content. */
@@ -75,6 +77,7 @@ export async function queryRange(
   start: string | number,
   end: string | number,
   step: string,
+  hostFetch: InfraPadFetch = fetch,
 ): Promise<PromRangeSeries[]> {
   const params = new URLSearchParams({
     query,
@@ -83,7 +86,7 @@ export async function queryRange(
     step,
   });
 
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/v1/query_range?${params}`);
+  const res = await hostFetch(`${baseUrl.replace(/\/$/, "")}/api/v1/query_range?${params}`);
   if (!res.ok) {
     throw new Error(`Prometheus API error (${res.status})`);
   }

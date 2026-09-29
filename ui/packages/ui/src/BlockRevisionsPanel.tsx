@@ -7,7 +7,7 @@ import {
 import jsYaml from "js-yaml";
 import { useEffect, useMemo, useState } from "react";
 
-import type { InfrapadBlock, ListBlockHistoryResponse } from "./api.js";
+import type { InfraPadFetch, InfrapadBlock, ListBlockHistoryResponse } from "./api.js";
 import { listBlockHistory } from "./api.js";
 import { computeLineDiff, formatUnifiedDiff } from "./diffHelpers.js";
 import type { UnifiedDiffLine } from "./diffHelpers.js";
@@ -108,10 +108,12 @@ export default function BlockRevisionsPanel({
   docId,
   blockNumber,
   baseUrl,
+  fetch: hostFetch,
 }: {
   docId: string;
   blockNumber: number;
   baseUrl: string;
+  fetch?: InfraPadFetch;
 }) {
   const [revisions, setRevisions] = useState<InfrapadBlock[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,7 +123,7 @@ export default function BlockRevisionsPanel({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listBlockHistory(baseUrl, docId, blockNumber)
+    listBlockHistory(baseUrl, docId, blockNumber, hostFetch)
       .then((resp) => {
         if (!cancelled) {
           setRevisions(prepareRevisions(resp));
@@ -139,7 +141,7 @@ export default function BlockRevisionsPanel({
     return () => {
       cancelled = true;
     };
-  }, [baseUrl, docId, blockNumber]);
+  }, [baseUrl, docId, blockNumber, hostFetch]);
 
   if (loading) {
     return (

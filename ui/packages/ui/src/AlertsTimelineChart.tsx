@@ -8,6 +8,7 @@ import {
 import { Alert, Bullseye, Spinner } from "@patternfly/react-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { InfraPadFetch } from "./api.js";
 import type { LabelMatcher, PromRangeSeries } from "./prometheusApi.js";
 import {
   buildAlertsQuery,
@@ -97,6 +98,7 @@ export interface AlertsTimelineChartProps {
   since: string;
   until?: string;
   baseUrl: string;
+  fetch?: InfraPadFetch;
 }
 
 // ---- Component ----
@@ -106,6 +108,7 @@ export default function AlertsTimelineChart({
   since,
   until,
   baseUrl,
+  fetch: hostFetch,
 }: AlertsTimelineChartProps) {
   const [seriesData, setSeriesData] = useState<PromRangeSeries[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,7 +143,7 @@ export default function AlertsTimelineChart({
     setError(null);
     try {
       const query = buildAlertsQuery(matchers);
-      const result = await queryRange(baseUrl, query, startUnix, endUnix, QUERY_STEP);
+      const result = await queryRange(baseUrl, query, startUnix, endUnix, QUERY_STEP, hostFetch);
       setSeriesData(result);
     } catch (err) {
       setError(
@@ -149,7 +152,7 @@ export default function AlertsTimelineChart({
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, matchers, startUnix, endUnix]);
+  }, [baseUrl, matchers, startUnix, endUnix, hostFetch]);
 
   useEffect(() => {
     fetchData();

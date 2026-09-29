@@ -26,7 +26,7 @@ import { marked } from "marked";
 import { useCallback, useEffect, useState } from "react";
 
 import AlertsTimelineChart from "./AlertsTimelineChart.js";
-import type { InfraPadServices, InfrapadBlock, InfrapadDocument } from "./api.js";
+import type { InfraPadFetch, InfraPadServices, InfrapadBlock, InfrapadDocument } from "./api.js";
 import { getDocument } from "./api.js";
 import BlockRevisionsPanel, { formatDate } from "./BlockRevisionsPanel.js";
 import type { LabelMatcher } from "./prometheusApi.js";
@@ -80,9 +80,11 @@ function MarkdownBlockContent({ text }: { text: string }) {
 function AlertsMatcherBlockContent({
   content,
   prometheusApiBaseUrl,
+  fetch: hostFetch,
 }: {
   content: Record<string, unknown>;
   prometheusApiBaseUrl: string;
+  fetch?: InfraPadFetch;
 }) {
   const matchers = content.LabelsMatchers as
     Array<Record<string, string[]>> | undefined;
@@ -145,6 +147,7 @@ function AlertsMatcherBlockContent({
       {matchers && matchers.length > 0 && since && (
         <AlertsTimelineChart
           baseUrl={prometheusApiBaseUrl}
+          fetch={hostFetch}
           matchers={matchers as LabelMatcher[]}
           since={since}
           until={isOngoing ? undefined : until}
@@ -168,20 +171,20 @@ function GenericBlockContent({
 }
 
 /** Render a single block's content based on its type. */
-function renderBlockContent(block: InfrapadBlock, prometheusApiBaseUrl: string) {
+function renderBlockContent(block: InfrapadBlock, prometheusApiBaseUrl: string, hostFetch?: InfraPadFetch) {
   switch (block.type) {
     case "markdown":
       return (
         <MarkdownBlockContent text={(block.content.text as string) ?? ""} />
       );
     case "alerts_matcher":
-      return <AlertsMatcherBlockContent content={block.content} prometheusApiBaseUrl={prometheusApiBaseUrl} />;
+      return <AlertsMatcherBlockContent content={block.content} prometheusApiBaseUrl={prometheusApiBaseUrl} fetch={hostFetch} />;
     default:
       return <GenericBlockContent content={block.content} />;
   }
 }
 
-function BlockCard({ block, docId, services }: { block: InfrapadBlock; docId: string; services: InfraPadServices }) {
+function BlockCard({ block, docId, services, fetch: hostFetch }: { block: InfrapadBlock; docId: string; services: InfraPadServices; fetch?: InfraPadFetch }) {
   const [showRevisions, setShowRevisions] = useState(false);
 
   return (
@@ -219,7 +222,7 @@ function BlockCard({ block, docId, services }: { block: InfrapadBlock; docId: st
           </Label>
         </div>
       </CardHeader>
-      <CardBody>{renderBlockContent(block, services.prometheusApiBaseUrl)}</CardBody>
+      <CardBody>{renderBlockContent(block, services.prometheusApiBaseUrl, hostFetch)}</CardBody>
       {showRevisions && (
         <CardBody className="infrapad-revisions-panel">
           <Title headingLevel="h4" size="md" className="pf-v6-u-mb-sm">
@@ -229,6 +232,7 @@ function BlockCard({ block, docId, services }: { block: InfrapadBlock; docId: st
             docId={docId}
             baseUrl={services.infrapadApiBaseUrl}
             blockNumber={block.blockNumber}
+            fetch={hostFetch}
           />
         </CardBody>
       )}
@@ -238,7 +242,7 @@ function BlockCard({ block, docId, services }: { block: InfrapadBlock; docId: st
 
 // ---- Page ----
 
-export default function InfrapadDocDetailPage({ services }: { services: InfraPadServices }) {
+export default function InfrapadDocDetailPage({ services, fetch: hostFetch }: { services: InfraPadServices; fetch?: InfraPadFetch }) {
   const { docId } = useParams<{ docId: string }>();
   const [document, setDocument] = useState<InfrapadDocument | null>(null);
   const [loading, setLoading] = useState(true);
@@ -249,7 +253,7 @@ export default function InfrapadDocDetailPage({ services }: { services: InfraPad
     setLoading(true);
     setError(null);
     try {
-      const resp = await getDocument(services.infrapadApiBaseUrl, docId);
+      const resp = await getDocument(services.infrapadApiBaseUrl, docId, hostFetch);
       if (!resp.document) throw new Error("Document not found");
       setDocument(resp.document);
     } catch (err) {
@@ -257,7 +261,7 @@ export default function InfrapadDocDetailPage({ services }: { services: InfraPad
     } finally {
       setLoading(false);
     }
-  }, [docId, services.infrapadApiBaseUrl]);
+  }, [docId, services.infrapadApiBaseUrl, hostFetch]);
 
   useEffect(() => {
     fetchDocument();
@@ -342,7 +346,7 @@ export default function InfrapadDocDetailPage({ services }: { services: InfraPad
           </EmptyState>
         ) : (
           blocks.map((block) => (
-            <BlockCard key={block.blockNumber} block={block} docId={docId!} services={services} />
+            <BlockCard key={block.blockNumber} block={block} docId={docId!} services={services} fetch={hostFetch} />
           ))
         )}
       </div>
