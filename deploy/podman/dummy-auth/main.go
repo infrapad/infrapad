@@ -284,8 +284,35 @@ func identityFromToken(token string) (identity, error) {
 	return result, nil
 }
 
+// This CORS policy is only for the local dummy proxy, not production authorization.
+func browserAPIPath(path string) bool {
+	return path == "/ui/config" || path == "/v1" || strings.HasPrefix(path, "/v1/")
+}
+
+func clearCORS(headers http.Header) {
+	for name := range headers {
+		if strings.HasPrefix(strings.ToLower(name), "access-control-") {
+			delete(headers, name)
+		}
+	}
+}
+
+func setBrowserAPICORS(headers http.Header) {
+	clearCORS(headers)
+	headers.Set("Access-Control-Allow-Origin", "*")
+	headers.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+	headers.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+}
+
 func newProxy(upstream *url.URL) http.Handler {
 	reverseProxy := httputil.NewSingleHostReverseProxy(upstream)
+	browserProxy := *reverseProxy
+	browserProxy.ModifyResponse = func(upstreamResponse *http.Response) error {
+		// The upstream may already set CORS headers. Drop all of them, including
+		// credentials/exposed headers, so only the proxy's policy is sent.
+		clearCORS(upstreamResponse.Header)
+		return nil
+	}
 
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
@@ -308,6 +335,17 @@ func newProxy(upstream *url.URL) http.Handler {
 			response.WriteHeader(http.StatusOK)
 			_, _ = io.WriteString(response, "ok\n")
 			return
+		}
+
+		proxy := reverseProxy
+		if browserAPIPath(request.URL.Path) {
+			setBrowserAPICORS(response.Header()) // Also covers proxy-generated 400/502 errors.
+			proxy = &browserProxy
+			if request.Method == http.MethodOptions && request.Header.Get("Origin") != "" &&
+				request.Header.Get("Access-Control-Request-Method") != "" {
+				response.WriteHeader(http.StatusNoContent)
+				return
+			}
 		}
 
 		authorizationValues, authorizationPresent := valuesForHeader(request.Header, "Authorization")
@@ -348,7 +386,7 @@ func newProxy(upstream *url.URL) http.Handler {
 			}
 		}
 
-		reverseProxy.ServeHTTP(response, request)
+		proxy.ServeHTTP(response, request)
 	})
 }
 

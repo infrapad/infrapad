@@ -205,6 +205,133 @@ func TestTokenBearerJourney(t *testing.T) {
 	}
 }
 
+func TestBrowserAPICORS(t *testing.T) {
+	var upstreamRequests atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		upstreamRequests.Add(1)
+		if request.URL.Path == "/v1/documents" {
+			if got := request.Header.Get("X-Forwarded-User"); got != "alice" {
+				t.Errorf("upstream identity = %q, want alice", got)
+			}
+			if got := request.Header.Get("Authorization"); got != "" {
+				t.Errorf("Authorization reached upstream: %q", got)
+			}
+			if got := request.Header.Get("X-Forwarded-Email"); got != "" {
+				t.Errorf("client identity reached upstream: %q", got)
+			}
+		}
+		if browserAPIPath(request.URL.Path) {
+			response.Header().Add("Access-Control-Allow-Origin", "https://other.example")
+			response.Header().Add("Access-Control-Allow-Origin", "*")
+			response.Header().Set("Access-Control-Allow-Credentials", "true")
+			response.Header().Set("Access-Control-Allow-Headers", "X-Other")
+		}
+		response.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	proxy := httptest.NewServer(newProxy(mustParseURL(t, upstream.URL)))
+	defer proxy.Close()
+
+	request := func(method, path string, headers http.Header) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(method, proxy.URL+path, nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+		req.Header = headers
+		result, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request proxy: %v", err)
+		}
+		_ = readBody(t, result)
+		return result
+	}
+	checkCORS := func(result *http.Response) {
+		t.Helper()
+		if got := result.Header.Values("Access-Control-Allow-Origin"); len(got) != 1 || got[0] != "*" {
+			t.Errorf("allow origins = %q, want single wildcard", got)
+		}
+		if got := result.Header.Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Authorization") {
+			t.Errorf("allowed headers = %q, missing Authorization", got)
+		}
+		if got := result.Header.Get("Access-Control-Allow-Credentials"); got != "" {
+			t.Errorf("credential allowance = %q, want none", got)
+		}
+	}
+
+	preflight := http.Header{
+		"Origin":                         {"https://fleetshift-sandbox.localhost:8085"},
+		"Access-Control-Request-Method":  {"GET"},
+		"Access-Control-Request-Headers": {"authorization"},
+	}
+	for _, path := range []string{"/ui/config", "/v1", "/v1/documents"} {
+		result := request(http.MethodOptions, path, preflight)
+		if result.StatusCode != http.StatusNoContent {
+			t.Errorf("%s preflight status = %d, want 204", path, result.StatusCode)
+		}
+		checkCORS(result)
+	}
+	if got := upstreamRequests.Load(); got != 0 {
+		t.Fatalf("preflight reached upstream %d times", got)
+	}
+
+	token, err := generateToken("alice", "", false)
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+	result := request(http.MethodGet, "/v1/documents", http.Header{
+		"Authorization":     {"Bearer " + token},
+		"X-Forwarded-User":  {"mallory"},
+		"X-Forwarded-Email": {"mallory@example.com"},
+	})
+	if result.StatusCode != http.StatusOK {
+		t.Errorf("bearer status = %d, want 200", result.StatusCode)
+	}
+	checkCORS(result)
+	if got := upstreamRequests.Load(); got != 1 {
+		t.Errorf("upstream requests = %d, want 1", got)
+	}
+
+	for _, headers := range []http.Header{
+		{"Authorization": {"Bearer not-a-jwt"}},
+		{"Authorization": {"Bearer " + token, "Bearer " + token}},
+	} {
+		result = request(http.MethodGet, "/ui/config", headers)
+		if result.StatusCode != http.StatusBadRequest {
+			t.Errorf("invalid bearer status = %d, want 400", result.StatusCode)
+		}
+		checkCORS(result)
+	}
+	if got := upstreamRequests.Load(); got != 1 {
+		t.Errorf("invalid bearer reached upstream: %d total requests", got)
+	}
+
+	// Neither the auth page nor similarly prefixed upstream paths get proxy-owned CORS.
+	for _, path := range []string{"/auth", "/v1ish", "/ui/configish"} {
+		result = request(http.MethodGet, path, nil)
+		if got := result.Header.Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("%s allow origin = %q, want none", path, got)
+		}
+	}
+}
+
+func TestBrowserAPIUpstreamErrorCORS(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	upstreamURL := mustParseURL(t, upstream.URL)
+	upstream.Close()
+	proxy := httptest.NewServer(newProxy(upstreamURL))
+	defer proxy.Close()
+
+	response, err := http.Get(proxy.URL + "/ui/config")
+	if err != nil {
+		t.Fatalf("request proxy: %v", err)
+	}
+	_ = readBody(t, response)
+	if response.StatusCode != http.StatusBadGateway || response.Header.Get("Access-Control-Allow-Origin") != "*" {
+		t.Errorf("upstream error status/CORS = %d, %q; want 502, *", response.StatusCode, response.Header.Get("Access-Control-Allow-Origin"))
+	}
+}
+
 func TestProxyAdjacentBehavior(t *testing.T) {
 	t.Run("anonymous request strips client identity", func(t *testing.T) {
 		upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
