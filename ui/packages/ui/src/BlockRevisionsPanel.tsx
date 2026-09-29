@@ -7,8 +7,8 @@ import {
 import jsYaml from "js-yaml";
 import { useEffect, useMemo, useState } from "react";
 
-import type { InfraPadFetch, InfrapadBlock, ListBlockHistoryResponse } from "./api.js";
-import { listBlockHistory } from "./api.js";
+import type { InfrapadBlock, ListBlockHistoryResponse } from "./api.js";
+import { useInfrapadClient } from "./infrapadClient.js";
 import { computeLineDiff, formatUnifiedDiff } from "./diffHelpers.js";
 import type { UnifiedDiffLine } from "./diffHelpers.js";
 
@@ -107,14 +107,11 @@ function DiffLine({ line }: { line: UnifiedDiffLine }) {
 export default function BlockRevisionsPanel({
   docId,
   blockNumber,
-  baseUrl,
-  fetch: hostFetch,
 }: {
   docId: string;
   blockNumber: number;
-  baseUrl: string;
-  fetch?: InfraPadFetch;
 }) {
+  const client = useInfrapadClient();
   const [revisions, setRevisions] = useState<InfrapadBlock[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -123,7 +120,7 @@ export default function BlockRevisionsPanel({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    listBlockHistory(baseUrl, docId, blockNumber, hostFetch)
+    client.listBlockHistory(docId, blockNumber)
       .then((resp) => {
         if (!cancelled) {
           setRevisions(prepareRevisions(resp));
@@ -141,7 +138,7 @@ export default function BlockRevisionsPanel({
     return () => {
       cancelled = true;
     };
-  }, [baseUrl, docId, blockNumber, hostFetch]);
+  }, [client, docId, blockNumber]);
 
   if (loading) {
     return (

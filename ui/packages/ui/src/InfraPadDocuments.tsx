@@ -1,7 +1,9 @@
+import { useMemo } from "react";
 import { Route, Routes } from "react-router-dom";
 import InfrapadDocsPage from "./InfrapadDocsPage.js";
 import InfrapadDocDetailPage from "./InfrapadDocDetailPage.js";
 import type { InfraPadFetch, InfraPadServices } from "./api.js";
+import { createInfrapadClient, InfrapadClientProvider } from "./infrapadClient.js";
 
 export interface InfraPadDocumentsProps {
   services: InfraPadServices;
@@ -11,10 +13,16 @@ export interface InfraPadDocumentsProps {
 
 /** Routes below the host's wildcard mount; the host owns the router. */
 export function InfraPadDocuments({ services, fetch: hostFetch }: InfraPadDocumentsProps) {
+  const client = useMemo(
+    () => createInfrapadClient(services, hostFetch),
+    [services.infrapadApiBaseUrl, services.prometheusApiBaseUrl, hostFetch],
+  );
   return (
-    <Routes>
-      <Route index element={<InfrapadDocsPage services={services} fetch={hostFetch} />} />
-      <Route path=":docId" element={<InfrapadDocDetailPage services={services} fetch={hostFetch} />} />
-    </Routes>
+    <InfrapadClientProvider client={client}>
+      <Routes>
+        <Route index element={<InfrapadDocsPage />} />
+        <Route path=":docId" element={<InfrapadDocDetailPage />} />
+      </Routes>
+    </InfrapadClientProvider>
   );
 }

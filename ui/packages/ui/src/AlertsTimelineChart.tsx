@@ -8,14 +8,13 @@ import {
 import { Alert, Bullseye, Spinner } from "@patternfly/react-core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { InfraPadFetch } from "./api.js";
 import type { LabelMatcher, PromRangeSeries } from "./prometheusApi.js";
 import {
   buildAlertsQuery,
   isoToUnix,
-  queryRange,
   seriesLabel,
 } from "./prometheusApi.js";
+import { useInfrapadClient } from "./infrapadClient.js";
 
 // ---- Constants ----
 
@@ -97,8 +96,6 @@ export interface AlertsTimelineChartProps {
   matchers: LabelMatcher[];
   since: string;
   until?: string;
-  baseUrl: string;
-  fetch?: InfraPadFetch;
 }
 
 // ---- Component ----
@@ -107,9 +104,8 @@ export default function AlertsTimelineChart({
   matchers,
   since,
   until,
-  baseUrl,
-  fetch: hostFetch,
 }: AlertsTimelineChartProps) {
+  const client = useInfrapadClient();
   const [seriesData, setSeriesData] = useState<PromRangeSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +139,7 @@ export default function AlertsTimelineChart({
     setError(null);
     try {
       const query = buildAlertsQuery(matchers);
-      const result = await queryRange(baseUrl, query, startUnix, endUnix, QUERY_STEP, hostFetch);
+      const result = await client.queryRange(query, startUnix, endUnix, QUERY_STEP);
       setSeriesData(result);
     } catch (err) {
       setError(
@@ -152,7 +148,7 @@ export default function AlertsTimelineChart({
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, matchers, startUnix, endUnix, hostFetch]);
+  }, [client, matchers, startUnix, endUnix]);
 
   useEffect(() => {
     fetchData();
