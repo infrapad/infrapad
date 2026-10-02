@@ -17,6 +17,15 @@ redirect_url = "https://localhost:8443/oauth/callback"
 upstreams = ["@INFRAPAD_AUTH_UPSTREAM@"]
 request_logging = true
 pass_user_headers = true
+pass_basic_auth = false
 pass_access_token = false
+pass_user_bearer_token = false
+# Delegation authenticates OpenShift bearers using TokenReview + the universal
+# system:authenticated marker, not per-document InfraPad authorization.
+# Only API paths are mapped; /oauth/ remains a standalone cookie login flow.
+openshift_delegate_urls = '{"/ui/config":{"group":"infrapad.local","resource":"access","name":"browser-api","namespace":"infrapad-local","verb":"get"},"/v1/":{"group":"infrapad.local","resource":"access","name":"browser-api","namespace":"infrapad-local","verb":"get"}}'
+# Allow browser bearer preflights without an OpenShift login redirect.
+# This skips auth for all OPTIONS, not for GET/POST/etc.; not a production CORS policy.
+skip_auth_preflight = true
 skip_provider_button = true
 email_domains = "*"

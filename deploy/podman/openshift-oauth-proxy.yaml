@@ -6,6 +6,8 @@ services:
     command:
       - --config=/etc/oauth-proxy/oauth-proxy.cfg
       - --kubeconfig=/etc/oauth-proxy/kubeconfig
+      - --authentication-kubeconfig=/etc/oauth-proxy/kubeconfig
+      - --authorization-kubeconfig=/etc/oauth-proxy/kubeconfig
       - --openshift-ca=/etc/oauth-proxy/cluster-ca.crt
     # Using host mode to reach out to backend on host,
     # host-gateway had some issues. We might get rid of it once

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Idempotent bootstrap for the OpenShift OAuth proxy used in local development.
 # Produces all generated files under deploy/podman/generated/ and reconciles
-# the required namespace, service account, and token Secret on the cluster
+# the required namespace, service account, RBAC, and token Secret on the cluster
 # identified by the current kubeconfig context.
 
 set -euo pipefail
+umask 077 # Protect new temporary credentials before they are moved into place.
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -60,6 +61,8 @@ has_complete_cache() {
   for artifact in "${artifacts[@]}"; do
     [ -s "$artifact" ] || return 1
   done
+  # Older caches contain a host-user kubeconfig and cannot enable delegation.
+  jq -e '.delegationReady == true' "$METADATA_FILE" &>/dev/null
 }
 
 write_oauth_metadata() {
@@ -70,7 +73,8 @@ write_oauth_metadata() {
     '{
       apiUrl: $api_url,
       authorizationEndpoint: $authorization_endpoint,
-      tokenEndpoint: $token_endpoint
+      tokenEndpoint: $token_endpoint,
+      delegationReady: true
     }' > "$METADATA_FILE.tmp"
   chmod 0644 "$METADATA_FILE.tmp"
   mv -f "$METADATA_FILE.tmp" "$METADATA_FILE"
@@ -138,12 +142,8 @@ echo "Verifying cluster connectivity…"
 oc whoami &>/dev/null || die "Cannot reach the cluster. Check your KUBECONFIG and current context."
 
 # ---------------------------------------------------------------------------
-# Flatten and minify kubeconfig for the current context only
+# Discover the current context's API URL and CA; host credentials stay on host.
 # ---------------------------------------------------------------------------
-echo "Flattening kubeconfig for the current context…"
-FLAT_KUBECONFIG="$(oc config view --flatten --minify 2>/dev/null)" \
-  || die "Failed to flatten kubeconfig for the current context."
-
 # Extract API server URL
 API_URL="$(oc config view --flatten --minify \
   -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null)" \
@@ -213,6 +213,83 @@ oc annotate serviceaccount "$SA_NAME" -n "$NAMESPACE" \
   "${REDIRECT_ANNOTATION}=${REDIRECT_VALUE}" --overwrite
 
 # ---------------------------------------------------------------------------
+# Reconcile the universal bearer marker and proxy's review/informer permissions.
+# This marker is an authn gate, not an InfraPad data-authorization rule. Neither
+# the virtual resource nor the named object needs to exist in the API server.
+# ---------------------------------------------------------------------------
+echo "Reconciling bearer delegation RBAC…"
+oc apply -f - <<EOF || die "Cannot reconcile InfraPad bearer marker Role/RoleBinding in $NAMESPACE. Check host RBAC."
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: infrapad-browser-api-access
+  namespace: ${NAMESPACE}
+rules:
+- apiGroups: ["infrapad.local"]
+  resources: ["access"]
+  resourceNames: ["browser-api"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: infrapad-browser-api-access
+  namespace: ${NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: infrapad-browser-api-access
+subjects:
+- kind: Group
+  name: system:authenticated
+  apiGroup: rbac.authorization.k8s.io
+EOF
+
+oc apply -f - <<EOF || die "Cannot bind $SA_NAME to system:auth-delegator. Check host cluster RBAC."
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: infrapad-local-oauth-proxy-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: ${SA_NAME}
+  namespace: ${NAMESPACE}
+EOF
+
+# The OpenShift provider watches this named ConfigMap for OAuth serving CA
+# changes even when using an explicit CA for validate_url.
+oc apply -f - <<EOF || die "Cannot grant $SA_NAME the oauth-serving-cert informer permissions in openshift-config-managed. Check host RBAC."
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: infrapad-oauth-serving-cert-reader
+  namespace: openshift-config-managed
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["oauth-serving-cert"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: infrapad-oauth-serving-cert-reader
+  namespace: openshift-config-managed
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: infrapad-oauth-serving-cert-reader
+subjects:
+- kind: ServiceAccount
+  name: ${SA_NAME}
+  namespace: ${NAMESPACE}
+EOF
+
+# ---------------------------------------------------------------------------
 # Reconcile token Secret
 # ---------------------------------------------------------------------------
 echo "Reconciling token Secret '$TOKEN_SECRET'…"
@@ -262,16 +339,67 @@ done
 # ---------------------------------------------------------------------------
 echo "Writing client-secret…"
 echo "$SA_TOKEN" | base64 -d > "$GEN_DIR/client-secret.tmp"
-chmod 0644 "$GEN_DIR/client-secret.tmp"
+chmod 0600 "$GEN_DIR/client-secret.tmp"
 mv -f "$GEN_DIR/client-secret.tmp" "$GEN_DIR/client-secret"
 
 # ---------------------------------------------------------------------------
-# Materialize flattened kubeconfig
+# Materialize a standalone kubeconfig containing ONLY the proxy SA token.
+# jq reads the token from a file, never from a process argument or host context.
+# JSON is valid kubeconfig YAML; the CA is inlined for the container.
 # ---------------------------------------------------------------------------
-echo "Writing kubeconfig…"
-echo "$FLAT_KUBECONFIG" > "$GEN_DIR/kubeconfig.tmp"
-chmod 0644 "$GEN_DIR/kubeconfig.tmp"
+echo "Writing proxy service-account kubeconfig…"
+jq -n --arg server "$API_URL" --arg ca "$CLUSTER_CA_B64" \
+  --rawfile token "$GEN_DIR/client-secret" '{
+    apiVersion: "v1", kind: "Config", "current-context": "infrapad-oauth-proxy",
+    clusters: [{name: "selected-cluster", cluster: {server: $server, "certificate-authority-data": $ca}}],
+    contexts: [{name: "infrapad-oauth-proxy", context: {cluster: "selected-cluster", user: "infrapad-oauth-proxy"}}],
+    users: [{name: "infrapad-oauth-proxy", user: {token: ($token | rtrimstr("\n"))}}]
+  }' > "$GEN_DIR/kubeconfig.tmp" || die "Could not write proxy kubeconfig."
+chmod 0600 "$GEN_DIR/kubeconfig.tmp"
 mv -f "$GEN_DIR/kubeconfig.tmp" "$GEN_DIR/kubeconfig"
+
+# Verify actual review calls as the proxy identity, not just the host's
+# permissions. Keep sample bearer values out of command lines and logs.
+echo "Checking proxy service-account review and informer permissions…"
+PROXY_OC=(oc --kubeconfig "$GEN_DIR/kubeconfig")
+"${PROXY_OC[@]}" create -f - >/dev/null <<EOF || die "Proxy service account cannot create TokenReviews; check system:auth-delegator binding."
+apiVersion: authentication.k8s.io/v1
+kind: TokenReview
+spec:
+  token: invalid-bootstrap-probe
+EOF
+"${PROXY_OC[@]}" create -f - >/dev/null <<EOF || die "Proxy service account cannot create SubjectAccessReviews; check system:auth-delegator binding."
+apiVersion: authorization.k8s.io/v1
+kind: SubjectAccessReview
+spec:
+  user: invalid-bootstrap-probe
+  resourceAttributes:
+    namespace: ${NAMESPACE}
+    group: infrapad.local
+    resource: access
+    name: browser-api
+    verb: get
+EOF
+for verb in get list watch; do
+  "${PROXY_OC[@]}" auth can-i "$verb" configmaps/oauth-serving-cert -n openshift-config-managed | grep -qx yes \
+    || die "Proxy service account lacks $verb on openshift-config-managed/oauth-serving-cert."
+done
+# Evaluate the marker for the authenticated group with a real SAR. This does
+# not require host impersonation permission or a real InfraPad resource/CRD.
+"${PROXY_OC[@]}" create -f - -o json <<EOF | jq -e '.status.allowed == true' >/dev/null \
+  || die "Marker SAR for system:authenticated is not allowed; check InfraPad RoleBinding."
+apiVersion: authorization.k8s.io/v1
+kind: SubjectAccessReview
+spec:
+  user: infrapad-bootstrap-probe
+  groups: ["system:authenticated"]
+  resourceAttributes:
+    namespace: ${NAMESPACE}
+    group: infrapad.local
+    resource: access
+    name: browser-api
+    verb: get
+EOF
 
 # ---------------------------------------------------------------------------
 # Materialize cluster CA
@@ -285,12 +413,13 @@ mv -f "$GEN_DIR/cluster-ca.crt.tmp" "$GEN_DIR/cluster-ca.crt"
 # Cookie secret — generate once, reuse
 # ---------------------------------------------------------------------------
 if [ -s "$GEN_DIR/cookie-secret" ]; then
+  chmod 0600 "$GEN_DIR/cookie-secret"
   echo "Reusing existing cookie-secret."
 else
   echo "Generating cookie-secret…"
   require_tool openssl
   openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n' > "$GEN_DIR/cookie-secret.tmp"
-  chmod 0644 "$GEN_DIR/cookie-secret.tmp"
+  chmod 0600 "$GEN_DIR/cookie-secret.tmp"
   mv -f "$GEN_DIR/cookie-secret.tmp" "$GEN_DIR/cookie-secret"
 fi
 
@@ -298,6 +427,7 @@ fi
 # TLS certificate via mkcert — generate once, reuse
 # ---------------------------------------------------------------------------
 if [ -s "$GEN_DIR/tls.crt" ] && [ -s "$GEN_DIR/tls.key" ]; then
+  chmod 0600 "$GEN_DIR/tls.key"
   echo "Reusing existing TLS certificate and key."
 else
   echo "Generating TLS certificate with mkcert…"
@@ -329,7 +459,7 @@ else
     localhost 127.0.0.1 ::1
 
   chmod 0644 "$MKCERT_TMP/tls.crt"
-  chmod 0644 "$MKCERT_TMP/tls.key"
+  chmod 0600 "$MKCERT_TMP/tls.key"
   mv -f "$MKCERT_TMP/tls.crt" "$GEN_DIR/tls.crt"
   mv -f "$MKCERT_TMP/tls.key" "$GEN_DIR/tls.key"
   rm -rf "$MKCERT_TMP"
