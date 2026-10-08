@@ -60,6 +60,27 @@ For any workflow, `task server:watch` can replace `task server:run`. It starts t
 
 `--prometheus-url` overrides `INFRAPAD_PROMETHEUS_URL` (default `http://localhost:9090`); this URL must be browser-reachable. The InfraPad API base is `/v1`. Go trusts forwarded identity only when UI traffic comes via the authentication proxy; direct `/v1/`, gRPC, and health access remain anonymous. `INFRAPAD_AUTH_UPSTREAM` remains an explicit proxy upstream override for advanced setups.
 
+### Metrics relay mode
+
+To use an upstream Prometheus-compatible endpoint (e.g. OpenShift Thanos Querier) instead of browser-direct Prometheus, set these flags or environment variables:
+
+| Flag | Environment variable | Description |
+| --- | --- | --- |
+| `--prometheus-upstream-url` | `INFRAPAD_PROMETHEUS_UPSTREAM_URL` | HTTPS base URL of the upstream (e.g. `https://thanos-querier-openshift-monitoring.apps.example.com`). Enables the relay and overrides `--prometheus-url`. |
+| `--prometheus-upstream-ca-file` | `INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE` | PEM CA bundle for upstream TLS verification. Extends system roots. An unreadable or invalid file is a startup error. Use an absolute path or a path relative to `server/`. |
+| `--prometheus-upstream-insecure-skip-tls-verify` | `INFRAPAD_PROMETHEUS_UPSTREAM_INSECURE_SKIP_TLS_VERIFY` | Disable upstream TLS certificate verification (**security risk** – bypasses certificate trust for the configured upstream only). Verification is enabled by default; use this only when proper CA material is unavailable. |
+
+When enabled, the relay mounts `GET /prometheus/api/*` and advertises `/prometheus` as `services.prometheusApiBaseUrl` in `/ui/config`. The upstream base may include a path prefix (e.g. `https://host/thanos` maps requests to `https://host/thanos/api/v1/...`). Only GET requests are forwarded; the relay accepts a single `Authorization: Bearer …` header, constructs a fresh upstream request with that credential, and returns the response. 
+
+Run the command to get the vars relevant for your setup:
+
+```
+cat <<EOF >> .env
+export INFRAPAD_PROMETHEUS_UPSTREAM_URL="https://$(oc -n openshift-monitoring get route thanos-querier -o jsonpath='{.spec.host}')"            
+export INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE="$PWD/deploy/example/openshift-thanos/tmp/ingress-ca.pem"
+EOF
+```
+
 ## Tests
 
 ```sh

@@ -23,11 +23,14 @@ import (
 )
 
 var (
-	flagDBString      string
-	flagPort          int
-	flagHTTPAddr      string
-	flagUIDir         string
-	flagPrometheusURL string
+	flagDBString                        string
+	flagPort                            int
+	flagHTTPAddr                        string
+	flagUIDir                           string
+	flagPrometheusURL                   string
+	flagPrometheusUpstreamURL           string
+	flagPrometheusUpstreamCAFile        string
+	flagPrometheusUpstreamInsecureSkip  bool
 )
 
 func init() {
@@ -36,6 +39,9 @@ func init() {
 	startCmd.Flags().StringVar(&flagHTTPAddr, "http-addr", ":8088", "HTTP/JSON gateway listen address")
 	startCmd.Flags().StringVar(&flagUIDir, "ui-dir", "", "built standalone UI directory (or INFRAPAD_UI_DIR env)")
 	startCmd.Flags().StringVar(&flagPrometheusURL, "prometheus-url", "", "browser-reachable Prometheus base URL (or INFRAPAD_PROMETHEUS_URL env)")
+	startCmd.Flags().StringVar(&flagPrometheusUpstreamURL, "prometheus-upstream-url", "", "upstream Prometheus-compatible base URL for relay mode (or INFRAPAD_PROMETHEUS_UPSTREAM_URL env)")
+	startCmd.Flags().StringVar(&flagPrometheusUpstreamCAFile, "prometheus-upstream-ca-file", "", "PEM CA bundle for upstream TLS (or INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE env)")
+	startCmd.Flags().BoolVar(&flagPrometheusUpstreamInsecureSkip, "prometheus-upstream-insecure-skip-tls-verify", false, "disable TLS verification for upstream (or INFRAPAD_PROMETHEUS_UPSTREAM_INSECURE_SKIP_TLS_VERIFY env)")
 	rootCmd.AddCommand(startCmd)
 }
 
@@ -105,6 +111,36 @@ var startCmd = &cobra.Command{
 		if prometheusURL == "" {
 			prometheusURL = "http://localhost:9090"
 		}
+
+		// Resolve relay configuration: explicit flag > environment.
+		upstreamURL := flagPrometheusUpstreamURL
+		if !cmd.Flags().Changed("prometheus-upstream-url") {
+			upstreamURL = os.Getenv("INFRAPAD_PROMETHEUS_UPSTREAM_URL")
+		}
+		upstreamCAFile := flagPrometheusUpstreamCAFile
+		if !cmd.Flags().Changed("prometheus-upstream-ca-file") {
+			upstreamCAFile = os.Getenv("INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE")
+		}
+		upstreamInsecure := flagPrometheusUpstreamInsecureSkip
+		if !cmd.Flags().Changed("prometheus-upstream-insecure-skip-tls-verify") {
+			upstreamInsecure = os.Getenv("INFRAPAD_PROMETHEUS_UPSTREAM_INSECURE_SKIP_TLS_VERIFY") == "true"
+		}
+
+		if upstreamURL != "" {
+			// Relay mode: mount relay handler and override advertised URL.
+			relay, err := transporthttp.NewRelay(transporthttp.RelayConfig{
+				UpstreamBase:          upstreamURL,
+				CAFile:                upstreamCAFile,
+				InsecureSkipTLSVerify: upstreamInsecure,
+			})
+			if err != nil {
+				return fmt.Errorf("metrics relay configuration: %w", err)
+			}
+			topMux.Handle("/prometheus/api/", relay)
+			prometheusURL = "/prometheus"
+			log.Printf("metrics relay enabled, upstream: %s", upstreamURL)
+		}
+
 		transporthttp.RegisterUIRoutes(topMux, uiDir, prometheusURL)
 
 		// 5. HTTP server with CORS + body-limit middleware.
