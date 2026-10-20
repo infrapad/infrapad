@@ -18,7 +18,8 @@ services:
       - ./generated/oauth-proxy.cfg:/etc/oauth-proxy/oauth-proxy.cfg:ro,z
       - ./generated/kubeconfig:/etc/oauth-proxy/kubeconfig:ro,z
       - ./generated/cluster-ca.crt:/etc/oauth-proxy/cluster-ca.crt:ro,z
-      - ./generated/client-secret:/etc/oauth-proxy/client-secret:ro,z
+      # Login-client secret is distinct from the SA token in generated/kubeconfig.
+      - ./generated/oauth-client-secret:/etc/oauth-proxy/oauth-client-secret:ro,z
       - ./generated/cookie-secret:/etc/oauth-proxy/cookie-secret:ro,z
       - ./generated/tls.crt:/etc/oauth-proxy/tls.crt:ro,z
       - ./generated/tls.key:/etc/oauth-proxy/tls.key:ro,z

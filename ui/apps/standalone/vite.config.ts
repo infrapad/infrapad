@@ -76,6 +76,9 @@ export default defineConfig(({ command }) => ({
       "/ui/config": {
         target: "http://127.0.0.1:8088",
       },
+      "/prometheus/api/": {
+        target: "http://127.0.0.1:8088",
+      },
     },
   },
   build: {

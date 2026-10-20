@@ -160,7 +160,7 @@ fi
 
 case "$auth_mode" in
   openshift)
-    "$SCRIPT_DIR/openshift-oauth-bootstrap.sh"
+    "$SCRIPT_DIR/openshift-oauth.sh" bootstrap
     compose_args+=("--profile" "auth-openshift")
     ;;
   dummy)

@@ -2,10 +2,11 @@
 // GET requests under /prometheus/api/ to a configured upstream
 // Prometheus-compatible endpoint (e.g. OpenShift Thanos Querier).
 //
-// The relay accepts a single Authorization: Bearer header from the caller,
-// constructs a fresh upstream request with that credential, and returns the
+// The relay accepts a single raw X-Forwarded-Access-Token from the authenticated
+// OAuth proxy, constructs a fresh upstream Bearer request, and returns the
 // buffered response. It never follows redirects, forwards cookies or identity
-// headers, or exposes upstream error bodies. When disabled (no upstream URL),
+// headers. Upstream response bodies are preserved, including errors.
+// When disabled (no upstream URL),
 // the existing browser-direct Prometheus mode is unchanged.
 package http
 
@@ -142,8 +143,8 @@ func (rl *Relay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract and validate bearer token.
-	token, err := extractBearer(r)
+	// Consume only the authenticated proxy's native credential header.
+	token, err := extractForwardedAccessToken(r)
 	if err != nil {
 		writeRelayError(w, http.StatusUnauthorized, err.Error())
 		return
@@ -178,10 +179,10 @@ func (rl *Relay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		// Distinguish timeout from other errors.
 		if isTimeout(err) {
-			writeRelayError(w, http.StatusGatewayTimeout, "upstream request timed out")
+			writeRelayError(w, http.StatusGatewayTimeout, "upstream request timed out: "+upstreamErrorDetail(err, token))
 			return
 		}
-		writeRelayError(w, http.StatusBadGateway, "upstream request failed")
+		writeRelayError(w, http.StatusBadGateway, "upstream request failed: "+upstreamErrorDetail(err, token))
 		return
 	}
 	defer resp.Body.Close()
@@ -197,20 +198,14 @@ func (rl *Relay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := readLimited(resp.Body, relayMaxResponseSize)
 	if err != nil {
 		if isTimeout(err) {
-			writeRelayError(w, http.StatusGatewayTimeout, "upstream response read timed out")
+			writeRelayError(w, http.StatusGatewayTimeout, "upstream response read timed out: "+upstreamErrorDetail(err, token))
 			return
 		}
-		writeRelayError(w, http.StatusBadGateway, "upstream response too large or unreadable")
+		writeRelayError(w, http.StatusBadGateway, "upstream response too large or unreadable: "+upstreamErrorDetail(err, token))
 		return
 	}
 
-	// For error responses from upstream, preserve status but replace body.
-	if resp.StatusCode >= 400 {
-		writeRelayError(w, resp.StatusCode, "upstream error")
-		return
-	}
-
-	// Forward successful response.
+	// Preserve upstream status and body, including error responses.
 	ct := resp.Header.Get("Content-Type")
 	if ct != "" {
 		w.Header().Set("Content-Type", ct)
@@ -219,25 +214,23 @@ func (rl *Relay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-// extractBearer extracts a single well-formed Bearer token from the Authorization header.
-func extractBearer(r *http.Request) (string, error) {
-	values := r.Header.Values("Authorization")
-	if len(values) == 0 {
-		return "", fmt.Errorf("missing Authorization header")
+// upstreamErrorDetail omits the request URL/query and redacts the bearer token.
+func upstreamErrorDetail(err error, token string) string {
+	if urlErr, ok := err.(*url.Error); ok {
+		err = urlErr.Err
 	}
-	if len(values) > 1 {
-		return "", fmt.Errorf("ambiguous Authorization headers")
+	return strings.ReplaceAll(err.Error(), token, "[redacted]")
+}
+
+// extractForwardedAccessToken accepts one nonempty, opaque token from the
+// authenticating proxy. Token validation belongs to the proxy and upstream;
+// direct Go access remains a trusted-development bypass.
+func extractForwardedAccessToken(r *http.Request) (string, error) {
+	values := r.Header.Values("X-Forwarded-Access-Token")
+	if len(values) != 1 || values[0] == "" {
+		return "", fmt.Errorf("expected one nonempty forwarded access token")
 	}
-	auth := values[0]
-	if !strings.HasPrefix(auth, "Bearer ") {
-		return "", fmt.Errorf("unsupported authorization scheme")
-	}
-	token := strings.TrimPrefix(auth, "Bearer ")
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return "", fmt.Errorf("empty bearer token")
-	}
-	return token, nil
+	return values[0], nil
 }
 
 // readLimited reads up to limit+1 bytes. If the body exceeds limit, it returns an error.
@@ -255,8 +248,8 @@ func readLimited(r io.Reader, limit int64) ([]byte, error) {
 
 // relayErrorBody is the JSON error shape returned by the relay.
 type relayErrorBody struct {
-	Error   string `json:"error"`
-	Status  int    `json:"status"`
+	Error  string `json:"error"`
+	Status int    `json:"status"`
 }
 
 func writeRelayError(w http.ResponseWriter, status int, msg string) {

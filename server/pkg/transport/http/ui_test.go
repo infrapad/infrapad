@@ -46,10 +46,15 @@ func TestUIRoutes(t *testing.T) {
 	if w := get("/ui/assets/..theme.js"); w.Code != 200 || !strings.Contains(w.Body.String(), "theme") {
 		t.Errorf("dot-prefixed asset: %d %q", w.Code, w.Body.String())
 	}
-	for _, url := range []string{"/ui/assets/missing.js", "/ui/assets/app.js/", "/ui/missing.css", "/elsewhere", "/ui/assets/unknown", "/ui/%2e%2e/secret"} {
+	for _, url := range []string{"/ui/assets/missing.js", "/ui/assets/app.js/", "/ui/missing.css", "/elsewhere", "/ui/assets/unknown"} {
 		if w := get(url); w.Code != 404 {
 			t.Errorf("%s: got %d, want 404", url, w.Code)
 		}
+	}
+	// ServeFile rejects decoded traversal with 400 on newer Go versions;
+	// older routing may return 404. Neither may expose a file or SPA entry.
+	if w := get("/ui/%2e%2e/secret"); w.Code != http.StatusBadRequest && w.Code != http.StatusNotFound {
+		t.Errorf("encoded traversal: got %d, want 400 or 404", w.Code)
 	}
 	if w := get("/v1/documents"); w.Code != 202 {
 		t.Errorf("API: %d", w.Code)
@@ -70,7 +75,7 @@ func TestUIRoutes(t *testing.T) {
 	}
 
 	for _, headers := range []map[string]string{
-		{"X-Forwarded-User": "alice", "X-Forwarded-Email": "alice@example.test", "Authorization": "Bearer secret"},
+		{"X-Forwarded-User": "alice", "X-Forwarded-Email": "alice@example.test", "Authorization": "Bearer secret", "X-Forwarded-Access-Token": "forwarded-secret"},
 		{"X-Forwarded-User": "bob"},
 		{"X-Forwarded-Email": "orphan@example.test"},
 	} {
@@ -96,7 +101,7 @@ func TestUIRoutes(t *testing.T) {
 		if headers["X-Forwarded-User"] == "" && body.Identity != nil || headers["X-Forwarded-User"] != "" && (body.Identity == nil || body.Identity.Username != headers["X-Forwarded-User"] || body.Identity.Email != headers["X-Forwarded-Email"]) {
 			t.Errorf("identity: %q", w.Body.String())
 		}
-		if strings.Contains(w.Body.String(), "Bearer") || strings.Contains(w.Body.String(), "orphan") || headers["X-Forwarded-Email"] == "" && strings.Contains(w.Body.String(), "email") {
+		if strings.Contains(w.Body.String(), "secret") || strings.Contains(w.Body.String(), "Bearer") || strings.Contains(w.Body.String(), "orphan") || headers["X-Forwarded-Email"] == "" && strings.Contains(w.Body.String(), "email") {
 			t.Errorf("config leaks headers: %q", w.Body.String())
 		}
 	}

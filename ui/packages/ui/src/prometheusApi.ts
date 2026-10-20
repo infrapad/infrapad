@@ -88,7 +88,8 @@ export async function queryRange(
 
   const res = await hostFetch(`${baseUrl.replace(/\/$/, "")}/api/v1/query_range?${params}`);
   if (!res.ok) {
-    throw new Error(`Prometheus API error (${res.status})`);
+    const details = await res.text();
+    throw new Error(`Prometheus API error (${res.status})${details ? `: ${details}` : ""}`);
   }
 
   const body: PromRangeResponse = await res.json();
