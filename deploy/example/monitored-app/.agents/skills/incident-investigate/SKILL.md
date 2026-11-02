@@ -21,8 +21,8 @@ infrapad md pull --document <document-name> --file incident.md
 
 Read the file to understand:
 - The **title** and **status** from the front matter.
-- The **alerts_matcher** block — which alerts are firing, the `Since`/`Until` timestamps, and the `LabelsMatchers` to identify affected components.
-- Any existing **markdown** blocks with prior notes.
+- The **Prometheus/AlertsMatcher** block — which alerts are firing, the `since`/`until` timestamps, and the `labels_matchers` to identify affected components.
+- Any existing **Core/Markdown** blocks with prior notes.
 
 ### 2. Gather diagnostic information
 
@@ -35,7 +35,7 @@ Include the details about findings.
 Append a new markdown block to the incident file with your findings:
 
 ```
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 # Investigation Summary
 
 **Investigated at**: <current UTC timestamp>
@@ -57,7 +57,7 @@ the request (and you don't have enough permissions to perform the actions).
 Instead, add another block with recommended action.
 
 ```
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 ## Recommended Actions
 
 <What should be done to resolve or follow up>

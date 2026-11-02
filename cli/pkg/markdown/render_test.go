@@ -17,9 +17,9 @@ func TestRender(t *testing.T) {
 	}
 
 	alertsContent, _ := structpb.NewStruct(map[string]any{
-		"LabelsMatchers": []any{
-			map[string]any{"name": []any{"CrashLoopBackOff"}},
-			map[string]any{"name": []any{"KubeNodeNotReady"}},
+		"labels_matchers": []any{
+			map[string]any{"alertname": []any{"CrashLoopBackOff"}},
+			map[string]any{"alertname": []any{"KubeNodeNotReady"}},
 		},
 	})
 
@@ -32,14 +32,14 @@ func TestRender(t *testing.T) {
 			BlockNumber:    1,
 			RevisionNumber: 2,
 			AuthorId:       "incident_detector:123",
-			Type:           "alerts_matcher",
+			Type:           "Prometheus/AlertsMatcher",
 			Content:        alertsContent,
 		},
 		{
 			BlockNumber:    2,
 			RevisionNumber: 2,
 			AuthorId:       "agentic_run_analysis:456",
-			Type:           "markdown",
+			Type:           "Core/Markdown",
 			Content:        mdContent,
 		},
 	}
@@ -64,7 +64,7 @@ func TestRender(t *testing.T) {
 	}
 
 	// Block 1 directive.
-	if !strings.Contains(out, "::infrapad_block{block=1 rev=2 type=alerts_matcher author=incident_detector:123}") {
+	if !strings.Contains(out, "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher author=incident_detector:123}") {
 		t.Error("missing block 1 directive")
 	}
 	// Block 1 content in a yaml code fence.
@@ -76,7 +76,7 @@ func TestRender(t *testing.T) {
 	}
 
 	// Block 2 directive.
-	if !strings.Contains(out, "::infrapad_block{block=2 rev=2 type=markdown author=agentic_run_analysis:456}") {
+	if !strings.Contains(out, "::infrapad_block{block=2 rev=2 type=Core/Markdown author=agentic_run_analysis:456}") {
 		t.Error("missing block 2 directive")
 	}
 	// Block 2 content (inline markdown, no code fence).
@@ -95,10 +95,10 @@ func TestRender(t *testing.T) {
 	if len(parsed.Blocks) != 2 {
 		t.Fatalf("round-trip got %d blocks, want 2", len(parsed.Blocks))
 	}
-	if parsed.Blocks[0].Meta.Type != "alerts_matcher" {
+	if parsed.Blocks[0].Meta.Type != "Prometheus/AlertsMatcher" {
 		t.Errorf("round-trip block 0 type = %q", parsed.Blocks[0].Meta.Type)
 	}
-	if parsed.Blocks[1].Meta.Type != "markdown" {
+	if parsed.Blocks[1].Meta.Type != "Core/Markdown" {
 		t.Errorf("round-trip block 1 type = %q", parsed.Blocks[1].Meta.Type)
 	}
 	if text, _ := parsed.Blocks[1].Content["text"].(string); !strings.Contains(text, "# Initial investigation") {
@@ -118,7 +118,7 @@ func TestRenderNoAuthor(t *testing.T) {
 		{
 			BlockNumber:    1,
 			RevisionNumber: 1,
-			Type:           "markdown",
+			Type:           "Core/Markdown",
 			Content:        content,
 		},
 	}
@@ -131,7 +131,7 @@ func TestRenderNoAuthor(t *testing.T) {
 	if strings.Contains(out, "author=") {
 		t.Error("should not include author= when author is empty")
 	}
-	if !strings.Contains(out, "::infrapad_block{block=1 rev=1 type=markdown}") {
+	if !strings.Contains(out, "::infrapad_block{block=1 rev=1 type=Core/Markdown}") {
 		t.Errorf("unexpected directive line in: %s", out)
 	}
 }

@@ -50,7 +50,7 @@ func renderBlock(block *pb.Block) string {
 	}
 
 	m := content.AsMap()
-	if block.GetType() == "markdown" {
+	if block.GetType() == MarkdownTypeName {
 		// Markdown blocks store content in a "text" field.
 		if text, ok := m["text"].(string); ok {
 			sb.WriteString(text)

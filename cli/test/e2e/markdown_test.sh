@@ -49,8 +49,8 @@ echo ""
 # 4. Verify block directives and content
 # -----------------------------------------------------------------------
 echo "Step 4: Verify block directives and content"
-assert_contains "has alerts_matcher directive" "$MD_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
-assert_contains "has markdown directive" "$MD_CONTENT" "::infrapad_block{block=2 rev=2 type=markdown"
+assert_contains "has alerts_matcher directive" "$MD_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
+assert_contains "has markdown directive" "$MD_CONTENT" "::infrapad_block{block=2 rev=2 type=Core/Markdown"
 assert_contains "alerts content has CrashLoopBackOff" "$MD_CONTENT" "CrashLoopBackOff"
 assert_contains "alerts content has KubeNodeNotReady" "$MD_CONTENT" "KubeNodeNotReady"
 assert_contains "alerts wrapped in yaml fence" "$MD_CONTENT" '```yaml'
@@ -70,8 +70,8 @@ assert_contains "parsed title" "$PARSE_OUT" "title:     Payment service crash lo
 assert_contains "parsed namespace" "$PARSE_OUT" "namespace: payments"
 assert_contains "parsed status" "$PARSE_OUT" "status:    active"
 assert_contains "parsed block count" "$PARSE_OUT" "Blocks (2):"
-assert_contains "parsed alerts_matcher type" "$PARSE_OUT" "type:   alerts_matcher"
-assert_contains "parsed markdown type" "$PARSE_OUT" "type:   markdown"
+assert_contains "parsed alerts_matcher type" "$PARSE_OUT" "type:   Prometheus/AlertsMatcher"
+assert_contains "parsed markdown type" "$PARSE_OUT" "type:   Core/Markdown"
 assert_contains "parsed alerts block number" "$PARSE_OUT" "block:  1"
 assert_contains "parsed markdown block number" "$PARSE_OUT" "block:  2"
 
@@ -113,7 +113,7 @@ assert_contains "refreshed file has block 2 directive" "$PUSHED_CONTENT" "::infr
 assert_contains "refreshed file has pushed content" "$PUSHED_CONTENT" "Additional notes from local edit."
 assert_contains "refreshed file has original content" "$PUSHED_CONTENT" "root cause identified"
 # The rev should have incremented from 2 to 3 after the push.
-assert_contains "refreshed block 2 has new rev" "$PUSHED_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+assert_contains "refreshed block 2 has new rev" "$PUSHED_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
 echo ""
 
 # -----------------------------------------------------------------------
@@ -125,9 +125,9 @@ $CLI md pull --document "$DOC_ID" --file "$VERIFY_FILE" 2>/dev/null
 VERIFY_CONTENT=$(cat "$VERIFY_FILE")
 assert_contains "independent pull has pushed content" "$VERIFY_CONTENT" "Additional notes from local edit."
 assert_contains "independent pull has original content" "$VERIFY_CONTENT" "root cause identified"
-assert_contains "independent pull has updated rev" "$VERIFY_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+assert_contains "independent pull has updated rev" "$VERIFY_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
 # Block 1 should be unchanged.
-assert_contains "block 1 unchanged after push" "$VERIFY_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
+assert_contains "block 1 unchanged after push" "$VERIFY_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
 assert_contains "block 1 content intact" "$VERIFY_CONTENT" "CrashLoopBackOff"
 echo ""
 
@@ -139,7 +139,7 @@ PARSE_PUSHED=$($CLI md parse --file "$MD_FILE")
 assert_contains "parsed pushed block count" "$PARSE_PUSHED" "Blocks (2):"
 assert_contains "parsed pushed markdown content" "$PARSE_PUSHED" "Additional notes from local edit."
 assert_contains "parsed pushed original content" "$PARSE_PUSHED" "root cause identified"
-assert_contains "parsed pushed alerts_matcher intact" "$PARSE_PUSHED" "type:   alerts_matcher"
+assert_contains "parsed pushed alerts_matcher intact" "$PARSE_PUSHED" "type:   Prometheus/AlertsMatcher"
 echo ""
 
 # -----------------------------------------------------------------------
@@ -149,7 +149,7 @@ echo "Step 11: Add a new block locally and push"
 # Append a new block directive and content to the pulled file.
 cat >> "$MD_FILE" <<'EOF'
 
-::infrapad_block{block=new type=markdown}
+::infrapad_block{block=new type=Core/Markdown}
 
 # Additional notes from the investigation
 
@@ -157,7 +157,7 @@ This was a red-herring.
 EOF
 
 NEW_BLOCK_CONTENT=$(cat "$MD_FILE")
-assert_contains "local file has new block directive" "$NEW_BLOCK_CONTENT" "block=new type=markdown"
+assert_contains "local file has new block directive" "$NEW_BLOCK_CONTENT" "block=new type=Core/Markdown"
 assert_contains "local file has new block content" "$NEW_BLOCK_CONTENT" "This was a red-herring."
 
 PUSH_NEW_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
@@ -176,10 +176,10 @@ assert_contains "refreshed file has new block content" "$PUSHED_NEW_CONTENT" "Th
 assert_contains "refreshed file has new block heading" "$PUSHED_NEW_CONTENT" "# Additional notes from the investigation"
 # The new block should be block 3.
 assert_contains "refreshed file has block 3 directive" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=3"
-assert_contains "refreshed file has block 3 as markdown" "$PUSHED_NEW_CONTENT" "block=3 rev=1 type=markdown"
+assert_contains "refreshed file has block 3 as markdown" "$PUSHED_NEW_CONTENT" "block=3 rev=1 type=Core/Markdown"
 # Earlier blocks should be unchanged.
-assert_contains "block 1 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
-assert_contains "block 2 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+assert_contains "block 1 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
+assert_contains "block 2 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
 echo ""
 
 # -----------------------------------------------------------------------
@@ -204,7 +204,7 @@ PARSE_NEW=$($CLI md parse --file "$MD_FILE")
 assert_contains "parsed new block count" "$PARSE_NEW" "Blocks (3):"
 assert_contains "parsed new block content" "$PARSE_NEW" "This was a red-herring."
 assert_contains "parsed block 3 number" "$PARSE_NEW" "block:  3"
-assert_contains "parsed alerts_matcher still intact" "$PARSE_NEW" "type:   alerts_matcher"
+assert_contains "parsed alerts_matcher still intact" "$PARSE_NEW" "type:   Prometheus/AlertsMatcher"
 echo ""
 
 # -----------------------------------------------------------------------
@@ -214,7 +214,7 @@ echo "Step 15: Add two new blocks at once and push"
 # Simulate the incident-investigate workflow: investigation summary + recommended actions.
 cat >> "$MD_FILE" <<'EOF'
 
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 # Investigation Summary
 
 **Investigated at**: 2026-08-14T12:00:00Z
@@ -227,7 +227,7 @@ The payment service pod is in CrashLoopBackOff due to an OOM kill.
 
 Memory limit is set too low for the current traffic pattern.
 
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 # Recommended Actions
 
 1. Increase memory limit from 256Mi to 512Mi.
@@ -261,11 +261,11 @@ assert_contains "refreshed file has recommended actions" "$PUSHED_TWO_CONTENT" "
 assert_contains "refreshed file has OOM diagnosis" "$PUSHED_TWO_CONTENT" "OOM kill"
 assert_contains "refreshed file has memory limit action" "$PUSHED_TWO_CONTENT" "Increase memory limit"
 # The two new blocks should be block 4 and block 5.
-assert_contains "refreshed file has block 4" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=4 rev=1 type=markdown"
-assert_contains "refreshed file has block 5" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=5 rev=1 type=markdown"
+assert_contains "refreshed file has block 4" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=4 rev=1 type=Core/Markdown"
+assert_contains "refreshed file has block 5" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=5 rev=1 type=Core/Markdown"
 # Earlier blocks should be unchanged.
-assert_contains "block 1 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
-assert_contains "block 2 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+assert_contains "block 1 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
+assert_contains "block 2 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
 assert_contains "block 3 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=3"
 echo ""
 
@@ -307,8 +307,8 @@ PULL_FILEONLY_OUT=$($CLI md pull --file "$MD_FILE" 2>&1)
 assert_contains "pull --file-only reports output file" "$PULL_FILEONLY_OUT" "Written to"
 FILEONLY_CONTENT=$(cat "$MD_FILE")
 assert_contains "file-only pull has doc id" "$FILEONLY_CONTENT" "document: $DOC_ID"
-assert_contains "file-only pull has block 1" "$FILEONLY_CONTENT" "::infrapad_block{block=1 rev=2 type=alerts_matcher"
-assert_contains "file-only pull has block 2" "$FILEONLY_CONTENT" "::infrapad_block{block=2 rev=3 type=markdown"
+assert_contains "file-only pull has block 1" "$FILEONLY_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
+assert_contains "file-only pull has block 2" "$FILEONLY_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
 assert_contains "file-only pull has block 5" "$FILEONLY_CONTENT" "::infrapad_block{block=5"
 assert_contains "file-only pull has original content" "$FILEONLY_CONTENT" "CrashLoopBackOff"
 echo ""

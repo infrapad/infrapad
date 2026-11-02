@@ -122,8 +122,12 @@ type Block struct {
 	Status         string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"` // "progressing" | "published" | "deleted"
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Arbitrary content payload; structure is determined by `type`.
-	// E.g. for "markdown": {"text": "…"}
-	// E.g. for "alerts_matcher": {"labels_matchers": [...], "since": "…"}
+	// The value is the inner extension content, not a host record
+	// envelope: producers never supply host timestamps.
+	// E.g. for "Core/Markdown": {"text": "…"}
+	// E.g. for "Prometheus/AlertsMatcher":
+	//
+	//	{"labels_matchers": [...], "since": "…"}
 	Content       *structpb.Struct `protobuf:"bytes,10,opt,name=content,proto3" json:"content,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

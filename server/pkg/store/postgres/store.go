@@ -151,14 +151,9 @@ type pgBlocks struct {
 var _ store.BlocksCollection = &pgBlocks{}
 
 func (b *pgBlocks) Create(ctx context.Context, documentUid model.DocumentUID, blk model.Block) (model.Block, error) {
-	sc := blk.SerializedContent
-	if blk.Content != nil {
-		var err error
-		sc, err = blk.Content.Serialize()
-		if err != nil {
-			return model.Block{}, fmt.Errorf("serialize block content: %w", err)
-		}
-	}
+	// The store is content-type agnostic: it persists the serialized host
+	// record envelope produced by the controller as-is.
+	sc := blk.SerializedRecord
 
 	var revisionExpr string
 	var args []any
@@ -252,12 +247,9 @@ func scanBlock(documentUid model.DocumentUID, row *sql.Row) (model.Block, error)
 	}
 	blk.Type = typ
 	blk.Status = model.BlockStatus(status)
-	blk.SerializedContent = model.SerializedContent{Type: typ, Data: data}
-	content, err := model.DeserializeBlockContent(blk.SerializedContent)
-	if err != nil {
-		return model.Block{}, fmt.Errorf("deserialize block content: %w", err)
-	}
-	blk.Content = content
+	// The deserialized record is restored by the controller through the
+	// content registry; the store keeps only the serialized envelope.
+	blk.SerializedRecord = model.SerializedRecord{Type: typ, Data: data}
 	return blk, nil
 }
 
@@ -274,12 +266,7 @@ func scanBlocks(documentUid model.DocumentUID, rows *sql.Rows) ([]model.Block, e
 		}
 		blk.Type = typ
 		blk.Status = model.BlockStatus(status)
-		blk.SerializedContent = model.SerializedContent{Type: typ, Data: data}
-		content, err := model.DeserializeBlockContent(blk.SerializedContent)
-		if err != nil {
-			return nil, fmt.Errorf("deserialize block content: %w", err)
-		}
-		blk.Content = content
+		blk.SerializedRecord = model.SerializedRecord{Type: typ, Data: data}
 		blocks = append(blocks, blk)
 	}
 	return blocks, rows.Err()

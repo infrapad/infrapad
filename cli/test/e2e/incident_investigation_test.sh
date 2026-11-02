@@ -39,8 +39,8 @@ echo ""
 echo "Step 2: Add alerts_matcher block"
 ADD_ALERTS_OUT=$($CLI block add \
   --document "$DOC_ID" \
-  --type alerts_matcher \
-  --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}]}')
+  --type Prometheus/AlertsMatcher \
+  --content '{"labels_matchers": [{"alertname": ["CrashLoopBackOff"]}], "since": "2026-08-14T09:00:00Z"}')
 echo "$ADD_ALERTS_OUT"
 
 assert_equals "alerts block_number is 1" "$(table_cell "$ADD_ALERTS_OUT" "BLOCK")" "1"
@@ -58,7 +58,7 @@ echo ""
 echo "Step 3: Add markdown block"
 ADD_MD_OUT=$($CLI block add \
   --document "$DOC_ID" \
-  --type markdown \
+  --type Core/Markdown \
   --content '{"text": "initial investigation writeup\nneeds further analysis"}')
 echo "$ADD_MD_OUT"
 
@@ -80,8 +80,8 @@ echo "Step 4: Update alerts_matcher block"
 UPDATE_ALERTS_OUT=$($CLI block update \
   --document "$DOC_ID" \
   --block-number 1 \
-  --type alerts_matcher \
-  --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]}')
+  --type Prometheus/AlertsMatcher \
+  --content '{"labels_matchers": [{"alertname": ["CrashLoopBackOff"]}, {"alertname": ["KubeNodeNotReady"]}], "since": "2026-08-14T09:00:00Z"}')
 echo "$UPDATE_ALERTS_OUT"
 
 assert_equals "updated alerts revision is 2" "$(table_cell "$UPDATE_ALERTS_OUT" "REV")" "2"
@@ -91,7 +91,7 @@ UPDATE_ALERTS_JSON=$($CLI block get -o json --document "$DOC_ID" --block-number 
 MATCHERS_COUNT=$(echo "$UPDATE_ALERTS_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data.get('content', {}).get('LabelsMatchers', [])))
+print(len(data.get('content', {}).get('labels_matchers', [])))
 " 2>/dev/null || echo "?")
 assert_equals "matchers_count is 2" "$MATCHERS_COUNT" "2"
 
@@ -104,7 +104,7 @@ echo "Step 5: Update markdown block"
 UPDATE_MD_OUT=$($CLI block update \
   --document "$DOC_ID" \
   --block-number "$MD_BLOCK_NUM" \
-  --type markdown \
+  --type Core/Markdown \
   --content '{"text": "updated investigation writeup\nroot cause identified"}')
 echo "$UPDATE_MD_OUT"
 
@@ -146,12 +146,12 @@ HISTORY_JSON=$($CLI block history -o json --document "$DOC_ID" --block-number 1)
 REV1_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data[0].get('content', {}).get('LabelsMatchers', [])))
+print(len(data[0].get('content', {}).get('labels_matchers', [])))
 " 2>/dev/null || echo "?")
 REV2_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data[1].get('content', {}).get('LabelsMatchers', [])))
+print(len(data[1].get('content', {}).get('labels_matchers', [])))
 " 2>/dev/null || echo "?")
 assert_equals "first revision has 1 matcher" "$REV1_MATCHERS" "1"
 assert_equals "second revision has 2 matchers" "$REV2_MATCHERS" "2"

@@ -49,7 +49,7 @@ func newParseCmd() *cobra.Command {
 				fmt.Println("  content:")
 				// Indent each content line for readability.
 				var contentStr string
-				if b.Meta.Type == "markdown" {
+				if b.Meta.Type == markdown.MarkdownTypeName {
 					contentStr = b.Content["text"].(string)
 				} else {
 					out, _ := yaml.Marshal(b.Content)

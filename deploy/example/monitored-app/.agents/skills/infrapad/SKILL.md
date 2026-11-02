@@ -15,12 +15,12 @@ An infrapad document consists of:
 - **Blocks** — numbered content sections, each prefixed with a directive line:
 
 ```
-::infrapad_block{block=1 rev=1 type=alerts_matcher}
+::infrapad_block{block=1 rev=1 type=Prometheus/AlertsMatcher}
 ```
 
 Block types can by:
 
-- structured (e.g. `alerts_matcher`): structured YAML in a fenced code block
+- structured (e.g. `Prometheus/AlertsMatcher`): structured YAML in a fenced code block
 - free-form markdown
 
 ### Example document
@@ -33,15 +33,15 @@ See `deploy/example/monitored-app/tmp/incident.md` for a real-world example of a
     namespace: monitored-app
     status: active
     ---
-    ::infrapad_block{block=1 rev=1 type=alerts_matcher}
+    ::infrapad_block{block=1 rev=1 type=Prometheus/AlertsMatcher}
     ```yaml
-    LabelsMatchers:
-      - endpoint: [endpoint1]
-        name: [MonitoredAppEndpointDown]
-    Since: "2026-01-01T00:00:00Z"
-    Until: "0001-01-01T00:00:00Z"
+    labels_matchers:
+      - alertname: [MonitoredAppEndpointDown]
+        endpoint: [endpoint1]
+    since: "2026-01-01T00:00:00Z"
+    until: "0001-01-01T00:00:00Z"
     ```
-    ::infrapad_block{block=2 rev=1 type=markdown}
+    ::infrapad_block{block=2 rev=1 type=Core/Markdown}
     # Investigation notes
 
     Some notes about the incident.
@@ -85,7 +85,7 @@ The push command auto-detects which blocks have changed (by comparing the local 
 To add a new block, append it to the pulled markdown file with `block=new`:
 
 ```
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 # My New Section
 
 Content goes here.

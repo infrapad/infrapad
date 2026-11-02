@@ -76,28 +76,29 @@ infrapad document get <id>
 
 ### `infrapad block`: Manage blocks within a document
 
-Blocks are the building units of a document. Each block has a type (e.g.
-`markdown`, `alerts_matcher`), a sequential block number, and a revision number
-that increments on every update.
+Blocks are the building units of a document. Each block has a canonical
+namespaced type (e.g. `Core/Markdown`, `Prometheus/AlertsMatcher`), a
+sequential block number, and a revision number that increments on every
+update.
 
 **Add a block:**
 
 ```bash
-infrapad block add --document <id> --type markdown \
+infrapad block add --document <id> --type Core/Markdown \
   --content '{"text": "initial investigation writeup\nneeds further analysis"}'
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--document` | yes | Parent document name |
-| `--type` | yes | Block type (e.g. `markdown`, `alerts_matcher`) |
+| `--type` | yes | Block type (e.g. `Core/Markdown`, `Prometheus/AlertsMatcher`) |
 | `--content` | no | Block content as a JSON object (default `{}`) |
 
 **Update a block:**
 
 ```bash
-infrapad block update --document <id> --block-number 1 --type alerts_matcher \
-  --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]}'
+infrapad block update --document <id> --block-number 1 --type Prometheus/AlertsMatcher \
+  --content '{"labels_matchers": [{"alertname": ["CrashLoopBackOff"]}, {"alertname": ["KubeNodeNotReady"]}], "since": "2026-08-14T09:00:00Z"}'
 ```
 
 | Flag | Required | Description |
@@ -140,22 +141,22 @@ directives.
     namespace: monitored-app
     status: active
     ---
-    ::infrapad_block{block=1 rev=2 type=alerts_matcher}
+    ::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher}
     ```yaml
-    LabelsMatchers:
-      - endpoint: [endpoint1]
-        name: [MonitoredAppEndpointDown]
-    Since: "2026-08-20T15:15:03Z"
-    Until: "2026-08-20T15:19:08Z"
+    labels_matchers:
+      - alertname: [MonitoredAppEndpointDown]
+        endpoint: [endpoint1]
+    since: "2026-08-20T15:15:03Z"
+    until: "2026-08-20T15:19:08Z"
     ```
-    ::infrapad_block{block=2 rev=1 type=markdown}
+    ::infrapad_block{block=2 rev=1 type=Core/Markdown}
     # Investigation Summary
 
     Both endpoints are returning HTTP 500.
 
 - **Front matter** contains the document metadata (`document`, `title`, `namespace`, `status`).
 - **Block directives** (`::infrapad_block{block=N rev=R type=T}`) mark the start of each block.
-- **Structured blocks** (e.g. `alerts_matcher`) wrap their content in a `` ```yaml `` fence.
+- **Structured blocks** (e.g. `Prometheus/AlertsMatcher`) wrap their content in a `` ```yaml `` fence.
 - **Markdown blocks** contain free-form markdown text.
 
 #### Pull: download a document as markdown
@@ -227,12 +228,12 @@ Multiple `block=new` sections can be added to a file and pushed together:
 ```bash
 cat >> incident.md <<'EOF'
 
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 # Investigation Summary
 
 Root cause: OOM kill due to memory limit set too low.
 
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 # Recommended Actions
 
 1. Increase memory limit from 256Mi to 512Mi.

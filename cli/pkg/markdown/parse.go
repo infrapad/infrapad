@@ -15,9 +15,9 @@ import (
 // DocumentMeta holds document-level metadata from the YAML frontmatter.
 type DocumentMeta struct {
 	DocumentID string
-	Title     string
-	Namespace string
-	Status    string
+	Title      string
+	Namespace  string
+	Status     string
 }
 
 // BlockMeta holds per-block metadata from the ::infrapad_block directive.
@@ -34,8 +34,6 @@ type ParsedBlock struct {
 	Meta    BlockMeta
 	Content map[string]any // structured content: {"text": ...} for markdown, parsed YAML for others
 }
-
-
 
 // ParsedDocument is the result of parsing an infrapad markdown file.
 type ParsedDocument struct {
@@ -66,7 +64,7 @@ func Parse(src []byte) (*ParsedDocument, error) {
 		if current == nil {
 			return
 		}
-		if current.Meta.Type == "markdown" {
+		if current.Meta.Type == MarkdownTypeName {
 			current.Content = map[string]any{"text": string(src[contentStart:contentEnd])}
 		}
 	}
@@ -92,7 +90,7 @@ func Parse(src []byte) (*ParsedDocument, error) {
 		// code fence for rendering. If the first sibling is a FencedCodeBlock,
 		// extract just its inner lines — the fence is a format detail, not
 		// actual content. Any remaining siblings (decorative) are ignored.
-		if current.Meta.Type != "markdown" {
+		if current.Meta.Type != MarkdownTypeName {
 			if fcb, ok := child.(*ast.FencedCodeBlock); ok && current.Content == nil {
 				raw := fcb.Lines().Value(src)
 				var parsed map[string]any
@@ -168,5 +166,3 @@ func lineStart(src []byte, pos int) int {
 	}
 	return i
 }
-
-

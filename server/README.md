@@ -2,6 +2,12 @@
 
 ## Repository layout
 
+## Content registry
+
+The server constructs one explicit content registry at startup from the
+built-in extension constructors (`server/pkg/extensions`)
+and injects it into the controller. 
+
 ## Extension CUE schemas
 
 Extension packages define their inner-content and transient-payload Go

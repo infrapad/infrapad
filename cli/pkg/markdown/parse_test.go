@@ -12,18 +12,18 @@ title: Payment service crash loop
 namespace: payments
 status: active
 ---
-::infrapad_block{type=alerts_matcher block=1 rev=2 author=incident_detector:123}
-` + "```yaml\n" + `LabelsMatchers:
-  - name: [CrashLoopBackOff]
-  - name: [KubeNodeNotReady]
-` + "```\n" + `::infrapad_block{type=markdown block=2 rev=2 author=agentic_run_analysis:456}
+::infrapad_block{type=Prometheus/AlertsMatcher block=1 rev=2 author=incident_detector:123}
+` + "```yaml\n" + `labels_matchers:
+  - alertname: [CrashLoopBackOff]
+  - alertname: [KubeNodeNotReady]
+` + "```\n" + `::infrapad_block{type=Core/Markdown block=2 rev=2 author=agentic_run_analysis:456}
 # Initial investigation
 
 ## Situation description
 
 This incident started at 2026-07-12 12:42 by CrashLoopBackOff...
 
-::infrapad_block{type=markdown block=3 rev=1 author=agentic_run_execution:543}
+::infrapad_block{type=Core/Markdown block=3 rev=1 author=agentic_run_execution:543}
 Get the pods in the namespace
 ` + "```\n" + `$ oc get pods --namespace paymants
 ` + "```\n"
@@ -55,7 +55,7 @@ func TestParse(t *testing.T) {
 
 	// Block 1: alerts_matcher
 	b1 := doc.Blocks[0]
-	if b1.Meta.Type != "alerts_matcher" {
+	if b1.Meta.Type != "Prometheus/AlertsMatcher" {
 		t.Errorf("block 1 type = %q", b1.Meta.Type)
 	}
 	if b1.Meta.BlockNumber != 1 {
@@ -68,18 +68,18 @@ func TestParse(t *testing.T) {
 		t.Errorf("block 1 author = %q", b1.Meta.AuthorID)
 	}
 	// Non-markdown blocks should have their YAML content parsed into a map.
-	matchers, ok := b1.Content["LabelsMatchers"]
+	matchers, ok := b1.Content["labels_matchers"]
 	if !ok {
-		t.Fatalf("block 1 content missing LabelsMatchers key: %v", b1.Content)
+		t.Fatalf("block 1 content missing labels_matchers key: %v", b1.Content)
 	}
 	matcherList, ok := matchers.([]any)
 	if !ok || len(matcherList) != 2 {
-		t.Errorf("block 1 LabelsMatchers = %v, want 2-element list", matchers)
+		t.Errorf("block 1 labels_matchers = %v, want 2-element list", matchers)
 	}
 
 	// Block 2: markdown
 	b2 := doc.Blocks[1]
-	if b2.Meta.Type != "markdown" {
+	if b2.Meta.Type != "Core/Markdown" {
 		t.Errorf("block 2 type = %q", b2.Meta.Type)
 	}
 	if b2.Meta.BlockNumber != 2 {
@@ -98,7 +98,7 @@ func TestParse(t *testing.T) {
 
 	// Block 3: markdown
 	b3 := doc.Blocks[2]
-	if b3.Meta.Type != "markdown" {
+	if b3.Meta.Type != "Core/Markdown" {
 		t.Errorf("block 3 type = %q", b3.Meta.Type)
 	}
 	if b3.Meta.BlockNumber != 3 {
@@ -138,10 +138,10 @@ title: Test
 namespace: test
 status: active
 ---
-::infrapad_block{type=markdown block=1 rev=1}
+::infrapad_block{type=Core/Markdown block=1 rev=1}
 Existing content
 
-::infrapad_block{block=new type=markdown}
+::infrapad_block{block=new type=Core/Markdown}
 
 # New block heading
 
@@ -173,7 +173,7 @@ New block content.
 	if b2.Meta.BlockNumber != 0 {
 		t.Errorf("new block number = %d, want 0", b2.Meta.BlockNumber)
 	}
-	if b2.Meta.Type != "markdown" {
+	if b2.Meta.Type != "Core/Markdown" {
 		t.Errorf("new block type = %q, want markdown", b2.Meta.Type)
 	}
 	b2Text, _ := b2.Content["text"].(string)
@@ -186,7 +186,7 @@ New block content.
 }
 
 func TestParseNoFrontmatter(t *testing.T) {
-	input := "::infrapad_block{type=markdown block=1 rev=1}\nHello world\n"
+	input := "::infrapad_block{type=Core/Markdown block=1 rev=1}\nHello world\n"
 	doc, err := Parse([]byte(input))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)

@@ -31,7 +31,7 @@ export function formatDate(iso?: string): string {
  * preparation for diff rendering.
  */
 export function blockContentToText(block: InfrapadBlock): string {
-  if (block.type === "markdown") {
+  if (block.type === "Core/Markdown") {
     return (block.content.text as string) ?? "";
   }
   // Structured types: serialize content to YAML.

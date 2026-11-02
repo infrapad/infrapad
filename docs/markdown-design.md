@@ -21,7 +21,7 @@ Block
   BlockNumber     int        – position in the document (1-based, monotonic)
   RevisionNumber  int        – version of this block (1-based, monotonic)
   AuthorID        string     – who created this revision
-  Type            string     – determines content schema ("markdown", "alerts_matcher", …)
+  Type            string     – determines content schema ("Core/Markdown", "Prometheus/AlertsMatcher", …)
   Status          string     – "progressing" | "published" | "deleted"
   Content         varies     – type-specific payload
 ```
@@ -69,7 +69,7 @@ Each block starts with a leaf directive (double-colon) that carries the
 block metadata as attributes:
 
 ```
-::infrapad_block{type=alerts_matcher block=1 rev=2 author=incident_detector:123}
+::infrapad_block{type=Prometheus/AlertsMatcher block=1 rev=2 author=incident_detector:123}
 ```
 
 | Attribute | Model field            |
@@ -88,9 +88,9 @@ By default, block content is serialized as a **YAML code fence**
 (` ```yaml … ``` `). The YAML body follows the schema defined by the
 block's type. This keeps structured data unambiguous while the
 surrounding markdown stays renderable in any viewer. See the
-`alerts_matcher` block in the example document (block 1).
+`Prometheus/AlertsMatcher` block in the example document (block 1).
 
-The `markdown` block type is an exception: its content region is
+The `Core/Markdown` block type is an exception: its content region is
 **literal markdown** — no wrapper, no code fence. Standard markdown
 constructs (headings, lists, code blocks, inline formatting) are used
 as-is. See the example document's blocks 2 and 3.
@@ -104,10 +104,10 @@ as-is. See the example document's blocks 2 and 3.
 4. Collect everything after the directive line until the next
    `::infrapad_block` or EOF — this is the block content.
 5. Deserialize the content according to `type`:
-   - `markdown` → use the raw text (trimmed of leading/trailing blank
-     lines).
-   - `alerts_matcher` (and other structured types) → extract the YAML
-     code fence body and unmarshal it.
+   - `Core/Markdown` → use the raw text (trimmed of leading/trailing
+     blank lines).
+   - `Prometheus/AlertsMatcher` (and other structured types) → extract
+     the YAML code fence body and unmarshal it.
 
 ## Serialization rules
 
@@ -115,7 +115,7 @@ as-is. See the example document's blocks 2 and 3.
 2. For each block in order:
    a. Emit `::infrapad_block{type=… block=… rev=… author=…}`.
    b. Emit the content:
-      - `markdown` → write the text verbatim.
+      - `Core/Markdown` → write the text verbatim.
       - structured types → wrap the YAML serialization in a
         ` ```yaml … ``` ` fence.
 

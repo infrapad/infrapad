@@ -63,7 +63,7 @@ as an infrapad document.
 2. Sets both endpoints to `fail`.
 3. Waits for Prometheus to report both `MonitoredAppEndpointDown` alerts as firing.
 4. Creates an infrapad document titled "Monitored app incident on ..." with an
-   `alerts_matcher` block matching both endpoints, `Since` set to the start time.
+   `Prometheus/AlertsMatcher` block matching both endpoints, `since` set to the start time.
 5. Pulls the document to `./tmp/incident.md` and remembers the doc name in
    `./tmp/.doc_name` for the resolve step.
 
@@ -86,7 +86,7 @@ agent from the environment that already contains the token.
 ### `incident-resolve`
 
 1. Sets both endpoints back to `ok`.
-2. Updates the `alerts_matcher` block's `Until` field to the current time.
+2. Updates the `Prometheus/AlertsMatcher` block's `until` field to the current time.
 3. Appends a markdown block noting the alerts were resolved.
 
 ### Requirements

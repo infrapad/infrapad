@@ -18,6 +18,16 @@ import (
 // DefaultPort is the default gRPC listen port.
 const DefaultPort = 50061
 
+// rpcError maps operation failures to gRPC statuses: invalid submitted
+// content becomes an explicit invalid-argument response, anything else
+// is an unexpected server error.
+func rpcError(op string, err error) error {
+	if controller.IsInvalidInput(err) {
+		return status.Errorf(codes.InvalidArgument, "%s: %v", op, err)
+	}
+	return status.Errorf(codes.Internal, "%s: %v", op, err)
+}
+
 // Server wraps the gRPC server and the controller.
 type Server struct {
 	pb.UnimplementedInfrapadServiceServer
@@ -62,14 +72,22 @@ func (s *Server) CreateDocument(ctx context.Context, req *pb.CreateDocumentReque
 		Namespace: req.GetNamespace(),
 	}
 	for _, b := range req.GetBlocks() {
-		doc.Blocks = append(doc.Blocks, blockFromProto(b))
+		blk, err := blockFromProto(b)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "create document: %v", err)
+		}
+		doc.Blocks = append(doc.Blocks, blk)
 	}
 
 	created, err := s.ctrl.CreateDocument(ctx, doc)
 	if err != nil {
+		return nil, rpcError("create document", err)
+	}
+	out, err := documentToProto(created)
+	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create document: %v", err)
 	}
-	return &pb.CreateDocumentResponse{Document: documentToProto(created)}, nil
+	return &pb.CreateDocumentResponse{Document: out}, nil
 }
 
 // documentUIDFromName extracts the document UID from a resource name like "documents/{uid}".
@@ -87,7 +105,11 @@ func (s *Server) GetDocument(ctx context.Context, req *pb.GetDocumentRequest) (*
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get document: %v", err)
 	}
-	return &pb.GetDocumentResponse{Document: documentToProto(doc)}, nil
+	out, err := documentToProto(doc)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get document: %v", err)
+	}
+	return &pb.GetDocumentResponse{Document: out}, nil
 }
 
 func (s *Server) ListDocuments(ctx context.Context, req *pb.ListDocumentsRequest) (*pb.ListDocumentsResponse, error) {
@@ -97,7 +119,11 @@ func (s *Server) ListDocuments(ctx context.Context, req *pb.ListDocumentsRequest
 	}
 	resp := &pb.ListDocumentsResponse{}
 	for _, d := range documents {
-		resp.Documents = append(resp.Documents, documentToProto(d))
+		out, err := documentToProto(d)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "list documents: %v", err)
+		}
+		resp.Documents = append(resp.Documents, out)
 	}
 	return resp, nil
 }
@@ -108,22 +134,36 @@ func (s *Server) ListDocuments(ctx context.Context, req *pb.ListDocumentsRequest
 
 func (s *Server) AddBlock(ctx context.Context, req *pb.AddBlockRequest) (*pb.AddBlockResponse, error) {
 	documentUID := documentUIDFromParent(req.GetParent())
-	blk := blockFromProto(req.GetBlock())
+	blk, err := blockFromProto(req.GetBlock())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "add block: %v", err)
+	}
 	created, err := s.ctrl.AddBlock(ctx, documentUID, blk)
+	if err != nil {
+		return nil, rpcError("add block", err)
+	}
+	out, err := blockToProto(created, documentUID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "add block: %v", err)
 	}
-	return &pb.AddBlockResponse{Block: blockToProto(created, documentUID)}, nil
+	return &pb.AddBlockResponse{Block: out}, nil
 }
 
 func (s *Server) UpdateBlock(ctx context.Context, req *pb.UpdateBlockRequest) (*pb.UpdateBlockResponse, error) {
 	documentUID := documentUIDFromParent(req.GetParent())
-	blk := blockFromProto(req.GetBlock())
+	blk, err := blockFromProto(req.GetBlock())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "update block: %v", err)
+	}
 	updated, err := s.ctrl.UpdateBlock(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()), blk)
+	if err != nil {
+		return nil, rpcError("update block", err)
+	}
+	out, err := blockToProto(updated, documentUID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "update block: %v", err)
 	}
-	return &pb.UpdateBlockResponse{Block: blockToProto(updated, documentUID)}, nil
+	return &pb.UpdateBlockResponse{Block: out}, nil
 }
 
 func (s *Server) GetBlock(ctx context.Context, req *pb.GetBlockRequest) (*pb.GetBlockResponse, error) {
@@ -132,7 +172,11 @@ func (s *Server) GetBlock(ctx context.Context, req *pb.GetBlockRequest) (*pb.Get
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get block: %v", err)
 	}
-	return &pb.GetBlockResponse{Block: blockToProto(blk, documentUID)}, nil
+	out, err := blockToProto(blk, documentUID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get block: %v", err)
+	}
+	return &pb.GetBlockResponse{Block: out}, nil
 }
 
 func (s *Server) ListBlocks(ctx context.Context, req *pb.ListBlocksRequest) (*pb.ListBlocksResponse, error) {
@@ -143,7 +187,11 @@ func (s *Server) ListBlocks(ctx context.Context, req *pb.ListBlocksRequest) (*pb
 	}
 	resp := &pb.ListBlocksResponse{}
 	for _, b := range blocks {
-		resp.Blocks = append(resp.Blocks, blockToProto(b, documentUID))
+		out, err := blockToProto(b, documentUID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "list blocks: %v", err)
+		}
+		resp.Blocks = append(resp.Blocks, out)
 	}
 	return resp, nil
 }
@@ -156,7 +204,11 @@ func (s *Server) ListBlockHistory(ctx context.Context, req *pb.ListBlockHistoryR
 	}
 	resp := &pb.ListBlockHistoryResponse{}
 	for _, b := range revisions {
-		resp.Blocks = append(resp.Blocks, blockToProto(b, documentUID))
+		out, err := blockToProto(b, documentUID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "list block history: %v", err)
+		}
+		resp.Blocks = append(resp.Blocks, out)
 	}
 	return resp, nil
 }

@@ -122,27 +122,27 @@ create_test_doc() {
   # Add alerts_matcher block (block 1).
   $CLI block add \
     --document "$DOC_ID" \
-    --type alerts_matcher \
-    --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}]}' > /dev/null
+    --type Prometheus/AlertsMatcher \
+    --content '{"labels_matchers": [{"alertname": ["CrashLoopBackOff"]}], "since": "2026-08-14T09:00:00Z"}' > /dev/null
 
   # Update alerts_matcher to add KubeNodeNotReady (rev 2).
   $CLI block update \
     --document "$DOC_ID" \
     --block-number 1 \
-    --type alerts_matcher \
-    --content '{"LabelsMatchers": [{"name": ["CrashLoopBackOff"]}, {"name": ["KubeNodeNotReady"]}]}' > /dev/null
+    --type Prometheus/AlertsMatcher \
+    --content '{"labels_matchers": [{"alertname": ["CrashLoopBackOff"]}, {"alertname": ["KubeNodeNotReady"]}], "since": "2026-08-14T09:00:00Z"}' > /dev/null
 
   # Add markdown block (block 2).
   $CLI block add \
     --document "$DOC_ID" \
-    --type markdown \
+    --type Core/Markdown \
     --content '{"text": "initial investigation writeup\nneeds further analysis"}' > /dev/null
 
   # Update markdown block (rev 2).
   $CLI block update \
     --document "$DOC_ID" \
     --block-number 2 \
-    --type markdown \
+    --type Core/Markdown \
     --content '{"text": "updated investigation writeup\nroot cause identified"}' > /dev/null
 }
 

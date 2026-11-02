@@ -67,13 +67,14 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	addAlertsResp, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 		Parent: docName,
 		Block: &pb.Block{
-			Type: "alerts_matcher",
+			Type: "Prometheus/AlertsMatcher",
 			Content: mustStruct(t, map[string]any{
-				"LabelsMatchers": []any{
+				"labels_matchers": []any{
 					map[string]any{
-						"name": []any{"CrashLoopBackOff"},
+						"alertname": []any{"CrashLoopBackOff"},
 					},
 				},
+				"since": "2026-08-14T09:00:00Z",
 			}),
 		},
 	})
@@ -95,7 +96,7 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	addMdResp, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 		Parent: docName,
 		Block: &pb.Block{
-			Type: "markdown",
+			Type: "Core/Markdown",
 			Content: mustStruct(t, map[string]any{
 				"text": "initial investigation writeup",
 			}),
@@ -117,16 +118,17 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		Parent:      docName,
 		BlockNumber: alertsBlock.GetBlockNumber(),
 		Block: &pb.Block{
-			Type: "alerts_matcher",
+			Type: "Prometheus/AlertsMatcher",
 			Content: mustStruct(t, map[string]any{
-				"LabelsMatchers": []any{
+				"labels_matchers": []any{
 					map[string]any{
-						"name": []any{"CrashLoopBackOff"},
+						"alertname": []any{"CrashLoopBackOff"},
 					},
 					map[string]any{
-						"name": []any{"KubeNodeNotReady"},
+						"alertname": []any{"KubeNodeNotReady"},
 					},
 				},
+				"since": "2026-08-14T09:00:00Z",
 			}),
 		},
 	})
@@ -146,7 +148,7 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		Parent:      docName,
 		BlockNumber: mdBlock.GetBlockNumber(),
 		Block: &pb.Block{
-			Type: "markdown",
+			Type: "Core/Markdown",
 			Content: mustStruct(t, map[string]any{
 				"text": "updated investigation writeup",
 			}),
@@ -194,8 +196,8 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	// First revision should have 1 matcher, second should have 2.
 	am1 := alertHistory[0].GetContent().AsMap()
 	am2 := alertHistory[1].GetContent().AsMap()
-	matchers1, _ := am1["LabelsMatchers"].([]any)
-	matchers2, _ := am2["LabelsMatchers"].([]any)
+	matchers1, _ := am1["labels_matchers"].([]any)
+	matchers2, _ := am2["labels_matchers"].([]any)
 	if len(matchers1) != 1 {
 		t.Errorf("rev 1: expected 1 matcher, got %d", len(matchers1))
 	}

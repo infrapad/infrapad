@@ -92,7 +92,7 @@ func DiffBlocks(local *ParsedDocument, remote *RemoteDocument) ([]SyncAction, er
 
 // blockContentChanged compares local parsed block content with the remote block.
 func blockContentChanged(local *ParsedBlock, remote *RemoteBlock) bool {
-	if local.Meta.Type == "markdown" {
+	if local.Meta.Type == MarkdownTypeName {
 		localText, _ := local.Content["text"].(string)
 		serverText, _ := remote.Content["text"].(string)
 		// Trim trailing newlines: blank lines between block directives

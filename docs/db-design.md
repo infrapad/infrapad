@@ -4,7 +4,18 @@
 
 The database uses PostgreSQL with a **single-table inheritance (STI)** approach
 for blocks. All block types and their versions are stored in one `blocks` table
-with type-specific data in a JSONB `serialized_content` column.
+with the serialized record in a JSONB `serialized_content` column.
+
+The store is **content-type agnostic**: it persists serialized bytes and
+ordinary block metadata only. It holds no extension implementations and no
+content registry; validation, serialization, and deserialization of the host
+records are owned by the controller through the injected content registry
+(see `server/pkg/controller` and `server/pkg/content`).
+
+The `type` column carries the canonical namespaced content type name
+(e.g. `Core/Markdown`), and `serialized_content` holds the **full host record
+envelope** (event timestamp, optional generated key, and the inner extension
+content) — not the flat inner content value exposed by the public API.
 
 ## Schema
 

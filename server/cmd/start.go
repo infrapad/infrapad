@@ -16,7 +16,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
+	"github.com/infrapad/infrapad/server/pkg/extensions/core"
+	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 	"github.com/infrapad/infrapad/server/pkg/store/postgres"
 	grpcTransport "github.com/infrapad/infrapad/server/pkg/transport/grpc"
 	transporthttp "github.com/infrapad/infrapad/server/pkg/transport/http"
@@ -64,7 +67,14 @@ var startCmd = &cobra.Command{
 		defer db.Close()
 
 		store := postgres.NewStore(db)
-		ctrl := controller.New(store)
+		// One explicit registry of the built-in extensions, constructed at
+		// startup and injected into the host/controller path. Additional
+		// extensions register their content types here.
+		registry, err := content.NewRegistry(core.ContentTypes(), prometheus.ContentTypes())
+		if err != nil {
+			return fmt.Errorf("build content registry: %w", err)
+		}
+		ctrl := controller.New(store, registry)
 		srv := grpcTransport.New(ctrl)
 
 		// 1. Start gRPC listener.

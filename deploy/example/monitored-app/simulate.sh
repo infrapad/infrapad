@@ -20,7 +20,7 @@ PROMETHEUS_URL="${PROMETHEUS_URL:-http://localhost:9090}"
 
 INFRAPAD_PROJECT_DIR="${INFRAPAD_PROJECT_DIR:-$(cd "${SCRIPT_DIR}/../../.." && pwd)}"
 
-declare -g AUTH_USE_ENV
+declare -g AUTH_USE_ENV=""
 
 # ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -233,17 +233,17 @@ cmd_incident_start() {
   # Add alerts_matcher block.
   local content
   content=$(jq -n --arg since "$since" '{
-    LabelsMatchers: [
-      {name: ["MonitoredAppEndpointDown"], endpoint: ["endpoint1"]},
-      {name: ["MonitoredAppEndpointDown"], endpoint: ["endpoint2"]}
+    labels_matchers: [
+      {alertname: ["MonitoredAppEndpointDown"], endpoint: ["endpoint1"]},
+      {alertname: ["MonitoredAppEndpointDown"], endpoint: ["endpoint2"]}
     ],
-    Since: $since,
-    Until: "0001-01-01T00:00:00Z"
+    since: $since,
+    until: "0001-01-01T00:00:00Z"
   }')
 
   ${INFRAPAD_CLI} block add \
     --document "$doc_name" \
-    --type alerts_matcher \
+    --type Prometheus/AlertsMatcher \
     --content "$content"
 
   log "  alerts_matcher block added."
@@ -297,11 +297,11 @@ cmd_incident_resolve() {
 
   # Read the Since value from the current file.
   local since
-  since=$(grep -oP 'Since:\s*"?\K[^"\n]+' "$INCIDENT_FILE" | head -1 | tr -d '[:space:]')
+  since=$(grep -oP 'since:\s*"?\K[^"\n]+' "$INCIDENT_FILE" | head -1 | tr -d '[:space:]')
   since=${since:-0001-01-01T00:00:00Z}
 
   # Update the Until in the markdown file.
-  sed -i 's|Until:\s*"\?0001-01-01T00:00:00Z"\?|Until: "'"${until}"'"|' "$INCIDENT_FILE"
+  sed -i 's|until:\s*"\?0001-01-01T00:00:00Z"\?|until: "'"${until}"'"|' "$INCIDENT_FILE"
 
   # Push the updated block 1.
   ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE"
@@ -314,7 +314,7 @@ cmd_incident_resolve() {
   # Remove trailing blank lines, then append the resolution block.
   sed -i -e :a -e '/^\s*$/{ $d; N; ba; }' "$INCIDENT_FILE"
   cat >> "$INCIDENT_FILE" <<EOF
-::infrapad_block{type=markdown block=new}
+::infrapad_block{type=Core/Markdown block=new}
 # Incident resolved
 
 The alerts have been resolved at ${until}. Both endpoints are back to healthy state.

@@ -93,7 +93,7 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 				"name": "documents/doc %?/blocks/1",
 				"blockNumber": 1,
 				"revisionNumber": 2,
-				"type": "markdown",
+				"type": "Core/Markdown",
 				"createdAt": "2026-08-20T15:15:03Z",
 				"content": {"text": "hello"}
 			},
@@ -110,7 +110,7 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	block, err := client.AddBlock(context.Background(), "documents/doc %?", &pb.Block{Type: "markdown", Content: content})
+	block, err := client.AddBlock(context.Background(), "documents/doc %?", &pb.Block{Type: "Core/Markdown", Content: content})
 	requestErr := <-requestErrors
 	if requestErr != nil {
 		t.Fatal(requestErr)

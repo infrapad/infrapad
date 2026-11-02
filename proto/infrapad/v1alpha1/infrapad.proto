@@ -62,8 +62,11 @@ message Block {
         [ (google.api.field_behavior) = OUTPUT_ONLY ];
 
     // Arbitrary content payload; structure is determined by `type`.
-    // E.g. for "markdown": {"text": "…"}
-    // E.g. for "alerts_matcher": {"labels_matchers": [...], "since": "…"}
+    // The value is the inner extension content, not a host record
+    // envelope: producers never supply host timestamps.
+    // E.g. for "Core/Markdown": {"text": "…"}
+    // E.g. for "Prometheus/AlertsMatcher":
+    //   {"labels_matchers": [...], "since": "…"}
     google.protobuf.Struct content = 10 [ (google.api.field_behavior) = REQUIRED ];
 }
 

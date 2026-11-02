@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
+	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/model"
 )
 
@@ -15,7 +16,7 @@ import (
 // model → proto
 // ---------------------------------------------------------------------------
 
-func documentToProto(d model.Document) *pb.Document {
+func documentToProto(d model.Document) (*pb.Document, error) {
 	out := &pb.Document{
 		Name:      "documents/" + string(d.Uid),
 		Status:    string(d.Status),
@@ -26,12 +27,16 @@ func documentToProto(d model.Document) *pb.Document {
 		out.CreatedAt = timestamppb.New(d.CreatedAt)
 	}
 	for _, b := range d.Blocks {
-		out.Blocks = append(out.Blocks, blockToProto(b, d.Uid))
+		block, err := blockToProto(b, d.Uid)
+		if err != nil {
+			return nil, err
+		}
+		out.Blocks = append(out.Blocks, block)
 	}
-	return out
+	return out, nil
 }
 
-func blockToProto(b model.Block, documentUID model.DocumentUID) *pb.Block {
+func blockToProto(b model.Block, documentUID model.DocumentUID) (*pb.Block, error) {
 	out := &pb.Block{
 		Name:           fmt.Sprintf("documents/%s/blocks/%d", string(documentUID), b.BlockNumber),
 		BlockNumber:    int32(b.BlockNumber),
@@ -44,30 +49,39 @@ func blockToProto(b model.Block, documentUID model.DocumentUID) *pb.Block {
 		out.CreatedAt = timestamppb.New(b.CreatedAt)
 	}
 
-	// Convert model.BlockContent → structpb.Struct via SerializedContent.
-	// The serialized JSON is the canonical representation that gets
-	// exposed as the generic Struct in the API.
-	if b.Content != nil {
-		sc, err := b.Content.Serialize()
-		if err == nil {
-			var m map[string]any
-			if err := json.Unmarshal(sc.Data, &m); err == nil {
-				if s, err := structpb.NewStruct(m); err == nil {
-					out.Content = s
-				}
-			}
+	// The public API exposes the inner extension content value, not the
+	// host record envelope: producers never see or supply host timestamps.
+	if b.Record != nil {
+		item, ok := b.Record.(content.ItemRecord)
+		if !ok {
+			// Grouped records: the public representation of grouped
+			// records is deferred to a later task.
+			return out, nil
 		}
+		data, err := json.Marshal(item.Content())
+		if err != nil {
+			return nil, fmt.Errorf("block %d: encode inner content: %w", b.BlockNumber, err)
+		}
+		var m map[string]any
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, fmt.Errorf("block %d: decode inner content: %w", b.BlockNumber, err)
+		}
+		s, err := structpb.NewStruct(m)
+		if err != nil {
+			return nil, fmt.Errorf("block %d: convert content: %w", b.BlockNumber, err)
+		}
+		out.Content = s
 	}
-	return out
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------
 // proto → model
 // ---------------------------------------------------------------------------
 
-func blockFromProto(b *pb.Block) model.Block {
+func blockFromProto(b *pb.Block) (model.Block, error) {
 	if b == nil {
-		return model.Block{}
+		return model.Block{}, nil
 	}
 	out := model.Block{
 		BlockNumber:    model.BlockNumber(b.BlockNumber),
@@ -80,19 +94,16 @@ func blockFromProto(b *pb.Block) model.Block {
 		out.CreatedAt = b.CreatedAt.AsTime()
 	}
 
-	// Convert structpb.Struct → model.SerializedContent, then deserialize
-	// into the registered BlockContent type via the model's deserializer
-	// registry.
-	if b.Content != nil && b.Type != "" {
+	// The public API carries the inner extension content value. It is
+	// passed through as raw JSON; validation, record construction, and
+	// host timestamps are owned by the controller through the content
+	// registry. Conversion failures are propagated, never discarded.
+	if b.Content != nil {
 		data, err := json.Marshal(b.Content.AsMap())
-		if err == nil {
-			sc := model.SerializedContent{Type: b.Type, Data: data}
-			content, err := model.DeserializeBlockContent(sc)
-			if err == nil {
-				out.Content = content
-				out.SerializedContent = sc
-			}
+		if err != nil {
+			return model.Block{}, fmt.Errorf("encode block content: %w", err)
 		}
+		out.Content = data
 	}
-	return out
+	return out, nil
 }

@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -74,7 +75,7 @@ func helperAddBlock(t *testing.T, client pb.InfrapadServiceClient, docName strin
 	resp, err := client.AddBlock(context.Background(), &pb.AddBlockRequest{
 		Parent: docName,
 		Block: &pb.Block{
-			Type:    "markdown",
+			Type:    "Core/Markdown",
 			Content: validContent(t),
 		},
 	})
@@ -136,7 +137,7 @@ func TestInvalidData(t *testing.T) {
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 			Parent: "",
 			Block: &pb.Block{
-				Type:    "markdown",
+				Type:    "Core/Markdown",
 				Content: validContent(t),
 			},
 		})
@@ -148,7 +149,7 @@ func TestInvalidData(t *testing.T) {
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 			Parent: "documents/does-not-exist-12345",
 			Block: &pb.Block{
-				Type:    "markdown",
+				Type:    "Core/Markdown",
 				Content: validContent(t),
 			},
 		})
@@ -184,10 +185,68 @@ func TestInvalidData(t *testing.T) {
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 			Parent: validDocName,
 			Block: &pb.Block{
-				Type: "markdown",
+				Type: "Core/Markdown",
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "no content")
+	})
+
+	// Content-type validation is enforced by the server: legacy type
+	// names, unknown fields, and normalized-away field spellings are
+	// rejected with InvalidArgument, with the offending field paths in
+	// the status message.
+	t.Run("AddBlock/invalid_content", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			typeName string
+			content  map[string]any
+			// messageSubstrings are expected offending field paths in the
+			// status message (optional).
+			messageSubstrings []string
+		}{
+			{
+				name:     "legacy type name",
+				typeName: "markdown",
+				content:  map[string]any{"text": "x"},
+			},
+			{
+				name:              "unknown content field",
+				typeName:          "Core/Markdown",
+				content:           map[string]any{"text": "x", "bogus": 1},
+				messageSubstrings: []string{"bogus"},
+			},
+			{
+				name:     "uppercase alert fields",
+				typeName: "Prometheus/AlertsMatcher",
+				content: map[string]any{
+					"LabelsMatchers": []any{map[string]any{"alertname": []any{"x"}}},
+					"Since":          "2026-08-14T09:00:00Z",
+				},
+				messageSubstrings: []string{"LabelsMatchers", "Since"},
+			},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				s, err := structpb.NewStruct(tc.content)
+				if err != nil {
+					t.Fatalf("structpb.NewStruct: %v", err)
+				}
+				_, err = client.AddBlock(ctx, &pb.AddBlockRequest{
+					Parent: validDocName,
+					Block: &pb.Block{
+						Type:    tc.typeName,
+						Content: s,
+					},
+				})
+				requireCode(t, err, codes.InvalidArgument, tc.name)
+				msg := status.Convert(err).Message()
+				for _, want := range tc.messageSubstrings {
+					if !strings.Contains(msg, want) {
+						t.Errorf("error message lacks offending field path %q: %s", want, msg)
+					}
+				}
+			})
+		}
 	})
 
 	// ===================================================================
@@ -200,7 +259,7 @@ func TestInvalidData(t *testing.T) {
 			Parent:      "",
 			BlockNumber: validBlock.GetBlockNumber(),
 			Block: &pb.Block{
-				Type:    "markdown",
+				Type:    "Core/Markdown",
 				Content: validContent(t),
 			},
 		})
@@ -213,7 +272,7 @@ func TestInvalidData(t *testing.T) {
 			Parent:      "documents/does-not-exist-12345",
 			BlockNumber: 1,
 			Block: &pb.Block{
-				Type:    "markdown",
+				Type:    "Core/Markdown",
 				Content: validContent(t),
 			},
 		})
@@ -227,7 +286,7 @@ func TestInvalidData(t *testing.T) {
 			Parent:      validDocName,
 			BlockNumber: 0,
 			Block: &pb.Block{
-				Type:    "markdown",
+				Type:    "Core/Markdown",
 				Content: validContent(t),
 			},
 		})
@@ -240,7 +299,7 @@ func TestInvalidData(t *testing.T) {
 			Parent:      validDocName,
 			BlockNumber: 99999,
 			Block: &pb.Block{
-				Type:    "markdown",
+				Type:    "Core/Markdown",
 				Content: validContent(t),
 			},
 		})

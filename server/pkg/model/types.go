@@ -2,9 +2,9 @@ package model
 
 import (
 	"encoding/json"
-	"fmt"
-	"sync"
 	"time"
+
+	"github.com/infrapad/infrapad/server/pkg/content"
 )
 
 type Document struct {
@@ -26,6 +26,20 @@ const (
 	ArchivedDocument DocumentStatus = "archived"
 )
 
+// Block is one revision of a block in a document.
+//
+// Content handling is split across three representations, each owned by a
+// different layer:
+//
+//   - Content is the raw inner content JSON submitted through the public
+//     API ({"text": "..."} for Core/Markdown). Producers never supply host
+//     record envelopes or timestamps. The controller validates it against
+//     the registered content type and builds the host record from it.
+//   - Record is the deserialized host record (content.Record). The
+//     controller converts between Content and Record.
+//   - SerializedRecord is the serialized full host record envelope. The
+//     controller produces it for persistence; the store persists it
+//     as-is, without any content-type knowledge.
 type Block struct {
 	// The unique identifier of the block inside the document.
 	// Monotonically increasing, staring from 1.
@@ -36,19 +50,25 @@ type Block struct {
 	// the current version of the block with the corresponding BlockNumber.
 	RevisionNumber RevisionNumber
 	AuthorID       AuthorID
-	Type           string
-	Status         BlockStatus
-	CreatedAt      time.Time
+	// Type is the canonical namespaced content type name
+	// (e.g. "Core/Markdown").
+	Type      string
+	Status    BlockStatus
+	CreatedAt time.Time
 
-	// Content is the deserialized block content.
-	// Used by the controller layer; the store layer should use
-	// SerializedContent instead.
-	Content BlockContent
+	// Content is the raw inner content JSON submitted through the public
+	// API; see the struct documentation. Only meaningful on input (the
+	// controller consumes it when building the record).
+	Content json.RawMessage
 
-	// SerializedContent is the serialized form of the block content.
-	// Used by the store layer for persistence; the controller converts
-	// between Content and SerializedContent.
-	SerializedContent SerializedContent
+	// Record is the deserialized host record; see the struct documentation.
+	// It is the authoritative in-memory form used by the controller and
+	// transport layers.
+	Record content.Record
+
+	// SerializedRecord is the serialized full host record envelope used by
+	// the store layer for persistence; see the struct documentation.
+	SerializedRecord SerializedRecord
 }
 
 type BlockNumber int
@@ -62,130 +82,15 @@ const (
 	DeletedBlock     = "deleted"
 )
 
-// SerializedContent holds the type-tagged serialized form of a block's content.
-// The store layer works exclusively with this struct for persistence.
-type SerializedContent struct {
+// SerializedRecord holds the type-tagged serialized form of a block's full
+// host record envelope. The store layer works exclusively with this struct
+// for persistence; (de)serialization is owned by the controller through the
+// content registry.
+type SerializedRecord struct {
+	// Type is the canonical namespaced content type name; it must match
+	// the record's own type association and the block's Type.
 	Type string
+	// Data is the JSON encoding of the full host record (timestamp,
+	// optional key, and inner content), not just the flat inner content.
 	Data []byte
-}
-
-// BlockContent is the interface that every block content type must implement.
-type BlockContent interface {
-	// Render produces the plain-text representation of the content.
-	Render() string
-	// Serialize returns the serialized form of the content.
-	Serialize() (SerializedContent, error)
-}
-
-// BlockContentDeserializer is a function that reconstructs a BlockContent
-// from its serialized data.
-type BlockContentDeserializer func(data []byte) (BlockContent, error)
-
-var (
-	deserializersMu sync.RWMutex
-	deserializers   = map[string]BlockContentDeserializer{}
-)
-
-// RegisterBlockContentType registers a deserializer for a given content type.
-// It is typically called from init() functions of packages that define
-// concrete BlockContent implementations.
-func RegisterBlockContentType(typeName string, fn BlockContentDeserializer) {
-	deserializersMu.Lock()
-	defer deserializersMu.Unlock()
-	deserializers[typeName] = fn
-}
-
-// DeserializeBlockContent looks up the registered deserializer for sc.Type
-// and uses it to reconstruct a BlockContent value.
-func DeserializeBlockContent(sc SerializedContent) (BlockContent, error) {
-	deserializersMu.RLock()
-	fn, ok := deserializers[sc.Type]
-	deserializersMu.RUnlock()
-	if !ok {
-		return nil, fmt.Errorf("no deserializer registered for block content type %q", sc.Type)
-	}
-	return fn(sc.Data)
-}
-
-type MarkdownBC struct {
-	text string
-}
-
-// NewMarkdownBC creates a MarkdownBC with the given text content.
-func NewMarkdownBC(text string) MarkdownBC {
-	return MarkdownBC{text: text}
-}
-
-func (m MarkdownBC) Render() string {
-	return m.text
-}
-
-func (m MarkdownBC) Serialize() (SerializedContent, error) {
-	data, err := json.Marshal(struct {
-		Text string `json:"text"`
-	}{Text: m.text})
-	if err != nil {
-		return SerializedContent{}, err
-	}
-	return SerializedContent{Type: "markdown", Data: data}, nil
-}
-
-var _ BlockContent = MarkdownBC{}
-
-func init() {
-	RegisterBlockContentType("markdown", func(data []byte) (BlockContent, error) {
-		var v struct {
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal(data, &v); err != nil {
-			return nil, err
-		}
-		return MarkdownBC{text: v.Text}, nil
-	})
-}
-
-type AlertsMatcherBC struct {
-	// LabelsMatchers represent the conditions to match the alerts.
-	// Semantics:
-	//    [
-	//      { "a":["b",],
-	//        "c":["d", "e"]},
-	//      { "g":["h"] }
-	//    ]
-	//  means:
-	//    (
-	//      (alert["a"] == "b") and
-	//      ((alert["c"] == "d") or (alert["c"] == "e"))
-	//    ) or (
-	//      (alert["g"] == "h")
-	//    )
-	LabelsMatchers []map[string][]string
-	Since          time.Time
-	// Zero time means right-open interval.
-	Until time.Time
-}
-
-func (am AlertsMatcherBC) Render() string {
-	// TODO: implement simple string representation
-	return fmt.Sprintf("%v %s %s", am.LabelsMatchers, am.Since, am.Until)
-}
-
-func (am AlertsMatcherBC) Serialize() (SerializedContent, error) {
-	data, err := json.Marshal(am)
-	if err != nil {
-		return SerializedContent{}, err
-	}
-	return SerializedContent{Type: "alerts_matcher", Data: data}, nil
-}
-
-var _ BlockContent = AlertsMatcherBC{}
-
-func init() {
-	RegisterBlockContentType("alerts_matcher", func(data []byte) (BlockContent, error) {
-		var v AlertsMatcherBC
-		if err := json.Unmarshal(data, &v); err != nil {
-			return nil, err
-		}
-		return v, nil
-	})
 }

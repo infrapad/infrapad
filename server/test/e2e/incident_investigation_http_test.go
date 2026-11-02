@@ -102,13 +102,14 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	}
 	httpDo(t, "POST", docURL+"/blocks", map[string]any{
 		"block": map[string]any{
-			"type": "alerts_matcher",
+			"type": "Prometheus/AlertsMatcher",
 			"content": map[string]any{
-				"LabelsMatchers": []any{
+				"labels_matchers": []any{
 					map[string]any{
-						"name": []any{"CrashLoopBackOff"},
+						"alertname": []any{"CrashLoopBackOff"},
 					},
 				},
+				"since": "2026-08-14T09:00:00Z",
 			},
 		},
 	}, &addAlertsResp)
@@ -132,7 +133,7 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	}
 	httpDo(t, "POST", docURL+"/blocks", map[string]any{
 		"block": map[string]any{
-			"type": "markdown",
+			"type": "Core/Markdown",
 			"content": map[string]any{
 				"text": "initial investigation writeup",
 			},
@@ -155,16 +156,17 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	}
 	httpDo(t, "PUT", fmt.Sprintf("%s/blocks/%d", docURL, addAlertsResp.Block.BlockNumber), map[string]any{
 		"block": map[string]any{
-			"type": "alerts_matcher",
+			"type": "Prometheus/AlertsMatcher",
 			"content": map[string]any{
-				"LabelsMatchers": []any{
+				"labels_matchers": []any{
 					map[string]any{
-						"name": []any{"CrashLoopBackOff"},
+						"alertname": []any{"CrashLoopBackOff"},
 					},
 					map[string]any{
-						"name": []any{"KubeNodeNotReady"},
+						"alertname": []any{"KubeNodeNotReady"},
 					},
 				},
+				"since": "2026-08-14T09:00:00Z",
 			},
 		},
 	}, &updateAlertsResp)
@@ -185,7 +187,7 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	}
 	httpDo(t, "PUT", fmt.Sprintf("%s/blocks/%d", docURL, addMdResp.Block.BlockNumber), map[string]any{
 		"block": map[string]any{
-			"type": "markdown",
+			"type": "Core/Markdown",
 			"content": map[string]any{
 				"text": "updated investigation writeup",
 			},
@@ -236,8 +238,8 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	}
 
 	// First revision should have 1 matcher, second should have 2.
-	matchers1, _ := histResp.Blocks[0].Content["LabelsMatchers"].([]any)
-	matchers2, _ := histResp.Blocks[1].Content["LabelsMatchers"].([]any)
+	matchers1, _ := histResp.Blocks[0].Content["labels_matchers"].([]any)
+	matchers2, _ := histResp.Blocks[1].Content["labels_matchers"].([]any)
 	if len(matchers1) != 1 {
 		t.Errorf("rev 1: expected 1 matcher, got %d", len(matchers1))
 	}

@@ -14,7 +14,7 @@ const document = {
       name: "documents/doc-1/blocks/1",
       blockNumber: 1,
       revisionNumber: 2,
-      type: "markdown",
+      type: "Core/Markdown",
       status: "published",
       content: { text: "**Service recovered** after the deployment was rolled back. <script>window.infrapadXss = true</script>" },
     },
@@ -22,11 +22,11 @@ const document = {
       name: "documents/doc-1/blocks/2",
       blockNumber: 2,
       revisionNumber: 1,
-      type: "alerts_matcher",
+      type: "Prometheus/AlertsMatcher",
       content: {
-        LabelsMatchers: [{ name: ["EndpointDown"], severity: ["critical"] }],
-        Since: "2025-01-02T03:00:00Z",
-        Until: "2025-01-02T03:05:00Z",
+        labels_matchers: [{ alertname: ["EndpointDown"], severity: ["critical"] }],
+        since: "2025-01-02T03:00:00Z",
+        until: "2025-01-02T03:05:00Z",
       },
     },
   ],
@@ -116,7 +116,7 @@ test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
   await expect(page.locator(".infrapad-markdown-content strong")).toHaveText("Service recovered");
   expect(await page.evaluate(() => (window as Window & { infrapadXss?: boolean }).infrapadXss)).toBeUndefined();
   await expect(page.locator(".infrapad-markdown-content script")).toHaveCount(0);
-  await expect(page.getByText("name=EndpointDown, severity=critical")).toBeVisible();
+  await expect(page.getByText("alertname=EndpointDown, severity=critical")).toBeVisible();
   await expect(page.locator(".infrapad-alerts-chart-container svg").first()).toBeVisible();
   await page.getByRole("button", { name: /rev 2/ }).click();
   await expect(page.getByText("Revision History")).toBeVisible();

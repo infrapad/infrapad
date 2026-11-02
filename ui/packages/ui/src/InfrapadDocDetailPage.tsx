@@ -54,9 +54,9 @@ function statusColor(
 
 function blockTypeLabel(type: string): string {
   switch (type) {
-    case "markdown":
+    case "Core/Markdown":
       return "Markdown";
-    case "alerts_matcher":
+    case "Prometheus/AlertsMatcher":
       return "Alert Matcher";
     default:
       return type;
@@ -78,10 +78,10 @@ function MarkdownBlockContent({ text }: { text: string }) {
 
 /** Render an alerts_matcher block as structured data + live timeline chart. */
 function AlertsMatcherBlockContent({ content }: { content: Record<string, unknown> }) {
-  const matchers = content.LabelsMatchers as
+  const matchers = content.labels_matchers as
     Array<Record<string, string[]>> | undefined;
-  const since = content.Since as string | undefined;
-  const until = content.Until as string | undefined;
+  const since = content.since as string | undefined;
+  const until = content.until as string | undefined;
   // "0001-01-01T00:00:00Z" is the Go zero time — treat as "ongoing"
   const isOngoing = !until || until.startsWith("0001-01-01");
 
@@ -163,11 +163,11 @@ function GenericBlockContent({
 /** Render a single block's content based on its type. */
 function renderBlockContent(block: InfrapadBlock) {
   switch (block.type) {
-    case "markdown":
+    case "Core/Markdown":
       return (
         <MarkdownBlockContent text={(block.content.text as string) ?? ""} />
       );
-    case "alerts_matcher":
+    case "Prometheus/AlertsMatcher":
       return <AlertsMatcherBlockContent content={block.content} />;
     default:
       return <GenericBlockContent content={block.content} />;
@@ -206,7 +206,7 @@ function BlockCard({ block, docId }: { block: InfrapadBlock; docId: string }) {
             {blockTypeLabel(block.type)}
           </Label>
           <Label color="orange" isCompact>
-            {block.type === "alerts_matcher"
+            {block.type === "Prometheus/AlertsMatcher"
               ? "automation: Incident Detector"
               : "AI agent: investigator"}
           </Label>
