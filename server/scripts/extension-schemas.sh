@@ -21,6 +21,8 @@ set -euo pipefail
 # Explicit list of schema inputs: Go packages relative to server/.
 INPUTS=(
 	pkg/extensions/aiagent
+	pkg/extensions/core
+	pkg/extensions/prometheus
 	pkg/extensions/slack
 )
 
