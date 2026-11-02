@@ -60,6 +60,16 @@ type ExpansionResult struct {
 	Blocks []EmittedBlock
 }
 
+// Members returns the keyed constituents of all emitted blocks in emission
+// order (collections flattened), for host grouping/reconciliation.
+func (r ExpansionResult) Members() []KeyedRecord {
+	var members []KeyedRecord
+	for _, block := range r.Blocks {
+		members = append(members, Members(block.Record)...)
+	}
+	return members
+}
+
 // EmittedBlock is one keyed output record.
 type EmittedBlock struct {
 	// Record is a keyed standalone record, or a GroupableRecord for

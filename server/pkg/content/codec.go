@@ -12,7 +12,8 @@ import (
 // ---------------------------------------------------------------------------
 
 // DecodeContent decodes an inner content JSON value into T. Content types
-// typically implement DecodeJSON with it. Schema validation is separate.
+// typically implement DecodeJSON with it. Schema validation happens before
+// in Registry.DecodeContent.
 func DecodeContent[T any](data json.RawMessage) (Content, error) {
 	var value T
 	if err := json.Unmarshal(data, &value); err != nil {
@@ -107,64 +108,65 @@ func WithContent[T any](existing Record, value T) (Record, error) {
 // schema evolution (upgrades must run before validation).
 // ---------------------------------------------------------------------------
 
-// CheckRecord validates host-owned record shape and metadata, independently
+// checkShape validates host-owned record shape and metadata, independently
 // of CUE validation of inner content: a registered-looking type association,
 // non-zero timestamps, non-empty unique keys, and a shape matching the type's
 // grouping capability (groupable types are always non-empty collections).
-func CheckRecord(record Record) error {
+// Failures are record-stage *ValidationError values.
+func checkShape(record Record) error {
 	if record == nil {
-		return fmt.Errorf("record is nil")
+		return recordError(nil, "record is nil")
 	}
 	ct := record.ContentType()
 	if ct == nil {
-		return fmt.Errorf("record %T has no content type", record)
+		return recordError(nil, "record %T has no content type", record)
 	}
 	if _, groupable := ct.(GroupableContentType); groupable {
 		collection, ok := record.(GroupableRecord)
 		if !ok {
-			return fmt.Errorf("%s: groupable type requires a collection record, got %T", ct.Name(), record)
+			return recordError(ct, "groupable type requires a collection record, got %T", record)
 		}
 		items := collection.KeyedItems()
 		if len(items) == 0 {
-			return fmt.Errorf("%s: collection must not be empty", ct.Name())
+			return recordError(ct, "collection must not be empty")
 		}
 		seen := make(map[string]bool, len(items))
-		for _, item := range items {
+		for n, item := range items {
 			if err := checkItem(ct, item); err != nil {
-				return err
+				return locateError(err, atMember(n, item.Key()))
 			}
 			if item.ContentType() != ct {
-				return fmt.Errorf("%s: collection member %q has content type %s", ct.Name(), item.Key(), typeName(item.ContentType()))
+				return locateError(recordError(ct, "collection member has content type %s", typeName(item.ContentType())), atMember(n, item.Key()))
 			}
 			if seen[item.Key()] {
-				return fmt.Errorf("%s: duplicate collection member key %q", ct.Name(), item.Key())
+				return locateError(recordError(ct, "duplicate collection member key %q", item.Key()), atMember(n, item.Key()))
 			}
 			seen[item.Key()] = true
 		}
 		return nil
 	}
 	if _, isCollection := record.(GroupableRecord); isCollection {
-		return fmt.Errorf("%s: non-groupable type cannot be stored as a collection", ct.Name())
+		return recordError(ct, "non-groupable type cannot be stored as a collection")
 	}
 	return checkItem(ct, record)
 }
 
 func checkItem(ct ContentType, record Record) error {
 	if _, ok := record.(ItemRecord); !ok {
-		return fmt.Errorf("%s: expected an individual record, got %T", ct.Name(), record)
+		return recordError(ct, "expected an individual record, got %T", record)
 	}
 	if record.Timestamp().IsZero() {
-		return fmt.Errorf("%s: record requires a timestamp", ct.Name())
+		return recordError(ct, "record requires a timestamp")
 	}
 	if keyed, ok := record.(KeyedRecord); ok && keyed.Key() == "" {
-		return fmt.Errorf("%s: keyed record requires a non-empty key", ct.Name())
+		return recordError(ct, "keyed record requires a non-empty key")
 	}
 	return nil
 }
 
 // EncodeRecord serializes a host record after checking its shape.
 func EncodeRecord(record Record) (json.RawMessage, error) {
-	if err := CheckRecord(record); err != nil {
+	if err := checkShape(record); err != nil {
 		return nil, err
 	}
 	return json.Marshal(record)
@@ -182,7 +184,9 @@ type wireCollection struct {
 }
 
 // DecodeRecord restores a host record of the named registered type,
-// delegating only inner content to the extension's DecodeJSON.
+// delegating only inner content to the extension's DecodeJSON. Each inner
+// value is validated against its content schema (see DecodeContent); the
+// envelope and metadata are checked separately as host record shape.
 func (r *Registry) DecodeRecord(name string, data json.RawMessage) (Record, error) {
 	ct, err := r.Lookup(name)
 	if err != nil {
@@ -192,19 +196,19 @@ func (r *Registry) DecodeRecord(name string, data json.RawMessage) (Record, erro
 	if groupable, ok := ct.(GroupableContentType); ok {
 		var wire wireCollection
 		if err := decodeStrict(data, &wire); err != nil {
-			return nil, fmt.Errorf("%s: decode collection record: %w", name, err)
+			return nil, recordError(ct, "decode collection record: %w", err)
 		}
 		if len(wire.Items) == 0 {
-			return nil, fmt.Errorf("%s: collection must not be empty", name)
+			return nil, recordError(ct, "collection must not be empty")
 		}
 		items := make([]KeyedRecord, 0, len(wire.Items))
-		for _, w := range wire.Items {
+		for n, w := range wire.Items {
 			if w.KeyValue == nil {
-				return nil, fmt.Errorf("%s: collection member requires a key", name)
+				return nil, locateError(recordError(ct, "collection member requires a key"), atMember(n, ""))
 			}
 			item, err := r.decodeItem(ct, w)
 			if err != nil {
-				return nil, err
+				return nil, locateError(err, atMember(n, *w.KeyValue))
 			}
 			items = append(items, item.(KeyedRecord))
 		}
@@ -214,13 +218,13 @@ func (r *Registry) DecodeRecord(name string, data json.RawMessage) (Record, erro
 	} else {
 		var wire wireItem
 		if err := decodeStrict(data, &wire); err != nil {
-			return nil, fmt.Errorf("%s: decode record: %w", name, err)
+			return nil, recordError(ct, "decode record: %w", err)
 		}
 		if record, err = r.decodeItem(ct, wire); err != nil {
 			return nil, err
 		}
 	}
-	if err := CheckRecord(record); err != nil {
+	if err := checkShape(record); err != nil {
 		return nil, err
 	}
 	return record, nil
@@ -228,7 +232,7 @@ func (r *Registry) DecodeRecord(name string, data json.RawMessage) (Record, erro
 
 func (r *Registry) decodeItem(ct ContentType, wire wireItem) (Record, error) {
 	if len(wire.ContentValue) == 0 {
-		return nil, fmt.Errorf("%s: record requires content", ct.Name())
+		return nil, recordError(ct, "record requires content")
 	}
 	value, err := r.DecodeContent(ct.Name(), wire.ContentValue)
 	if err != nil {

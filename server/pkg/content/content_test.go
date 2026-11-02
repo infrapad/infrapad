@@ -3,6 +3,9 @@ package content
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
 	"testing"
 	"time"
 )
@@ -139,7 +142,7 @@ func TestCodecAndCollections(t *testing.T) {
 	}
 }
 
-func TestCheckExpansionIdentities(t *testing.T) {
+func TestValidateExpansionIdentities(t *testing.T) {
 	n, l, r := newTypes()
 	registry, err := NewRegistry([]ContentType{n, l, r})
 	if err != nil {
@@ -167,18 +170,116 @@ func TestCheckExpansionIdentities(t *testing.T) {
 		"payload to plain": {Record: primary, Blocks: []EmittedBlock{{Record: NewKeyedItem(n, "a", ts, text{}), ExpansionPayload: json.RawMessage(`{}`)}}},
 	}
 	for name, result := range cases {
-		if _, err := registry.CheckExpansion(primary, result); err == nil {
-			t.Errorf("%s: accepted", name)
-		} else {
-			t.Logf("%s: %v", name, err)
+		err := registry.ValidateExpansion(primary, result)
+		var validation *ValidationError
+		if !errors.As(err, &validation) || validation.Stage != StageRecord {
+			t.Errorf("%s: expected a host record validation error, got %v", name, err)
 		}
 	}
 	valid := ExpansionResult{Record: primary, Blocks: []EmittedBlock{
 		{Record: collection("a", "b")},
 		{Record: NewKeyedItem(r, "nested", ts, text{}), ExpansionPayload: json.RawMessage(`{"texts":[]}`)},
 	}}
-	members, err := registry.CheckExpansion(primary, valid)
-	if err != nil || len(members) != 3 {
-		t.Fatalf("valid expansion: %v, %d members", err, len(members))
+	if err := registry.ValidateExpansion(primary, valid); err != nil || len(valid.Members()) != 3 {
+		t.Fatalf("valid expansion: %v, %d members", err, len(valid.Members()))
+	}
+}
+
+func TestRuntimeValidation(t *testing.T) {
+	n, l, r := newTypes()
+	registry, err := NewRegistry([]ContentType{n, l, r})
+	if err != nil {
+		t.Fatal(err)
+	}
+	primary := NewKeyedItem(r, "primary", ts, text{"ref"})
+	invalidMembers, err := NewCollection[map[string]any](l, []KeyedRecord{
+		NewKeyedItem(l, "a", ts, map[string]any{"text": "ok"}),
+		NewKeyedItem(l, "b", ts, map[string]any{"text": 1}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type want struct {
+		stage    ValidationStage
+		location string
+		path     string
+	}
+	cases := map[string]struct {
+		err  error
+		want want
+	}{
+		"unknown content field": {
+			err:  errOnly(registry.DecodeContent(n.Name(), json.RawMessage(`{"text":"x","extra":1}`))),
+			want: want{StageContent, "", "extra"},
+		},
+		"stored member content": {
+			err:  errOnly(registry.DecodeRecord(l.Name(), json.RawMessage(`{"items":[{"timestamp":"2026-10-25T10:00:00Z","key":"a","content":{}}]}`))),
+			want: want{StageContent, `member 0 (key "a")`, "text"},
+		},
+		"payload": {
+			err:  registry.ValidatePayload(r.Name(), json.RawMessage(`{"texts":["a",1]}`)),
+			want: want{StagePayload, "", "texts.1"},
+		},
+		"returned primary": {
+			err:  registry.ValidateExpansion(primary, ExpansionResult{Record: NewKeyedItem(r, "primary", ts, map[string]any{"text": "x", "url": "y"})}),
+			want: want{StageContent, "", "url"},
+		},
+		"grouped member": {
+			err:  registry.ValidateExpansion(primary, ExpansionResult{Record: primary, Blocks: []EmittedBlock{{Record: invalidMembers}}}),
+			want: want{StageContent, `block 0 > member 1 (key "b")`, "text"},
+		},
+	}
+	for name, tc := range cases {
+		var validation *ValidationError
+		if !errors.As(tc.err, &validation) {
+			t.Errorf("%s: expected a validation error, got %v", name, tc.err)
+			continue
+		}
+		got := want{validation.Stage, validation.Location.String(), ""}
+		if len(validation.Fields) > 0 {
+			got.path = validation.Fields[0].Path
+		}
+		if got != tc.want {
+			t.Errorf("%s: got %+v, want %+v (%v)", name, got, tc.want, validation)
+		}
+	}
+	if err := registry.ValidatePayload(n.Name(), json.RawMessage(`{}`)); err == nil {
+		t.Error("payload accepted for a non-expandable type")
+	}
+	if err := registry.ValidatePayload("Missing/Type", json.RawMessage(`{}`)); !errors.Is(err, ErrUnknownContentType) {
+		t.Errorf("unknown type: %v", err)
+	}
+}
+
+func errOnly[T any](_ T, err error) error { return err }
+
+// TestNestedExpansionLocation simulates a cascading host: an upstream
+// expansion emits a nested reference (block 1), whose own expansion emits an
+// invalid grouped member (block 0, member 1). The host adds the upstream
+// block step to the downstream error while unwinding.
+func TestNestedExpansionLocation(t *testing.T) {
+	n, l, r := newTypes()
+	registry, err := NewRegistry([]ContentType{n, l, r})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalid, err := NewCollection[map[string]any](l, []KeyedRecord{
+		NewKeyedItem(l, "a", ts, map[string]any{"text": "ok"}),
+		NewKeyedItem(l, "b", ts, map[string]any{"text": 1}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nested := NewKeyedItem(r, "nested", ts, text{"nested"})
+	downstream := registry.ValidateExpansion(nested, ExpansionResult{Record: nested, Blocks: []EmittedBlock{{Record: invalid}}})
+	err = locateError(fmt.Errorf("cascade: %w", downstream), atBlock(1))
+
+	var validation *ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("expected a validation error, got %v", err)
+	}
+	want := Location{atBlock(1), atBlock(0), atMember(1, "b")}
+	if !slices.Equal(validation.Location, want) {
+		t.Fatalf("location %v, want %v", validation.Location, want)
 	}
 }

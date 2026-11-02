@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -15,8 +16,8 @@ import (
 )
 
 // TestThreadSnapshotScenario exercises the contracts end to end through the
-// registry: expansion of a snapshot with an interleaved agent message,
-// host-side checks, grouping (a minimal stand-in for the host's grouping
+// registry: the host validation sequence around expansion of a snapshot with
+// an interleaved agent message (input validation, invocation, output checks), grouping (a minimal stand-in for the host's grouping
 // engine), record round-trips, rendering, and presentation.
 func TestThreadSnapshotScenario(t *testing.T) {
 	agent := aiagent.NewMessageType()
@@ -39,9 +40,7 @@ func TestThreadSnapshotScenario(t *testing.T) {
 	}}
 	payload, err := json.Marshal(snapshot)
 	must(t, err)
-	result, err := thread.(content.Expander).Expand(context.Background(), reloadedRoot, payload)
-	must(t, err)
-	members, err := registry.CheckExpansion(reloadedRoot, result)
+	members, err := expand(registry, reloadedRoot, payload)
 	must(t, err)
 	if len(members) != 4 {
 		t.Fatalf("expected 4 emitted members, got %d", len(members))
@@ -89,9 +88,7 @@ func TestThreadSnapshotScenario(t *testing.T) {
 
 	// A generated (keyed) thread reference keeps its key through expansion.
 	generated := content.NewKeyedItem(thread, "investigation-thread", at("10:00"), slack.ThreadReference{URL: "https://slack.example/x"})
-	result, err = thread.(content.Expander).Expand(context.Background(), roundTrip(t, registry, generated), payload)
-	must(t, err)
-	if _, err := registry.CheckExpansion(generated, result); err != nil {
+	if _, err := expand(registry, roundTrip(t, registry, generated), payload); err != nil {
 		t.Fatal(err)
 	}
 
@@ -101,11 +98,88 @@ func TestThreadSnapshotScenario(t *testing.T) {
 	thread, err = unwired.Lookup(slack.ThreadTypeName)
 	must(t, err)
 	root = content.NewItem(thread, at("10:00"), slack.ThreadReference{URL: "https://slack.example/x"})
-	result, err = thread.(content.Expander).Expand(context.Background(), root, payload)
-	must(t, err)
-	if _, err := unwired.CheckExpansion(root, result); err == nil {
+	if _, err := expand(unwired, root, payload); err == nil {
 		t.Fatal("expected an unregistered emitted type instance to be rejected")
 	}
+}
+
+// TestThreadValidation checks the runtime schema boundaries with the Slack
+// and agent types: actionable failures on raw input and cross-extension
+// output, and open nested extras.
+func TestThreadValidation(t *testing.T) {
+	agent := aiagent.NewMessageType()
+	registry, err := content.NewRegistry([]content.ContentType{agent}, slack.ContentTypes(agent))
+	must(t, err)
+	thread, err := registry.Lookup(slack.ThreadTypeName)
+	must(t, err)
+	root := content.NewItem(thread, at("10:00"), slack.ThreadReference{URL: "https://slack.example/x"})
+
+	// Nested unknown payload fields are rejected before invocation.
+	payload := json.RawMessage(`{"messages":[{"id":"1","timestamp":"2026-10-25T10:00:00Z","author":"a","text":"b","channel":"C1"}]}`)
+	_, err = expand(registry, root, payload)
+	expectField(t, err, content.StagePayload, "messages.0.channel")
+
+	// Unknown stored fields do not disappear through Go decoding.
+	_, err = registry.DecodeRecord(slack.ThreadTypeName, json.RawMessage(`{"timestamp":"2026-10-25T10:00:00Z","content":{"url":"u","channel":"C1"}}`))
+	expectField(t, err, content.StageContent, "channel")
+
+	// Arbitrary nested metadata is allowed inside declared extras.
+	_, err = registry.DecodeRecord(aiagent.MessageTypeName, json.RawMessage(`{"timestamp":"2026-10-25T10:00:00Z","key":"k","content":{"agent":"a","text":"b","extras":{"slack":{"ids":[1,"2"],"thread":{"ts":"1.2"}}}}}`))
+	must(t, err)
+
+	// Cross-extension output with the wrong inner value is rejected with
+	// its emitted location.
+	result := content.ExpansionResult{Record: root, Blocks: []content.EmittedBlock{
+		{Record: content.NewKeyedItem(agent, "k", at("10:00"), slack.Message{Author: "a", Text: "b"})},
+	}}
+	err = registry.ValidateExpansion(root, result)
+	validation := expectField(t, err, content.StageContent, "")
+	if validation.ContentType != aiagent.MessageTypeName || validation.Location.String() != "block 0" {
+		t.Fatalf("unexpected location: %v", validation)
+	}
+}
+
+// expand runs the host sequence around a direct expander invocation:
+// validate the existing record and the payload, invoke the expander, then
+// check the result. It returns the emitted constituents.
+func expand(registry *content.Registry, existing content.Record, payload json.RawMessage) ([]content.KeyedRecord, error) {
+	if err := registry.ValidateRecord(existing); err != nil {
+		return nil, err
+	}
+	name := existing.ContentType().Name()
+	if err := registry.ValidatePayload(name, payload); err != nil {
+		return nil, err
+	}
+	expander, err := registry.Lookup(name)
+	if err != nil {
+		return nil, err
+	}
+	result, err := expander.(content.Expander).Expand(context.Background(), existing, payload)
+	if err != nil {
+		return nil, err
+	}
+	if err := registry.ValidateExpansion(existing, result); err != nil {
+		return nil, err
+	}
+	return result.Members(), nil
+}
+
+// expectField asserts a structured validation error of the given stage
+// that reports path among its field errors (any field when path is empty).
+func expectField(t *testing.T, err error, stage content.ValidationStage, path string) *content.ValidationError {
+	t.Helper()
+	var validation *content.ValidationError
+	if !errors.As(err, &validation) || validation.Stage != stage || len(validation.Fields) == 0 {
+		t.Fatalf("expected a %s validation error, got %v", stage, err)
+	}
+	t.Log(validation)
+	for _, field := range validation.Fields {
+		if path == "" || field.Path == path {
+			return validation
+		}
+	}
+	t.Fatalf("expected field %q in %v", path, validation)
+	return nil
 }
 
 // group orders constituents chronologically and groups adjacent members of

@@ -13,7 +13,8 @@ import (
 )
 
 // TestGeneratedSchemas checks the structural constraints carried by the
-// generated embedded schemas. Operation-time validation is a separate task.
+// generated embedded schemas; runtime validation goes through the registry
+// (see slack_test.go).
 func TestGeneratedSchemas(t *testing.T) {
 	agent := aiagent.NewMessageType()
 	types := slack.ContentTypes(agent)
