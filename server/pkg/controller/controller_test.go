@@ -71,9 +71,20 @@ func (d *fakeDocuments) List(ctx context.Context) ([]model.Document, error) {
 	return out, nil
 }
 
+func (d *fakeDocuments) Lock(ctx context.Context, uid model.DocumentUID) error {
+	if _, err := d.Get(ctx, uid); err != nil {
+		return err
+	}
+	return nil
+}
+
 type fakeBlocks fakeStore
 
 func (b *fakeBlocks) Create(ctx context.Context, documentUid model.DocumentUID, blk model.Block) (model.Block, error) {
+	// Match the postgres default for omitted statuses.
+	if blk.Status == "" {
+		blk.Status = model.PublishedBlock
+	}
 	blocks := (*fakeStore)(b).blocks[documentUid]
 	if blk.BlockNumber == 0 {
 		blk.BlockNumber = model.BlockNumber(len(blocks) + 1)

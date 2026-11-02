@@ -48,6 +48,9 @@ func blockToProto(b model.Block, documentUID model.DocumentUID) (*pb.Block, erro
 	if !b.CreatedAt.IsZero() {
 		out.CreatedAt = timestamppb.New(b.CreatedAt)
 	}
+	if b.ParentBlockNumber != nil {
+		out.ParentBlockNumber = int32Ptr(*b.ParentBlockNumber)
+	}
 
 	// The public API exposes the inner extension content value, not the
 	// host record envelope: producers never see or supply host timestamps.
@@ -93,6 +96,9 @@ func blockFromProto(b *pb.Block) (model.Block, error) {
 	if b.CreatedAt != nil {
 		out.CreatedAt = b.CreatedAt.AsTime()
 	}
+	if b.ParentBlockNumber != nil {
+		out.ParentBlockNumber = blockNumberPtr(model.BlockNumber(*b.ParentBlockNumber))
+	}
 
 	// The public API carries the inner extension content value. It is
 	// passed through as raw JSON; validation, record construction, and
@@ -106,4 +112,14 @@ func blockFromProto(b *pb.Block) (model.Block, error) {
 		out.Content = data
 	}
 	return out, nil
+}
+
+func blockNumberPtr(n model.BlockNumber) *model.BlockNumber {
+	parent := n
+	return &parent
+}
+
+func int32Ptr(n model.BlockNumber) *int32 {
+	v := int32(n)
+	return &v
 }

@@ -49,10 +49,22 @@ CREATE TABLE blocks (
     status            TEXT NOT NULL DEFAULT 'published',
     serialized_content JSONB NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    parent_block_number INT NULL,
 
     PRIMARY KEY (document_uid, block_number, revision_number)
 );
 ```
+
+`parent_block_number` carries block **provenance**: the immediate generating
+block in the same document, or `NULL` for root blocks. It is host-owned
+immutable metadata, kept outside `serialized_content`. It is assigned only
+when the server creates a generated child (through the transaction-scoped
+controller host helpers) and is copied unchanged onto every later revision,
+including deletion and restoration revisions. There is no database-level
+foreign key: same-document references and parent existence are enforced by
+the controller under the document mutation lock (see
+[Provenance lifecycle](#provenance-lifecycle)). Existing blocks from before
+the column was added remain roots (`NULL`).
 
 Both `block_number` and `revision_number` are scoped auto-increments
 starting from 1 for each document (and each block respectively). They are
@@ -122,3 +134,43 @@ VALUES (
 The PK constraint on `(document_uid, block_number, revision_number)` prevents
 duplicate revisions in case of concurrent edits — the application can retry
 on conflict.
+
+## Provenance lifecycle
+
+Provenance relationships form a tree within a document: each block has at
+most one immediate parent, and references never cross documents.
+
+- **Assignment**: only the host assigns provenance, when it creates a
+  generated child through `Controller.CreateChildBlockTx`. The parent must
+  already exist and be live (non-deleted) in the same document and
+  transaction, and nested trees are created parent-first. Public block
+  creation rejects any supplied parent; public updates accept only an exact
+  echo of the stored parent.
+- **Immutability**: provenance is preserved unchanged across every
+  revision. Missing parents, self-references, and cycles are rejected as
+  invalid input before anything is written.
+- **Deletion**: deleting a block appends `deleted` revisions for the target
+  and each live descendant at every depth, atomically. Content and parent
+  relationships are preserved on the deletion revisions; no rows are
+  physically removed and no redundant deletion revisions are appended for
+  already-deleted descendants.
+- **Restoration**: restoring a deleted block restores only that block, back
+  to its pre-deletion status. Descendants stay deleted until a later
+  expansion/reconciliation decides otherwise, and reviving a child requires
+  a live parent.
+
+## Document mutation locking
+
+All block mutations within a document — public block add/update as well as
+internal host operations (child creation, cascading deletion, restoration,
+and later snapshot reconciliation) — run inside a transaction that first
+takes an exclusive row lock on the `documents` row:
+
+```sql
+SELECT uid FROM documents WHERE uid = $1 FOR UPDATE;
+```
+
+The lock is acquired before any block validation or write, so concurrent
+operations on the same document are serialized. In particular, concurrent
+child creation and parent deletion can never commit a live child beneath a
+deleted parent. Transactions that only read blocks do not take the lock.

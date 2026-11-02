@@ -275,6 +275,15 @@ definitions:
         type: string
         format: date-time
         readOnly: true
+      parentBlockNumber:
+        type: integer
+        format: int32
+        description: |-
+          Immediate generating block in the same document, or unset for a root
+          block. Host-owned immutable provenance metadata: it is assigned only
+          when the server creates a generated child. Public submissions must
+          omit it on creation and may only exactly echo the stored value on
+          updates; anything else is rejected with an invalid-argument error.
       content:
         type: object
         title: |-

@@ -61,6 +61,14 @@ message Block {
     google.protobuf.Timestamp created_at = 7
         [ (google.api.field_behavior) = OUTPUT_ONLY ];
 
+    // Immediate generating block in the same document, or unset for a root
+    // block. Host-owned immutable provenance metadata: it is assigned only
+    // when the server creates a generated child. Public submissions must
+    // omit it on creation and may only exactly echo the stored value on
+    // updates; anything else is rejected with an invalid-argument error.
+    optional int32 parent_block_number = 8
+        [ (google.api.field_behavior) = OPTIONAL ];
+
     // Arbitrary content payload; structure is determined by `type`.
     // The value is the inner extension content, not a host record
     // envelope: producers never supply host timestamps.

@@ -33,6 +33,12 @@ type DocumentsCollection interface {
 	Create(ctx context.Context, doc model.Document) (model.Document, error)
 	Get(ctx context.Context, uid model.DocumentUID) (model.Document, error)
 	List(ctx context.Context) ([]model.Document, error)
+	// Lock takes an exclusive lock on the document row for the rest of
+	// the transaction, serializing all block mutations within the
+	// document. It also verifies the document exists and fails when it
+	// does not. Implementations without row locking (e.g. in-memory
+	// fakes) may just verify existence.
+	Lock(ctx context.Context, uid model.DocumentUID) error
 }
 
 type BlocksCollection interface {

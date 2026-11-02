@@ -250,6 +250,68 @@ func TestInvalidData(t *testing.T) {
 	})
 
 	// ===================================================================
+	// Provenance: host-owned immutable metadata. Public submissions can
+	// never assign or change it; only the server-side host path assigns
+	// parents when it creates generated children.
+	// ===================================================================
+
+	t.Run("AddBlock/public_parent_assignment", func(t *testing.T) {
+		parent := int32(validBlock.GetBlockNumber())
+		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
+			Parent: validDocName,
+			Block: &pb.Block{
+				Type:              "Core/Markdown",
+				Content:           validContent(t),
+				ParentBlockNumber: &parent,
+			},
+		})
+		requireCode(t, err, codes.InvalidArgument, "public parent assignment")
+	})
+
+	t.Run("AddBlock/zero_parent", func(t *testing.T) {
+		zero := int32(0)
+		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
+			Parent: validDocName,
+			Block: &pb.Block{
+				Type:              "Core/Markdown",
+				Content:           validContent(t),
+				ParentBlockNumber: &zero,
+			},
+		})
+		requireCode(t, err, codes.InvalidArgument, "zero parent")
+	})
+
+	t.Run("UpdateBlock/public_parent_change", func(t *testing.T) {
+		wrong := validBlock.GetBlockNumber() + 1000
+		_, err := client.UpdateBlock(ctx, &pb.UpdateBlockRequest{
+			Parent:      validDocName,
+			BlockNumber: validBlock.GetBlockNumber(),
+			Block: &pb.Block{
+				Type:              "Core/Markdown",
+				Content:           validContent(t),
+				ParentBlockNumber: &wrong,
+			},
+		})
+		requireCode(t, err, codes.InvalidArgument, "public parent change")
+	})
+
+	t.Run("UpdateBlock/public_parent_assignment", func(t *testing.T) {
+		// The valid block is a root: echoing any parent is an assignment
+		// attempt and must be rejected.
+		parent := int32(validBlock.GetBlockNumber())
+		_, err := client.UpdateBlock(ctx, &pb.UpdateBlockRequest{
+			Parent:      validDocName,
+			BlockNumber: validBlock.GetBlockNumber(),
+			Block: &pb.Block{
+				Type:              "Core/Markdown",
+				Content:           validContent(t),
+				ParentBlockNumber: &parent,
+			},
+		})
+		requireCode(t, err, codes.InvalidArgument, "public parent assignment on update")
+	})
+
+	// ===================================================================
 	// UpdateBlock
 	// ===================================================================
 

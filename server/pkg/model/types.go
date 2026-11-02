@@ -56,6 +56,15 @@ type Block struct {
 	Status    BlockStatus
 	CreatedAt time.Time
 
+	// ParentBlockNumber identifies the immediate generating block in
+	// the same document; nil means a root block. It is host-owned
+	// provenance metadata, kept outside the content and the serialized
+	// host record envelope: it is assigned only when the host creates a
+	// child and is preserved unchanged across every revision, including
+	// deletion and restoration. Public submissions can never assign or
+	// change it.
+	ParentBlockNumber *BlockNumber
+
 	// Content is the raw inner content JSON submitted through the public
 	// API; see the struct documentation. Only meaningful on input (the
 	// controller consumes it when building the record).

@@ -121,6 +121,12 @@ type Block struct {
 	Type           string                 `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`
 	Status         string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"` // "progressing" | "published" | "deleted"
 	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// Immediate generating block in the same document, or unset for a root
+	// block. Host-owned immutable provenance metadata: it is assigned only
+	// when the server creates a generated child. Public submissions must
+	// omit it on creation and may only exactly echo the stored value on
+	// updates; anything else is rejected with an invalid-argument error.
+	ParentBlockNumber *int32 `protobuf:"varint,8,opt,name=parent_block_number,json=parentBlockNumber,proto3,oneof" json:"parent_block_number,omitempty"`
 	// Arbitrary content payload; structure is determined by `type`.
 	// The value is the inner extension content, not a host record
 	// envelope: producers never supply host timestamps.
@@ -210,6 +216,13 @@ func (x *Block) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Block) GetParentBlockNumber() int32 {
+	if x != nil && x.ParentBlockNumber != nil {
+		return *x.ParentBlockNumber
+	}
+	return 0
 }
 
 func (x *Block) GetContent() *structpb.Struct {
@@ -994,7 +1007,7 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x12/\n" +
 	"\x06blocks\x18\x06 \x03(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x03R\x06blocks:D\xeaAA\n" +
-	"\x14infrapad.io/Document\x12\x14documents/{document}*\tdocuments2\bdocument\"\x95\x03\n" +
+	"\x14infrapad.io/Document\x12\x14documents/{document}*\tdocuments2\bdocument\"\xe7\x03\n" +
 	"\x05Block\x12\x1a\n" +
 	"\x04name\x18\x01 \x01(\tB\x06\xe0A\b\xe0A\x03R\x04name\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x03R\vblockNumber\x12,\n" +
@@ -1003,10 +1016,12 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\x04type\x18\x05 \x01(\tB\x03\xe0A\x02R\x04type\x12\x1b\n" +
 	"\x06status\x18\x06 \x01(\tB\x03\xe0A\x01R\x06status\x12>\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x126\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x128\n" +
+	"\x13parent_block_number\x18\b \x01(\x05B\x03\xe0A\x01H\x00R\x11parentBlockNumber\x88\x01\x01\x126\n" +
 	"\acontent\x18\n" +
 	" \x01(\v2\x17.google.protobuf.StructB\x03\xe0A\x02R\acontent:J\xeaAG\n" +
-	"\x11infrapad.io/Block\x12#documents/{document}/blocks/{block}*\x06blocks2\x05block\"\x86\x01\n" +
+	"\x11infrapad.io/Block\x12#documents/{document}/blocks/{block}*\x06blocks2\x05blockB\x16\n" +
+	"\x14_parent_block_number\"\x86\x01\n" +
 	"\x15CreateDocumentRequest\x12\x19\n" +
 	"\x05title\x18\x01 \x01(\tB\x03\xe0A\x02R\x05title\x12!\n" +
 	"\tnamespace\x18\x02 \x01(\tB\x03\xe0A\x01R\tnamespace\x12/\n" +
@@ -1142,6 +1157,7 @@ func file_infrapad_v1alpha1_infrapad_proto_init() {
 	if File_infrapad_v1alpha1_infrapad_proto != nil {
 		return
 	}
+	file_infrapad_v1alpha1_infrapad_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

@@ -34,6 +34,8 @@ export interface InfrapadBlock {
   type: string;
   status?: string; // "progressing" | "published" | "deleted"
   createdAt?: string;
+  // Immediate generating block in the same document; unset for root blocks.
+  parentBlockNumber?: number;
   content: Record<string, unknown>;
 }
 

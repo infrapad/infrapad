@@ -32,15 +32,35 @@ func New(s store.Store, registry *content.Registry) *Controller {
 }
 
 // IsInvalidInput reports whether err was caused by invalid submitted
-// content (unknown content type or a schema/record validation failure)
-// rather than an unexpected server failure. Transports use it to map
-// such errors to explicit invalid-argument responses.
+// content or metadata (unknown content type, a schema/record validation
+// failure, or invalid provenance input) rather than an unexpected server
+// failure. Transports use it to map such errors to explicit
+// invalid-argument responses.
 func IsInvalidInput(err error) bool {
 	var validation *content.ValidationError
 	if errors.As(err, &validation) {
 		return true
 	}
+	var invalid *InvalidInputError
+	if errors.As(err, &invalid) {
+		return true
+	}
 	return errors.Is(err, content.ErrUnknownContentType)
+}
+
+// InvalidInputError marks a rejection caused by invalid submitted input
+// (e.g. illegal provenance changes) as opposed to an unexpected server
+// failure. Transports map it to invalid-argument responses through
+// IsInvalidInput.
+type InvalidInputError struct {
+	Err error
+}
+
+func (e *InvalidInputError) Error() string { return e.Err.Error() }
+func (e *InvalidInputError) Unwrap() error { return e.Err }
+
+func invalidInput(format string, args ...any) error {
+	return &InvalidInputError{Err: fmt.Errorf(format, args...)}
 }
 
 // ---------------------------------------------------------------------------
@@ -147,6 +167,12 @@ func (c *Controller) prepareUpdate(blk *model.Block, existing content.Record) er
 // CreateDocument creates a new document. If doc.Blocks is non-empty the blocks are
 // inserted as well, each getting BlockNumber assigned sequentially starting at 1.
 func (c *Controller) CreateDocument(ctx context.Context, doc model.Document) (model.Document, error) {
+	for i := range doc.Blocks {
+		if err := rejectPublicParent(&doc.Blocks[i]); err != nil {
+			return model.Document{}, fmt.Errorf("initial block %d: %w", i+1, err)
+		}
+	}
+
 	tx, err := c.store.Begin(ctx)
 	if err != nil {
 		return model.Document{}, fmt.Errorf("begin tx: %w", err)
@@ -238,15 +264,19 @@ func (c *Controller) ListDocuments(ctx context.Context) ([]model.Document, error
 // submitted blk.Content is validated against the registered content type
 // and the record timestamp is initialized from block creation time.
 func (c *Controller) AddBlock(ctx context.Context, documentUID model.DocumentUID, blk model.Block) (model.Block, error) {
+	if err := rejectPublicParent(&blk); err != nil {
+		return model.Block{}, err
+	}
+
 	tx, err := c.store.Begin(ctx)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Verify the document exists.
-	if _, err := tx.Documents().Get(ctx, documentUID); err != nil {
-		return model.Block{}, fmt.Errorf("get document for add block: %w", err)
+	// Verify the document exists and lock it against concurrent mutations.
+	if err := tx.Documents().Lock(ctx, documentUID); err != nil {
+		return model.Block{}, fmt.Errorf("lock document for add block: %w", err)
 	}
 
 	if err := c.prepareNew(&blk, time.Now().UTC()); err != nil {
@@ -276,6 +306,11 @@ func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.Document
 	}
 	defer tx.Rollback()
 
+	// Serialize block mutations within the document.
+	if err := tx.Documents().Lock(ctx, documentUID); err != nil {
+		return model.Block{}, fmt.Errorf("lock document for update block: %w", err)
+	}
+
 	// Make sure the block exists before we create a new revision.
 	latest, err := tx.Blocks().Get(ctx, documentUID, blockNumber, 0)
 	if err != nil {
@@ -284,6 +319,12 @@ func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.Document
 	if err := c.deserializeRecord(&latest); err != nil {
 		return model.Block{}, err
 	}
+
+	if err := checkParentEcho(blk.ParentBlockNumber, latest.ParentBlockNumber); err != nil {
+		return model.Block{}, err
+	}
+	// Preserve the stored provenance on the new revision.
+	blk.ParentBlockNumber = latest.ParentBlockNumber
 
 	if err := c.prepareUpdate(&blk, latest.Record); err != nil {
 		return model.Block{}, err
@@ -371,4 +412,47 @@ func (c *Controller) ListBlockHistory(ctx context.Context, documentUID model.Doc
 		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 	return revisions, nil
+}
+
+// ---------------------------------------------------------------------------
+// Provenance boundary checks and revision helpers
+// ---------------------------------------------------------------------------
+// The host-side provenance path lives in provenance.go; these helpers
+// enforce the same contract on the public write boundary and provide the
+// shared revision-append primitive.
+
+// rejectPublicParent rejects any provenance supplied through public block
+// creation input: provenance is assigned only by the host when it creates
+// a generated child.
+func rejectPublicParent(blk *model.Block) error {
+	if blk.ParentBlockNumber == nil {
+		return nil
+	}
+	return invalidInput("block parent %d: provenance cannot be assigned through public input", *blk.ParentBlockNumber)
+}
+
+// checkParentEcho accepts an omitted or exactly echoed parent block number
+// on public updates. Omission preserves provenance; changing or clearing
+// it is rejected.
+func checkParentEcho(submitted, stored *model.BlockNumber) error {
+	if submitted == nil || stored != nil && *submitted == *stored {
+		return nil
+	}
+	if stored == nil {
+		return invalidInput("block has no parent: provenance cannot be assigned through public input")
+	}
+	return invalidInput("block parent %d: provenance cannot be changed to %d", *stored, *submitted)
+}
+
+// appendRevision appends a new revision of blk with the given status and
+// author, preserving the block type, serialized record envelope, and
+// immutable parent relationship.
+func appendRevision(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, blk model.Block, status model.BlockStatus, author model.AuthorID) (model.Block, error) {
+	blk.Status = status
+	blk.AuthorID = author
+	rev, err := tx.Blocks().Create(ctx, documentUID, blk)
+	if err != nil {
+		return model.Block{}, fmt.Errorf("append revision for block %d: %w", blk.BlockNumber, err)
+	}
+	return rev, nil
 }

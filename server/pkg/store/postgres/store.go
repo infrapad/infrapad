@@ -140,6 +140,18 @@ func (d *pgDocuments) List(ctx context.Context) ([]model.Document, error) {
 	return documents, rows.Err()
 }
 
+// Lock takes an exclusive row lock on the document for the rest of the
+// transaction, serializing block mutations within the document. It must
+// be acquired before any block validation or write.
+func (d *pgDocuments) Lock(ctx context.Context, uid model.DocumentUID) error {
+	var out model.DocumentUID
+	if err := d.tx.QueryRowContext(ctx,
+		`SELECT uid FROM documents WHERE uid = $1 FOR UPDATE`, uid).Scan(&out); err != nil {
+		return fmt.Errorf("lock document %s: %w", uid, err)
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // BlocksCollection
 // ---------------------------------------------------------------------------
@@ -154,25 +166,31 @@ func (b *pgBlocks) Create(ctx context.Context, documentUid model.DocumentUID, bl
 	// The store is content-type agnostic: it persists the serialized host
 	// record envelope produced by the controller as-is.
 	sc := blk.SerializedRecord
+	parent, err := parentValue(blk.ParentBlockNumber)
+	if err != nil {
+		return model.Block{}, err
+	}
 
-	var revisionExpr string
+	var revisionExpr, parentParam string
 	var args []any
 
 	if blk.BlockNumber == 0 {
 		// New block – assign next block_number, revision = 1.
 		revisionExpr = `(SELECT COALESCE(MAX(block_number), 0) + 1 FROM blocks WHERE document_uid = $1), 1`
-		args = []any{string(documentUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data}
+		parentParam = `$6`
+		args = []any{string(documentUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data, parent}
 	} else {
 		// New revision of existing block.
 		revisionExpr = `$6, (SELECT COALESCE(MAX(revision_number), 0) + 1 FROM blocks WHERE document_uid = $1 AND block_number = $6)`
-		args = []any{string(documentUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data, blk.BlockNumber}
+		parentParam = `$7`
+		args = []any{string(documentUid), blk.AuthorID, blk.Type, cond(blk.Status == "", model.PublishedBlock, string(blk.Status)), sc.Data, blk.BlockNumber, parent}
 	}
 
 	query := fmt.Sprintf(
-		`INSERT INTO blocks (document_uid, block_number, revision_number, author_id, type, status, serialized_content)
-		 VALUES ($1, %s, $2, $3, $4, $5)
-		 RETURNING block_number, revision_number, author_id, type, status, serialized_content, created_at`,
-		revisionExpr,
+		`INSERT INTO blocks (document_uid, block_number, revision_number, author_id, type, status, serialized_content, parent_block_number)
+		 VALUES ($1, %s, $2, $3, $4, $5, %s)
+		 RETURNING block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number`,
+		revisionExpr, parentParam,
 	)
 
 	row := b.tx.QueryRowContext(ctx, query, args...)
@@ -183,13 +201,13 @@ func (b *pgBlocks) Get(ctx context.Context, documentUid model.DocumentUID, block
 	var row *sql.Row
 	if revisionNumber == 0 {
 		row = b.tx.QueryRowContext(ctx,
-			`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
+			`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number
 			 FROM blocks WHERE document_uid = $1 AND block_number = $2
 			 ORDER BY revision_number DESC LIMIT 1`,
 			documentUid, blockNumber)
 	} else {
 		row = b.tx.QueryRowContext(ctx,
-			`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
+			`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number
 			 FROM blocks WHERE document_uid = $1 AND block_number = $2 AND revision_number = $3`,
 			documentUid, blockNumber, revisionNumber)
 	}
@@ -198,7 +216,7 @@ func (b *pgBlocks) Get(ctx context.Context, documentUid model.DocumentUID, block
 
 func (b *pgBlocks) List(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error) {
 	rows, err := b.tx.QueryContext(ctx,
-		`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
+		`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number
 		 FROM blocks WHERE document_uid = $1
 		 ORDER BY block_number, revision_number`,
 		documentUid)
@@ -210,7 +228,7 @@ func (b *pgBlocks) List(ctx context.Context, documentUid model.DocumentUID) ([]m
 
 func (b *pgBlocks) ListRevisions(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber) ([]model.Block, error) {
 	rows, err := b.tx.QueryContext(ctx,
-		`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at
+		`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number
 		 FROM blocks WHERE document_uid = $1 AND block_number = $2
 		 ORDER BY revision_number`,
 		documentUid, blockNumber)
@@ -223,7 +241,7 @@ func (b *pgBlocks) ListRevisions(ctx context.Context, documentUid model.Document
 func (b *pgBlocks) ListLatest(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error) {
 	rows, err := b.tx.QueryContext(ctx,
 		`SELECT DISTINCT ON (block_number)
-		        block_number, revision_number, author_id, type, status, serialized_content, created_at
+		        block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number
 		 FROM blocks WHERE document_uid = $1
 		 ORDER BY block_number, revision_number DESC`,
 		documentUid)
@@ -241,12 +259,14 @@ func scanBlock(documentUid model.DocumentUID, row *sql.Row) (model.Block, error)
 	var blk model.Block
 	var status, typ string
 	var data []byte
+	var parent sql.NullInt64
 	if err := row.Scan(&blk.BlockNumber, &blk.RevisionNumber, &blk.AuthorID,
-		&typ, &status, &data, &blk.CreatedAt); err != nil {
+		&typ, &status, &data, &blk.CreatedAt, &parent); err != nil {
 		return model.Block{}, err
 	}
 	blk.Type = typ
 	blk.Status = model.BlockStatus(status)
+	setScannedParent(&blk, parent)
 	// The deserialized record is restored by the controller through the
 	// content registry; the store keeps only the serialized envelope.
 	blk.SerializedRecord = model.SerializedRecord{Type: typ, Data: data}
@@ -260,16 +280,40 @@ func scanBlocks(documentUid model.DocumentUID, rows *sql.Rows) ([]model.Block, e
 		var blk model.Block
 		var status, typ string
 		var data []byte
+		var parent sql.NullInt64
 		if err := rows.Scan(&blk.BlockNumber, &blk.RevisionNumber, &blk.AuthorID,
-			&typ, &status, &data, &blk.CreatedAt); err != nil {
+			&typ, &status, &data, &blk.CreatedAt, &parent); err != nil {
 			return nil, err
 		}
 		blk.Type = typ
 		blk.Status = model.BlockStatus(status)
+		setScannedParent(&blk, parent)
 		blk.SerializedRecord = model.SerializedRecord{Type: typ, Data: data}
 		blocks = append(blocks, blk)
 	}
 	return blocks, rows.Err()
+}
+
+// parentValue converts the optional model parent into a typed driver
+// value (sql.NullInt64 so Postgres can infer the parameter type even
+// when the value is NULL), rejecting non-positive numbers (defense in
+// depth: the controller is the primary validation point).
+func parentValue(parent *model.BlockNumber) (any, error) {
+	if parent == nil {
+		return sql.NullInt64{}, nil
+	}
+	if *parent <= 0 {
+		return nil, fmt.Errorf("block parent %d: must be positive", *parent)
+	}
+	return sql.NullInt64{Int64: int64(*parent), Valid: true}, nil
+}
+
+// setScannedParent restores the nullable parent column onto blk.
+func setScannedParent(blk *model.Block, parent sql.NullInt64) {
+	if parent.Valid {
+		p := model.BlockNumber(parent.Int64)
+		blk.ParentBlockNumber = &p
+	}
 }
 
 func cond[T any](c bool, ifTrue, ifFalse T) T {
