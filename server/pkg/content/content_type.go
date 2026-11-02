@@ -23,8 +23,9 @@ type ContentType interface {
 	RenderMarkdown(Record) (string, error)
 }
 
-// Schema references a (generated) CUE artifact and the definition selector
-// within it, e.g. Schema{Source: slackCUE, Definition: "#Message"}.
+// Schema references a self-contained CUE artifact and the definition selector
+// within it, e.g. Schema{Source: slackCUE, Definition: "#Message"}. Extension
+// artifacts are generated from Go types.
 type Schema struct {
 	Source     []byte
 	Definition string

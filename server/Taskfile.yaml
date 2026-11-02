@@ -54,6 +54,16 @@ tasks:
         fi
         ./infrapad-server-watch ./infrapad-server start --db "{{.TEST_DBSTRING}}" --http-addr ":8088" {{.CLI_ARGS}}
 
+  extensions:schema:generate:
+    desc: Regenerate extension CUE schemas from their Go definitions
+    cmds:
+      - ./scripts/extension-schemas.sh generate
+
+  extensions:schema:check:
+    desc: Fail if committed extension CUE schemas are stale (does not modify files)
+    cmds:
+      - ./scripts/extension-schemas.sh check
+
   db:migrate:status:
     desc: Show status of migrations
     cmds:
