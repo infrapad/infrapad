@@ -83,7 +83,13 @@ func (c *Controller) CreateChildBlockTx(ctx context.Context, tx store.Tx, docume
 	if err := c.checkSiblingKeys(ctx, tx, documentUID, parentBlockNumber, record, 0); err != nil {
 		return model.Block{}, err
 	}
+	return insertChildBlock(ctx, tx, documentUID, parentBlockNumber, record, author)
+}
 
+// insertChildBlock allocates a new generated block under
+// parentBlockNumber through normal store allocation. It performs no
+// validation: callers check the record, ancestry, and sibling keys first.
+func insertChildBlock(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, parentBlockNumber model.BlockNumber, record content.Record, author model.AuthorID) (model.Block, error) {
 	blk := model.Block{
 		Type:              record.ContentType().Name(),
 		ParentBlockNumber: &parentBlockNumber,

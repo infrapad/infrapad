@@ -128,7 +128,14 @@ func (b *fakeBlocks) Create(ctx context.Context, documentUid model.DocumentUID, 
 	}
 	blocks := (*fakeStore)(b).blocks[documentUid]
 	if blk.BlockNumber == 0 {
-		blk.BlockNumber = model.BlockNumber(len(blocks) + 1)
+		// Allocate the next block number, like the postgres store.
+		next := model.BlockNumber(1)
+		for _, existing := range blocks {
+			if existing.BlockNumber >= next {
+				next = existing.BlockNumber + 1
+			}
+		}
+		blk.BlockNumber = next
 		blk.RevisionNumber = 1
 	} else {
 		max := 0

@@ -1,7 +1,8 @@
 package controller
 
 // Generated-block identities: record-preserving internal writes and the
-// pure membership matcher consumed by later snapshot reconciliation.
+// pure membership matcher consumed by snapshot reconciliation
+// (reconciliation.go).
 //
 // A generated constituent's identity is its document, its immediate
 // generating parent block, and its opaque non-empty key. Keys are unique
@@ -66,12 +67,24 @@ func (c *Controller) AppendGeneratedRevisionTx(ctx context.Context, tx store.Tx,
 		return model.Block{}, err
 	}
 
+	return storeRecordRevision(ctx, tx, documentUID, latest, record, author)
+}
+
+// storeRecordRevision appends a revision of latest carrying record,
+// preserving the block's status, type, and immutable parent. It performs
+// no validation: callers check the record and identity first.
+func storeRecordRevision(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, latest model.Block, record content.Record, author model.AuthorID) (model.Block, error) {
 	blk := latest
 	blk.Record = record
 	if err := serializeRecord(&blk); err != nil {
 		return model.Block{}, err
 	}
-	return appendRevision(ctx, tx, documentUID, blk, latest.Status, author)
+	rev, err := appendRevision(ctx, tx, documentUID, blk, latest.Status, author)
+	if err != nil {
+		return model.Block{}, err
+	}
+	rev.Record = record
+	return rev, nil
 }
 
 // MembershipMatch pairs one live generated block with the desired record

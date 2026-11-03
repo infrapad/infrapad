@@ -1,7 +1,8 @@
 package content
 
 // Member ordering: a side-effect-free primitive for chronological member
-// views. Snapshot reconciliation uses it when constructing desired groups;
+// views. Snapshot reconciliation (controller) applies the same rule within
+// a parent, extended document-wide with the owning primary's block number;
 // it never reorders persisted collections (the identity matcher keeps
 // consuming the old persisted member order).
 
