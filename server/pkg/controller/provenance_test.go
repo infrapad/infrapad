@@ -1,10 +1,12 @@
 package controller_test
 
 // Provenance contract tests: nested host-owned parent relationships,
-// public/internal write boundaries, cascading deletion, and restoration.
+// public/internal write boundaries, generated-block edit protection,
+// cascading deletion, and restoration.
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/infrapad/infrapad/server/internal/testutil"
@@ -16,8 +18,9 @@ import (
 
 // TestProvenanceLifecycle covers the focused provenance scenario: a root,
 // child, and grandchild created through the internal host path, provenance
-// visible through reads and history, atomic cascading deletion with
-// preserved content and parents, and parent-only restoration.
+// visible through reads and history, public edit protection, atomic
+// cascading deletion with preserved content and parents, and parent-only
+// restoration.
 func TestProvenanceLifecycle(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
@@ -73,12 +76,45 @@ func TestProvenanceLifecycle(t *testing.T) {
 		}
 	}
 
-	// A public update echoing the stored parent is accepted and preserves
-	// provenance on the new revision, visible through revision history.
-	updated := markdownBlock("child edited")
-	updated.ParentBlockNumber = &root.BlockNumber
-	_, err = ctrl.UpdateBlock(ctx, doc.Uid, child.BlockNumber, updated)
+	// Roots remain editable, but public writes cannot change generated
+	// blocks, even with echoed, omitted, or forged provenance.
+	_, err = ctrl.UpdateBlock(ctx, doc.Uid, root.BlockNumber, markdownBlock("root edited"))
 	testutil.NoErr(t, err)
+	echo := child
+	echo.Content = markdownBlock("child").Content
+	ts := child.Record.Timestamp()
+	echo.Timestamp = &ts
+	forged := markdownBlock("grandchild edited")
+	forged.ParentBlockNumber = &root.BlockNumber // Actual parent is the child.
+	deletion := echo
+	deletion.Status = model.DeletedBlock
+	revisionsBefore := len(f.store.blocks[doc.Uid])
+	for _, attempt := range []struct {
+		name   string
+		stored model.Block
+		input  model.Block
+	}{
+		{"identical echo", child, echo},
+		{"omitted provenance", child, markdownBlock("child edited")},
+		{"forged provenance", grandchild, forged},
+		{"deletion", child, deletion},
+	} {
+		_, err := ctrl.UpdateBlock(ctx, doc.Uid, attempt.stored.BlockNumber, attempt.input)
+		requireForbiddenEdit(t, attempt.name, err, doc.Uid, attempt.stored.BlockNumber, parentOf(t, attempt.stored))
+	}
+	if got := len(f.store.blocks[doc.Uid]); got != revisionsBefore {
+		t.Fatalf("rejected updates appended revisions: got %d, want %d", got, revisionsBefore)
+	}
+
+	// A trusted host revision still succeeds and preserves provenance on
+	// the new revision, visible through revision history.
+	reviseTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
+	testutil.NoErr(t, err)
+	defer reviseTx.Rollback()
+	editedRecord := content.NewKeyedItem(f.markdownType, "md:child", at(0), core.Markdown{Text: "child edited"})
+	_, err = ctrl.AppendGeneratedRevisionTx(ctx, reviseTx, doc.Uid, child.BlockNumber, editedRecord, "host")
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, reviseTx.Commit())
 	history, err := ctrl.ListBlockHistory(ctx, doc.Uid, child.BlockNumber)
 	testutil.NoErr(t, err)
 	if len(history) != 2 {
@@ -155,6 +191,29 @@ func TestProvenanceLifecycle(t *testing.T) {
 		t.Fatalf("expected invalid input restoring beneath a deleted parent, got: %v", err)
 	}
 	reviveTx.Rollback()
+
+	// Public restoration is forbidden too; only the host may restore the
+	// child beneath the now-live root, leaving the grandchild deleted.
+	revisionsBefore = len(f.store.blocks[doc.Uid])
+	_, err = ctrl.UpdateBlock(ctx, doc.Uid, child.BlockNumber, echo)
+	requireForbiddenEdit(t, "restoration", err, doc.Uid, child.BlockNumber, root.BlockNumber)
+	if got := len(f.store.blocks[doc.Uid]); got != revisionsBefore {
+		t.Fatalf("rejected restoration appended revisions: got %d, want %d", got, revisionsBefore)
+	}
+	childRestoreTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
+	testutil.NoErr(t, err)
+	defer childRestoreTx.Rollback()
+	restoredChild, err := ctrl.RestoreBlockTx(ctx, childRestoreTx, doc.Uid, child.BlockNumber, "host")
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, childRestoreTx.Commit())
+	if restoredChild.Status != model.PublishedBlock || parentOf(t, restoredChild) != root.BlockNumber {
+		t.Fatalf("unexpected restored child: %+v", restoredChild)
+	}
+	latestGrandchild, err := ctrl.GetBlock(ctx, doc.Uid, grandchild.BlockNumber, 0)
+	testutil.NoErr(t, err)
+	if latestGrandchild.Status != model.DeletedBlock {
+		t.Fatalf("grandchild resurrected with the parent: %q", latestGrandchild.Status)
+	}
 }
 
 // TestProvenanceRejection covers the public/internal write boundaries and
@@ -283,4 +342,29 @@ func recordContentView(blk model.Block) (string, error) {
 		return "", err
 	}
 	return view.ContentValue.Text, nil
+}
+
+// requireForbiddenEdit fails the test unless err is a forbidden-edit
+// rejection carrying the expected document, block, and immediate-parent
+// identity, and is not classified as invalid input.
+func requireForbiddenEdit(t *testing.T, label string, err error, documentUID model.DocumentUID, blockNumber, parentBlockNumber model.BlockNumber) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s: expected a forbidden-edit rejection, got success", label)
+	}
+	if !controller.IsForbiddenEdit(err) {
+		t.Fatalf("%s: not a forbidden-edit error: %v", label, err)
+	}
+	if controller.IsInvalidInput(err) {
+		t.Fatalf("%s: forbidden edit misclassified as invalid input: %v", label, err)
+	}
+	var forbidden *controller.ForbiddenEditError
+	if !errors.As(err, &forbidden) {
+		t.Fatalf("%s: error does not unwrap to ForbiddenEditError: %v", label, err)
+	}
+	if forbidden.DocumentUID != documentUID || forbidden.BlockNumber != blockNumber || forbidden.ParentBlockNumber != parentBlockNumber {
+		t.Fatalf("%s: forbidden edit carries %q block %d of parent %d, want %q block %d of parent %d",
+			label, forbidden.DocumentUID, forbidden.BlockNumber, forbidden.ParentBlockNumber,
+			documentUID, blockNumber, parentBlockNumber)
+	}
 }

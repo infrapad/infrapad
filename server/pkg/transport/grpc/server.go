@@ -18,10 +18,15 @@ import (
 // DefaultPort is the default gRPC listen port.
 const DefaultPort = 50061
 
-// rpcError maps operation failures to gRPC statuses: invalid submitted
-// content becomes an explicit invalid-argument response, anything else
-// is an unexpected server error.
+// rpcError maps operation failures to gRPC statuses: forbidden edits of
+// extension-managed blocks become permission-denied responses, invalid
+// submitted content becomes an explicit invalid-argument response, and
+// anything else is an unexpected server error. The HTTP gateway derives
+// its status codes from the same mapping (PermissionDenied → 403).
 func rpcError(op string, err error) error {
+	if controller.IsForbiddenEdit(err) {
+		return status.Errorf(codes.PermissionDenied, "%s: %v", op, err)
+	}
 	if controller.IsInvalidInput(err) {
 		return status.Errorf(codes.InvalidArgument, "%s: %v", op, err)
 	}

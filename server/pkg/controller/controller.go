@@ -63,6 +63,31 @@ func invalidInput(format string, args ...any) error {
 	return &InvalidInputError{Err: fmt.Errorf(format, args...)}
 }
 
+// ForbiddenEditError marks a rejected public mutation of an
+// extension-managed (generated) block: the block is owned by its
+// generating parent and cannot be mutated through the public API.
+// Transports map it to gRPC PermissionDenied / HTTP 403, distinct from
+// invalid input and unexpected server failures.
+type ForbiddenEditError struct {
+	DocumentUID       model.DocumentUID
+	BlockNumber       model.BlockNumber
+	ParentBlockNumber model.BlockNumber
+}
+
+func (e *ForbiddenEditError) Error() string {
+	return fmt.Sprintf("block %d of document %q is managed by parent block %d: direct public edits are forbidden",
+		e.BlockNumber, e.DocumentUID, e.ParentBlockNumber)
+}
+
+// IsForbiddenEdit reports whether err was caused by an attempt to
+// publicly mutate an extension-managed block, as opposed to invalid
+// input or an unexpected server failure. Transports use it to map such
+// errors to permission-denied responses.
+func IsForbiddenEdit(err error) bool {
+	var forbidden *ForbiddenEditError
+	return errors.As(err, &forbidden)
+}
+
 // ---------------------------------------------------------------------------
 // Record handling
 // ---------------------------------------------------------------------------
@@ -168,10 +193,7 @@ func (c *Controller) prepareUpdate(blk *model.Block, existing content.Record) er
 // inserted as well, each getting BlockNumber assigned sequentially starting at 1.
 func (c *Controller) CreateDocument(ctx context.Context, doc model.Document) (model.Document, error) {
 	for i := range doc.Blocks {
-		if err := rejectPublicParent(&doc.Blocks[i]); err != nil {
-			return model.Document{}, fmt.Errorf("initial block %d: %w", i+1, err)
-		}
-		if err := rejectPublicTimestamp(&doc.Blocks[i]); err != nil {
+		if err := checkPublicBlockCreation(&doc.Blocks[i]); err != nil {
 			return model.Document{}, fmt.Errorf("initial block %d: %w", i+1, err)
 		}
 	}
@@ -268,10 +290,7 @@ func (c *Controller) ListDocuments(ctx context.Context) ([]model.Document, error
 // submitted blk.Content is validated against the registered content type
 // and the record timestamp is initialized from block creation time.
 func (c *Controller) AddBlock(ctx context.Context, documentUID model.DocumentUID, blk model.Block) (model.Block, error) {
-	if err := rejectPublicParent(&blk); err != nil {
-		return model.Block{}, err
-	}
-	if err := rejectPublicTimestamp(&blk); err != nil {
+	if err := checkPublicBlockCreation(&blk); err != nil {
 		return model.Block{}, err
 	}
 
@@ -327,15 +346,14 @@ func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.Document
 		return model.Block{}, err
 	}
 
-	if err := checkParentEcho(blk.ParentBlockNumber, latest.ParentBlockNumber); err != nil {
+	// The public write boundary: generated-block ownership plus exact
+	// provenance/timestamp echoes, all decided from the stored block before
+	// the submitted change is interpreted.
+	if err := checkPublicBlockUpdate(documentUID, &blk, &latest); err != nil {
 		return model.Block{}, err
 	}
 	// Preserve the stored provenance on the new revision.
 	blk.ParentBlockNumber = latest.ParentBlockNumber
-
-	if err := checkTimestampEcho(blk.Timestamp, latest.Record.Timestamp()); err != nil {
-		return model.Block{}, err
-	}
 
 	if err := c.prepareUpdate(&blk, latest.Record); err != nil {
 		return model.Block{}, err
@@ -427,53 +445,60 @@ func (c *Controller) ListBlockHistory(ctx context.Context, documentUID model.Doc
 }
 
 // ---------------------------------------------------------------------------
-// Provenance boundary checks and revision helpers
+// Public write boundary checks and revision helpers
 // ---------------------------------------------------------------------------
-// The host-side provenance path lives in provenance.go; these helpers
+// The host-side provenance path lives in provenance.go; these functions
 // enforce the same contract on the public write boundary and provide the
 // shared revision-append primitive.
 
-// rejectPublicParent rejects any provenance supplied through public block
-// creation input: provenance is assigned only by the host when it creates
-// a generated child.
-func rejectPublicParent(blk *model.Block) error {
-	if blk.ParentBlockNumber == nil {
-		return nil
+// checkPublicBlockCreation validates the host-owned metadata of a block
+// submitted through public creation input (AddBlock and initial document
+// blocks): provenance and the event timestamp are assigned only by the
+// host, so both must be omitted entirely.
+func checkPublicBlockCreation(blk *model.Block) error {
+	if parent := blk.ParentBlockNumber; parent != nil {
+		return invalidInput("block parent %d: provenance cannot be assigned through public input", *parent)
 	}
-	return invalidInput("block parent %d: provenance cannot be assigned through public input", *blk.ParentBlockNumber)
+	if ts := blk.Timestamp; ts != nil {
+		return invalidInput("block timestamp %s: event timestamp cannot be assigned through public input", ts.Format(time.RFC3339))
+	}
+	return nil
 }
 
-// checkParentEcho accepts an omitted or exactly echoed parent block number
-// on public updates. Omission preserves provenance; changing or clearing
-// it is rejected.
-func checkParentEcho(submitted, stored *model.BlockNumber) error {
-	if submitted == nil || stored != nil && *submitted == *stored {
-		return nil
+// checkPublicBlockUpdate validates the host-owned metadata of a block
+// submitted through a public update against latest, the stored block it
+// targets (read under the document mutation lock): the ownership policy
+// first rejects every public update of a generated block before the
+// submitted change is interpreted, then provenance and the event
+// timestamp may only be exactly echoed — the stored values are preserved
+// on the new revision.
+func checkPublicBlockUpdate(documentUID model.DocumentUID, submitted, latest *model.Block) error {
+	// Ownership follows stored provenance: every block with a parent
+	// (including nested descendants) is extension-managed, regardless of
+	// content type; roots keep their existing editing behavior. Decided
+	// from the stored block alone, before the submitted change is
+	// interpreted, so omitted or forged submitted provenance cannot
+	// bypass it. This is the future delegated-authorization seam.
+	if parent := latest.ParentBlockNumber; parent != nil {
+		return &ForbiddenEditError{
+			DocumentUID:       documentUID,
+			BlockNumber:       latest.BlockNumber,
+			ParentBlockNumber: *parent,
+		}
 	}
-	if stored == nil {
-		return invalidInput("block has no parent: provenance cannot be assigned through public input")
+	if parent := submitted.ParentBlockNumber; parent != nil {
+		switch stored := latest.ParentBlockNumber; {
+		case stored == nil:
+			return invalidInput("block has no parent: provenance cannot be assigned through public input")
+		case *parent != *stored:
+			return invalidInput("block parent %d: provenance cannot be changed to %d", *stored, *parent)
+		}
 	}
-	return invalidInput("block parent %d: provenance cannot be changed to %d", *stored, *submitted)
-}
-
-// rejectPublicTimestamp rejects any event timestamp supplied through
-// public block creation input: the event time is host-owned metadata,
-// initialized from creation time for ordinary blocks.
-func rejectPublicTimestamp(blk *model.Block) error {
-	if blk.Timestamp == nil {
-		return nil
+	if ts := submitted.Timestamp; ts != nil && !ts.Equal(latest.Record.Timestamp()) {
+		return invalidInput("event timestamp %s cannot be changed to %s through public input",
+			latest.Record.Timestamp().Format(time.RFC3339), ts.Format(time.RFC3339))
 	}
-	return invalidInput("block timestamp %s: event timestamp cannot be assigned through public input", blk.Timestamp.Format(time.RFC3339))
-}
-
-// checkTimestampEcho accepts an omitted or exactly echoed event timestamp
-// on public updates. Omission preserves the stored event time; assigning
-// or changing it is rejected.
-func checkTimestampEcho(submitted *time.Time, stored time.Time) error {
-	if submitted == nil || submitted.Equal(stored) {
-		return nil
-	}
-	return invalidInput("event timestamp %s cannot be changed to %s through public input", stored.Format(time.RFC3339), submitted.Format(time.RFC3339))
+	return nil
 }
 
 // appendRevision appends a new revision of blk with the given status and
