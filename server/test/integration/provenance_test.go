@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
@@ -37,9 +38,7 @@ func markdownRegistry(t *testing.T) (*content.Registry, *core.MarkdownType) {
 	t.Helper()
 	markdown := core.NewMarkdownType()
 	registry, err := content.NewRegistry([]content.ContentType{markdown})
-	if err != nil {
-		t.Fatalf("build registry: %v", err)
-	}
+	testutil.NoErr(t, err)
 	return registry, markdown
 }
 
@@ -50,51 +49,33 @@ func TestProvenancePersistenceRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := postgres.OpenPG(testConnStr())
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
+	testutil.NoErr(t, err)
 	defer db.Close()
 
 	registry, markdown := markdownRegistry(t)
 	ctrl := controller.New(postgres.NewStore(db), registry)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "provenance round-trip"})
-	if err != nil {
-		t.Fatalf("create document: %v", err)
-	}
+	testutil.NoErr(t, err)
 	root, err := ctrl.AddBlock(ctx, doc.Uid, markdownBlock("root"))
-	if err != nil {
-		t.Fatalf("add root: %v", err)
-	}
+	testutil.NoErr(t, err)
 
 	tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("begin host tx: %v", err)
-	}
+	testutil.NoErr(t, err)
 	child, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, keyedMarkdownRecord(markdown, "md:child", "child"), "host")
-	if err != nil {
-		t.Fatalf("create child: %v", err)
-	}
+	testutil.NoErr(t, err)
 	grandchild, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, child.BlockNumber, keyedMarkdownRecord(markdown, "md:grandchild", "grandchild"), "host")
-	if err != nil {
-		t.Fatalf("create grandchild: %v", err)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit host tx: %v", err)
-	}
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, tx.Commit())
 
 	// Parents come back through the individual reads and the block list.
 	gotChild, err := ctrl.GetBlock(ctx, doc.Uid, child.BlockNumber, 0)
-	if err != nil {
-		t.Fatalf("get child: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if gotChild.ParentBlockNumber == nil || *gotChild.ParentBlockNumber != root.BlockNumber {
 		t.Fatalf("child parent not persisted: %v", gotChild.ParentBlockNumber)
 	}
 	blocks, err := ctrl.ListBlocks(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("list blocks: %v", err)
-	}
+	testutil.NoErr(t, err)
 	parents := map[model.BlockNumber]model.BlockNumber{}
 	for _, blk := range blocks {
 		if blk.ParentBlockNumber != nil {
@@ -110,36 +91,23 @@ func TestProvenancePersistenceRoundTrip(t *testing.T) {
 
 	// Cascading deletion and parent-only restoration.
 	delTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("begin delete tx: %v", err)
-	}
+	testutil.NoErr(t, err)
 	deleted, err := ctrl.DeleteBlockTreeTx(ctx, delTx, doc.Uid, root.BlockNumber, "host")
-	if err != nil {
-		t.Fatalf("delete tree: %v", err)
-	}
-	if err := delTx.Commit(); err != nil {
-		t.Fatalf("commit delete tx: %v", err)
-	}
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, delTx.Commit())
 	if len(deleted) != 3 {
 		t.Fatalf("expected 3 deletion revisions, got %d", len(deleted))
 	}
 
 	restTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("begin restore tx: %v", err)
-	}
-	if _, err := ctrl.RestoreBlockTx(ctx, restTx, doc.Uid, root.BlockNumber, "host"); err != nil {
-		t.Fatalf("restore root: %v", err)
-	}
-	if err := restTx.Commit(); err != nil {
-		t.Fatalf("commit restore tx: %v", err)
-	}
+	testutil.NoErr(t, err)
+	_, err = ctrl.RestoreBlockTx(ctx, restTx, doc.Uid, root.BlockNumber, "host")
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, restTx.Commit())
 
 	for _, number := range []model.BlockNumber{child.BlockNumber, grandchild.BlockNumber} {
 		blk, err := ctrl.GetBlock(ctx, doc.Uid, number, 0)
-		if err != nil {
-			t.Fatalf("get block %d: %v", number, err)
-		}
+		testutil.NoErr(t, err)
 		if blk.Status != model.DeletedBlock {
 			t.Fatalf("block %d resurrected with the parent: %q", number, blk.Status)
 		}
@@ -153,9 +121,7 @@ func TestProvenanceConcurrency(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := postgres.OpenPG(testConnStr())
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
+	testutil.NoErr(t, err)
 	defer db.Close()
 
 	registry, markdown := markdownRegistry(t)
@@ -163,13 +129,9 @@ func TestProvenanceConcurrency(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "provenance concurrency"})
-		if err != nil {
-			t.Fatalf("create document: %v", err)
-		}
+		testutil.NoErr(t, err)
 		root, err := ctrl.AddBlock(ctx, doc.Uid, markdownBlock("root"))
-		if err != nil {
-			t.Fatalf("add root: %v", err)
-		}
+		testutil.NoErr(t, err)
 
 		deleteRoot := func() error {
 			tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
@@ -223,9 +185,7 @@ func TestProvenanceConcurrency(t *testing.T) {
 
 		// Invariant: no committed live block has a deleted parent.
 		blocks, err := ctrl.ListBlocks(ctx, doc.Uid)
-		if err != nil {
-			t.Fatalf("list blocks: %v", err)
-		}
+		testutil.NoErr(t, err)
 		latest := map[model.BlockNumber]model.Block{}
 		for _, blk := range blocks {
 			latest[blk.BlockNumber] = blk
@@ -255,31 +215,22 @@ func TestProvenanceLockSerialization(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := postgres.OpenPG(testConnStr())
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
+	testutil.NoErr(t, err)
 	defer db.Close()
 
 	registry, markdown := markdownRegistry(t)
 	ctrl := controller.New(postgres.NewStore(db), registry)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "provenance lock serialization"})
-	if err != nil {
-		t.Fatalf("create document: %v", err)
-	}
+	testutil.NoErr(t, err)
 	root, err := ctrl.AddBlock(ctx, doc.Uid, markdownBlock("root"))
-	if err != nil {
-		t.Fatalf("add root: %v", err)
-	}
+	testutil.NoErr(t, err)
 
 	// Hold the document lock with an uncommitted deletion of the root.
 	delTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("begin delete tx: %v", err)
-	}
-	if _, err := ctrl.DeleteBlockTreeTx(ctx, delTx, doc.Uid, root.BlockNumber, "host"); err != nil {
-		t.Fatalf("delete tree: %v", err)
-	}
+	testutil.NoErr(t, err)
+	_, err = ctrl.DeleteBlockTreeTx(ctx, delTx, doc.Uid, root.BlockNumber, "host")
+	testutil.NoErr(t, err)
 
 	lateRecord := keyedMarkdownRecord(markdown, "md:late", "late")
 	done := make(chan error, 1)
@@ -305,9 +256,7 @@ func TestProvenanceLockSerialization(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	if err := delTx.Commit(); err != nil {
-		t.Fatalf("commit delete tx: %v", err)
-	}
+	testutil.NoErr(t, delTx.Commit())
 
 	// After the release the creation proceeds and observes the deleted
 	// parent.

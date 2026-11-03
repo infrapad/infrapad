@@ -135,6 +135,35 @@ The PK constraint on `(document_uid, block_number, revision_number)` prevents
 duplicate revisions in case of concurrent edits — the application can retry
 on conflict.
 
+## Event timestamps
+
+Every host record carries an **event timestamp** inside the
+`serialized_content` envelope, next to the optional generated key. It is
+the time the underlying event occurred and is distinct from the row's
+`created_at`, which is the creation time of that particular **revision**:
+an edited block gets a new `created_at` on every revision while its event
+timestamp is preserved.
+
+- **Ordinary blocks** get their event timestamp initialized from block
+  creation time; it never changes across public edits.
+- **Generated blocks** keep the event timestamps supplied internally by
+  their extension; host-managed revisions may change them when the source
+  event times change.
+- **Collections** expose their first member's event timestamp; there is no
+  separate group timestamp.
+
+The event timestamp is read-only through the public API: creations must
+omit it, updates may omit it or exactly echo the stored value, and
+assignments or changes are rejected as invalid input. The block-level
+`timestamp` field of the public API is derived from the record; there is
+no second authoritative event-time value and no extra column or
+migration.
+
+Latest-block document views are ordered by event timestamp ascending,
+then block number ascending, in the controller after record decoding —
+the store stays content-type agnostic and never interprets record
+envelopes for ordering. Revision history keeps its revision-number order.
+
 ## Provenance lifecycle
 
 Provenance relationships form a tree within a document: each block has at

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
@@ -48,9 +49,7 @@ func newFixture(t *testing.T) *fixture {
 	registry, err := content.NewRegistry([]content.ContentType{
 		f.markdownType, f.alertsType, f.agentType, f.threadType, f.conversationType,
 	})
-	if err != nil {
-		t.Fatalf("build registry: %v", err)
-	}
+	testutil.NoErr(t, err)
 	f.registry = registry
 	f.ctrl = controller.New(f.store, f.registry)
 	return f

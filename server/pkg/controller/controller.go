@@ -171,6 +171,9 @@ func (c *Controller) CreateDocument(ctx context.Context, doc model.Document) (mo
 		if err := rejectPublicParent(&doc.Blocks[i]); err != nil {
 			return model.Document{}, fmt.Errorf("initial block %d: %w", i+1, err)
 		}
+		if err := rejectPublicTimestamp(&doc.Blocks[i]); err != nil {
+			return model.Document{}, fmt.Errorf("initial block %d: %w", i+1, err)
+		}
 	}
 
 	tx, err := c.store.Begin(ctx)
@@ -228,6 +231,7 @@ func (c *Controller) GetDocument(ctx context.Context, uid model.DocumentUID) (mo
 			return model.Document{}, err
 		}
 	}
+	sortBlocksChronologically(blocks)
 	doc.Blocks = blocks
 
 	if err := tx.Commit(); err != nil {
@@ -265,6 +269,9 @@ func (c *Controller) ListDocuments(ctx context.Context) ([]model.Document, error
 // and the record timestamp is initialized from block creation time.
 func (c *Controller) AddBlock(ctx context.Context, documentUID model.DocumentUID, blk model.Block) (model.Block, error) {
 	if err := rejectPublicParent(&blk); err != nil {
+		return model.Block{}, err
+	}
+	if err := rejectPublicTimestamp(&blk); err != nil {
 		return model.Block{}, err
 	}
 
@@ -326,6 +333,10 @@ func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.Document
 	// Preserve the stored provenance on the new revision.
 	blk.ParentBlockNumber = latest.ParentBlockNumber
 
+	if err := checkTimestampEcho(blk.Timestamp, latest.Record.Timestamp()); err != nil {
+		return model.Block{}, err
+	}
+
 	if err := c.prepareUpdate(&blk, latest.Record); err != nil {
 		return model.Block{}, err
 	}
@@ -383,6 +394,7 @@ func (c *Controller) ListBlocks(ctx context.Context, documentUID model.DocumentU
 			return nil, err
 		}
 	}
+	sortBlocksChronologically(blocks)
 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit tx: %w", err)
@@ -442,6 +454,26 @@ func checkParentEcho(submitted, stored *model.BlockNumber) error {
 		return invalidInput("block has no parent: provenance cannot be assigned through public input")
 	}
 	return invalidInput("block parent %d: provenance cannot be changed to %d", *stored, *submitted)
+}
+
+// rejectPublicTimestamp rejects any event timestamp supplied through
+// public block creation input: the event time is host-owned metadata,
+// initialized from creation time for ordinary blocks.
+func rejectPublicTimestamp(blk *model.Block) error {
+	if blk.Timestamp == nil {
+		return nil
+	}
+	return invalidInput("block timestamp %s: event timestamp cannot be assigned through public input", blk.Timestamp.Format(time.RFC3339))
+}
+
+// checkTimestampEcho accepts an omitted or exactly echoed event timestamp
+// on public updates. Omission preserves the stored event time; assigning
+// or changing it is rejected.
+func checkTimestampEcho(submitted *time.Time, stored time.Time) error {
+	if submitted == nil || submitted.Equal(stored) {
+		return nil
+	}
+	return invalidInput("event timestamp %s cannot be changed to %s through public input", stored.Format(time.RFC3339), submitted.Format(time.RFC3339))
 }
 
 // appendRevision appends a new revision of blk with the given status and

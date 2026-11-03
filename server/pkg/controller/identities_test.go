@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
@@ -131,23 +132,17 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	f := newFixture(t)
 	ctrl := f.ctrl
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "identities"})
-	if err != nil {
-		t.Fatalf("create document: %v", err)
-	}
+	testutil.NoErr(t, err)
 	thread, err := ctrl.AddBlock(ctx, doc.Uid, model.Block{
 		Type:    slack.ThreadTypeName,
 		Content: []byte(`{"url":"https://slack.example/archives/C1/p1"}`),
 	})
-	if err != nil {
-		t.Fatalf("add thread block: %v", err)
-	}
+	testutil.NoErr(t, err)
 
 	// Generated children require keyed records.
 	unkeyed := content.NewItem(f.conversationType, identityTS, slack.Message{Author: "a", Text: "b"})
 	tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("begin host tx: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, thread.BlockNumber, unkeyed, "host"); err == nil || !controller.IsInvalidInput(err) {
 		t.Fatalf("expected invalid input for an unkeyed record, got: %v", err)
 	}
@@ -155,22 +150,15 @@ func TestGeneratedWriteRejection(t *testing.T) {
 
 	// Valid creation of a conversation and a keyed standalone reference.
 	tx, err = ctrl.BeginHostTx(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("begin host tx: %v", err)
-	}
+	testutil.NoErr(t, err)
 	defer tx.Rollback()
 	convRecord := conversationRecord(t, f.conversationType, "m1", "m2")
 	convBlock, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, thread.BlockNumber, convRecord, "host")
-	if err != nil {
-		t.Fatalf("create conversation child: %v", err)
-	}
+	testutil.NoErr(t, err)
 	agent := content.NewKeyedItem(f.agentType, "m3", identityTS, aiagent.Message{Agent: "agent", Text: "message m3"})
-	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, thread.BlockNumber, agent, "host"); err != nil {
-		t.Fatalf("create agent child: %v", err)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit host tx: %v", err)
-	}
+	_, err = ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, thread.BlockNumber, agent, "host")
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, tx.Commit())
 	revisionsBefore := len(f.store.blocks[doc.Uid])
 
 	// Duplicate keys are rejected within the parent's live output, both
@@ -218,16 +206,10 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	// while the block number stays stable.
 	revised := conversationRecord(t, f.conversationType, "m2")
 	tx, err = ctrl.BeginHostTx(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("begin host tx: %v", err)
-	}
+	testutil.NoErr(t, err)
 	revision, err := ctrl.AppendGeneratedRevisionTx(ctx, tx, doc.Uid, convBlock.BlockNumber, revised, "host")
-	if err != nil {
-		t.Fatalf("append generated revision: %v", err)
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("commit host tx: %v", err)
-	}
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, tx.Commit())
 	if revision.BlockNumber != convBlock.BlockNumber || revision.RevisionNumber != 2 {
 		t.Fatalf("unexpected revision %d/%d", revision.BlockNumber, revision.RevisionNumber)
 	}
@@ -245,9 +227,7 @@ func conversationRecord(t *testing.T, conversationType *slack.ConversationType, 
 		items[n] = content.NewKeyedItem(conversationType, key, at(n), slack.Message{Author: "author-" + key, Text: "message " + key})
 	}
 	collection, err := conversationType.NewCollection(items)
-	if err != nil {
-		t.Fatalf("build conversation: %v", err)
-	}
+	testutil.NoErr(t, err)
 	return collection
 }
 

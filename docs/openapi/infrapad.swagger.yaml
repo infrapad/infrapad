@@ -284,6 +284,19 @@ definitions:
           when the server creates a generated child. Public submissions must
           omit it on creation and may only exactly echo the stored value on
           updates; anything else is rejected with an invalid-argument error.
+      timestamp:
+        type: string
+        format: date-time
+        description: |-
+          Read-only event timestamp of the block's host record: when the
+          underlying event occurred. Ordinary blocks keep their creation
+          time; generated blocks keep the event time supplied by their
+          extension; collections expose their first member's event time.
+          Distinct from created_at, which is the creation time of this
+          particular revision.
+          Public submissions must omit it on creation; updates may omit it
+          or exactly echo the stored event time. Assignments and changes
+          are rejected with an invalid-argument error.
       content:
         type: object
         title: |-

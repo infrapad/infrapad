@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
@@ -41,15 +42,11 @@ func TestIncidentInvestigation(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := postgres.OpenPG(testConnStr())
-	if err != nil {
-		t.Fatalf("open database: %v", err)
-	}
+	testutil.NoErr(t, err)
 	defer db.Close()
 
 	registry, err := content.NewRegistry(core.ContentTypes(), prometheus.ContentTypes())
-	if err != nil {
-		t.Fatalf("build registry: %v", err)
-	}
+	testutil.NoErr(t, err)
 	s := postgres.NewStore(db)
 	ctrl := controller.New(s, registry)
 
@@ -60,9 +57,7 @@ func TestIncidentInvestigation(t *testing.T) {
 		Title:     "Payment service crash loop",
 		Namespace: "payments",
 	})
-	if err != nil {
-		t.Fatalf("create doc: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if doc.Uid == "" {
 		t.Fatal("expected non-empty document uid")
 	}
@@ -79,9 +74,7 @@ func TestIncidentInvestigation(t *testing.T) {
 		Content: json.RawMessage(
 			`{"labels_matchers":[{"alertname":["CrashLoopBackOff"]}],"since":"2026-08-14T09:00:00Z"}`),
 	})
-	if err != nil {
-		t.Fatalf("add alerts_matcher block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if alertsBlock.BlockNumber != 1 {
 		t.Fatalf("expected block_number 1, got %d", alertsBlock.BlockNumber)
 	}
@@ -97,9 +90,7 @@ func TestIncidentInvestigation(t *testing.T) {
 		Type:    core.MarkdownTypeName,
 		Content: json.RawMessage(`{"text":"initial investigation writeup"}`),
 	})
-	if err != nil {
-		t.Fatalf("add markdown block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if mdBlock.BlockNumber != 2 {
 		t.Fatalf("expected block_number 2, got %d", mdBlock.BlockNumber)
 	}
@@ -113,9 +104,7 @@ func TestIncidentInvestigation(t *testing.T) {
 		Content: json.RawMessage(
 			`{"labels_matchers":[{"alertname":["CrashLoopBackOff"]},{"alertname":["KubeNodeNotReady"]}],"since":"2026-08-14T09:00:00Z"}`),
 	})
-	if err != nil {
-		t.Fatalf("update alerts_matcher block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if updatedAlerts.RevisionNumber != 2 {
 		t.Fatalf("expected revision 2 after update, got %d", updatedAlerts.RevisionNumber)
 	}
@@ -128,9 +117,7 @@ func TestIncidentInvestigation(t *testing.T) {
 		Type:    core.MarkdownTypeName,
 		Content: json.RawMessage(`{"text":"updated investigation writeup"}`),
 	})
-	if err != nil {
-		t.Fatalf("update markdown block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if updatedMd.RevisionNumber != 2 {
 		t.Fatalf("expected revision 2 after update, got %d", updatedMd.RevisionNumber)
 	}
@@ -140,9 +127,7 @@ func TestIncidentInvestigation(t *testing.T) {
 	// Verify final state: GetDocument should return 2 blocks, each at revision 2.
 	// -----------------------------------------------------------------------
 	finalDoc, err := ctrl.GetDocument(ctx, doc.Uid)
-	if err != nil {
-		t.Fatalf("get document: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if len(finalDoc.Blocks) != 2 {
 		t.Fatalf("expected 2 blocks, got %d", len(finalDoc.Blocks))
 	}
@@ -154,9 +139,7 @@ func TestIncidentInvestigation(t *testing.T) {
 
 	// Verify revision history of the alerts_matcher block.
 	alertHistory, err := ctrl.ListBlockHistory(ctx, doc.Uid, alertsBlock.BlockNumber)
-	if err != nil {
-		t.Fatalf("list block history: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if len(alertHistory) != 2 {
 		t.Fatalf("expected 2 revisions for alerts_matcher, got %d", len(alertHistory))
 	}
@@ -164,13 +147,9 @@ func TestIncidentInvestigation(t *testing.T) {
 	// First revision should have 1 matcher, second should have 2; the record
 	// timestamp must be preserved across revisions.
 	am1, err := content.ItemView[prometheus.AlertsMatcher](alertHistory[0].Record)
-	if err != nil {
-		t.Fatalf("rev 1 record: %v", err)
-	}
+	testutil.NoErr(t, err)
 	am2, err := content.ItemView[prometheus.AlertsMatcher](alertHistory[1].Record)
-	if err != nil {
-		t.Fatalf("rev 2 record: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if len(am1.ContentValue.LabelsMatchers) != 1 {
 		t.Errorf("rev 1: expected 1 matcher, got %d", len(am1.ContentValue.LabelsMatchers))
 	}

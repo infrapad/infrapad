@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
@@ -20,25 +21,19 @@ func TestRecordPersistenceRoundTrip(t *testing.T) {
 	f := newFixture(t)
 	ctrl := f.ctrl
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
-	if err != nil {
-		t.Fatalf("create document: %v", err)
-	}
+	testutil.NoErr(t, err)
 
 	blk, err := ctrl.AddBlock(ctx, doc.Uid, model.Block{
 		Type:    prometheus.AlertsMatcherTypeName,
 		Content: json.RawMessage(`{"labels_matchers":[{"alertname":["CrashLoopBackOff"]}],"since":"2026-10-25T10:00:00Z"}`),
 	})
-	if err != nil {
-		t.Fatalf("add block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if _, ok := blk.Record.(content.ItemRecord); !ok {
 		t.Fatal("created block carries no item record")
 	}
 	// The persisted envelope is the full host record, not the flat inner content.
 	var envelope map[string]any
-	if err := json.Unmarshal(blk.SerializedRecord.Data, &envelope); err != nil {
-		t.Fatalf("serialized record is not JSON: %v", err)
-	}
+	testutil.NoErr(t, json.Unmarshal(blk.SerializedRecord.Data, &envelope))
 	if envelope["timestamp"] == nil || envelope["content"] == nil {
 		t.Fatalf("serialized record is not a host record envelope: %v", envelope)
 	}
@@ -47,13 +42,9 @@ func TestRecordPersistenceRoundTrip(t *testing.T) {
 	}
 
 	fetched, err := ctrl.GetBlock(ctx, doc.Uid, blk.BlockNumber, 0)
-	if err != nil {
-		t.Fatalf("get block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	view, err := content.ItemView[prometheus.AlertsMatcher](fetched.Record)
-	if err != nil {
-		t.Fatalf("restored record: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if len(view.ContentValue.LabelsMatchers) != 1 ||
 		view.ContentValue.LabelsMatchers[0]["alertname"][0] != "CrashLoopBackOff" {
 		t.Fatalf("unexpected restored content: %#v", view.ContentValue)
@@ -71,17 +62,13 @@ func TestTimestampPreservationAcrossRevisions(t *testing.T) {
 	f := newFixture(t)
 	ctrl := f.ctrl
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
-	if err != nil {
-		t.Fatalf("create document: %v", err)
-	}
+	testutil.NoErr(t, err)
 	before := time.Now().UTC()
 	blk, err := ctrl.AddBlock(ctx, doc.Uid, model.Block{
 		Type:    core.MarkdownTypeName,
 		Content: json.RawMessage(`{"text":"first"}`),
 	})
-	if err != nil {
-		t.Fatalf("add block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	created := blk.Record.Timestamp()
 	if created.Before(before.Add(-time.Minute)) || created.After(time.Now().UTC().Add(time.Minute)) {
 		t.Fatalf("record timestamp not initialized from creation time: %v", created)
@@ -91,15 +78,14 @@ func TestTimestampPreservationAcrossRevisions(t *testing.T) {
 		Type:    core.MarkdownTypeName,
 		Content: json.RawMessage(`{"text":"second"}`),
 	})
-	if err != nil {
-		t.Fatalf("update block: %v", err)
-	}
+	testutil.NoErr(t, err)
 	if !updated.Record.Timestamp().Equal(created) {
 		t.Fatalf("record timestamp not preserved: %v != %v", updated.Record.Timestamp(), created)
 	}
 	view, err := content.ItemView[core.Markdown](updated.Record)
-	if err != nil || view.ContentValue.Text != "second" {
-		t.Fatalf("unexpected updated content: %#v (%v)", view.ContentValue, err)
+	testutil.NoErr(t, err)
+	if view.ContentValue.Text != "second" {
+		t.Fatalf("unexpected updated content: %#v", view.ContentValue)
 	}
 }
 
@@ -111,9 +97,7 @@ func TestStrictInputRejection(t *testing.T) {
 	f := newFixture(t)
 	ctrl := f.ctrl
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
-	if err != nil {
-		t.Fatalf("create document: %v", err)
-	}
+	testutil.NoErr(t, err)
 
 	cases := []struct {
 		name     string
@@ -141,9 +125,7 @@ func TestStrictInputRejection(t *testing.T) {
 				t.Fatalf("expected invalid input, got: %v", err)
 			}
 			blocks, err := ctrl.ListBlocks(ctx, doc.Uid)
-			if err != nil {
-				t.Fatalf("list blocks: %v", err)
-			}
+			testutil.NoErr(t, err)
 			if len(blocks) != 0 {
 				t.Fatalf("rejected submission changed the document: %d blocks", len(blocks))
 			}

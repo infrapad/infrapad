@@ -65,6 +65,14 @@ type Block struct {
 	// change it.
 	ParentBlockNumber *BlockNumber
 
+	// Timestamp carries the submitted public timestamp echo. It is
+	// input-only validation metadata: the authoritative event timestamp
+	// lives in the record (Record.Timestamp()) and every output derives
+	// it from there. Creation must omit it; updates may omit it or echo
+	// the stored event time unchanged — assignments and changes are
+	// rejected as invalid input.
+	Timestamp *time.Time
+
 	// Content is the raw inner content JSON submitted through the public
 	// API; see the struct documentation. Only meaningful on input (the
 	// controller consumes it when building the record).

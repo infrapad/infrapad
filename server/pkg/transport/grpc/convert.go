@@ -52,8 +52,18 @@ func blockToProto(b model.Block, documentUID model.DocumentUID) (*pb.Block, erro
 		out.ParentBlockNumber = int32Ptr(*b.ParentBlockNumber)
 	}
 
+	// The public event timestamp is read-only metadata derived from the
+	// authoritative record: ordinary blocks expose their creation time,
+	// generated blocks their source event time, and collections their
+	// first member's event time. It is distinct from created_at, the
+	// creation time of this particular revision.
+	if b.Record != nil {
+		out.Timestamp = timestamppb.New(b.Record.Timestamp())
+	}
+
 	// The public API exposes the inner extension content value, not the
-	// host record envelope: producers never see or supply host timestamps.
+	// host record envelope: the record's host metadata (event timestamp,
+	// keys) never appears inside content.
 	if b.Record != nil {
 		item, ok := b.Record.(content.ItemRecord)
 		if !ok {
@@ -98,6 +108,13 @@ func blockFromProto(b *pb.Block) (model.Block, error) {
 	}
 	if b.ParentBlockNumber != nil {
 		out.ParentBlockNumber = blockNumberPtr(model.BlockNumber(*b.ParentBlockNumber))
+	}
+	// A supplied event timestamp is preserved as an input echo so the
+	// controller can distinguish omission from an unchanged echo; it is
+	// never authoritative and never reaches the record.
+	if b.GetTimestamp() != nil {
+		echo := b.GetTimestamp().AsTime()
+		out.Timestamp = &echo
 	}
 
 	// The public API carries the inner extension content value. It is

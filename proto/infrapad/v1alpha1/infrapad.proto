@@ -69,6 +69,17 @@ message Block {
     optional int32 parent_block_number = 8
         [ (google.api.field_behavior) = OPTIONAL ];
 
+    // Read-only event timestamp of the block's host record: when the
+    // underlying event occurred. Ordinary blocks keep their creation
+    // time; generated blocks keep the event time supplied by their
+    // extension; collections expose their first member's event time.
+    // Distinct from created_at, which is the creation time of this
+    // particular revision.
+    // Public submissions must omit it on creation; updates may omit it
+    // or exactly echo the stored event time. Assignments and changes
+    // are rejected with an invalid-argument error.
+    optional google.protobuf.Timestamp timestamp = 9;
+
     // Arbitrary content payload; structure is determined by `type`.
     // The value is the inner extension content, not a host record
     // envelope: producers never supply host timestamps.

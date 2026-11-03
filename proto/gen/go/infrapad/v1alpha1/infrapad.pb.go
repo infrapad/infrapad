@@ -127,6 +127,16 @@ type Block struct {
 	// omit it on creation and may only exactly echo the stored value on
 	// updates; anything else is rejected with an invalid-argument error.
 	ParentBlockNumber *int32 `protobuf:"varint,8,opt,name=parent_block_number,json=parentBlockNumber,proto3,oneof" json:"parent_block_number,omitempty"`
+	// Read-only event timestamp of the block's host record: when the
+	// underlying event occurred. Ordinary blocks keep their creation
+	// time; generated blocks keep the event time supplied by their
+	// extension; collections expose their first member's event time.
+	// Distinct from created_at, which is the creation time of this
+	// particular revision.
+	// Public submissions must omit it on creation; updates may omit it
+	// or exactly echo the stored event time. Assignments and changes
+	// are rejected with an invalid-argument error.
+	Timestamp *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=timestamp,proto3,oneof" json:"timestamp,omitempty"`
 	// Arbitrary content payload; structure is determined by `type`.
 	// The value is the inner extension content, not a host record
 	// envelope: producers never supply host timestamps.
@@ -223,6 +233,13 @@ func (x *Block) GetParentBlockNumber() int32 {
 		return *x.ParentBlockNumber
 	}
 	return 0
+}
+
+func (x *Block) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
 }
 
 func (x *Block) GetContent() *structpb.Struct {
@@ -1007,7 +1024,7 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x12/\n" +
 	"\x06blocks\x18\x06 \x03(\v2\x12.infrapad.v1.BlockB\x03\xe0A\x03R\x06blocks:D\xeaAA\n" +
-	"\x14infrapad.io/Document\x12\x14documents/{document}*\tdocuments2\bdocument\"\xe7\x03\n" +
+	"\x14infrapad.io/Document\x12\x14documents/{document}*\tdocuments2\bdocument\"\xb4\x04\n" +
 	"\x05Block\x12\x1a\n" +
 	"\x04name\x18\x01 \x01(\tB\x06\xe0A\b\xe0A\x03R\x04name\x12&\n" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x03R\vblockNumber\x12,\n" +
@@ -1017,11 +1034,14 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\x06status\x18\x06 \x01(\tB\x03\xe0A\x01R\x06status\x12>\n" +
 	"\n" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\tcreatedAt\x128\n" +
-	"\x13parent_block_number\x18\b \x01(\x05B\x03\xe0A\x01H\x00R\x11parentBlockNumber\x88\x01\x01\x126\n" +
+	"\x13parent_block_number\x18\b \x01(\x05B\x03\xe0A\x01H\x00R\x11parentBlockNumber\x88\x01\x01\x12=\n" +
+	"\ttimestamp\x18\t \x01(\v2\x1a.google.protobuf.TimestampH\x01R\ttimestamp\x88\x01\x01\x126\n" +
 	"\acontent\x18\n" +
 	" \x01(\v2\x17.google.protobuf.StructB\x03\xe0A\x02R\acontent:J\xeaAG\n" +
 	"\x11infrapad.io/Block\x12#documents/{document}/blocks/{block}*\x06blocks2\x05blockB\x16\n" +
-	"\x14_parent_block_number\"\x86\x01\n" +
+	"\x14_parent_block_numberB\f\n" +
+	"\n" +
+	"_timestamp\"\x86\x01\n" +
 	"\x15CreateDocumentRequest\x12\x19\n" +
 	"\x05title\x18\x01 \x01(\tB\x03\xe0A\x02R\x05title\x12!\n" +
 	"\tnamespace\x18\x02 \x01(\tB\x03\xe0A\x01R\tnamespace\x12/\n" +
@@ -1117,39 +1137,40 @@ var file_infrapad_v1alpha1_infrapad_proto_depIdxs = []int32{
 	18, // 0: infrapad.v1.Document.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 1: infrapad.v1.Document.blocks:type_name -> infrapad.v1.Block
 	18, // 2: infrapad.v1.Block.created_at:type_name -> google.protobuf.Timestamp
-	19, // 3: infrapad.v1.Block.content:type_name -> google.protobuf.Struct
-	1,  // 4: infrapad.v1.CreateDocumentRequest.blocks:type_name -> infrapad.v1.Block
-	0,  // 5: infrapad.v1.CreateDocumentResponse.document:type_name -> infrapad.v1.Document
-	0,  // 6: infrapad.v1.GetDocumentResponse.document:type_name -> infrapad.v1.Document
-	0,  // 7: infrapad.v1.ListDocumentsResponse.documents:type_name -> infrapad.v1.Document
-	1,  // 8: infrapad.v1.AddBlockRequest.block:type_name -> infrapad.v1.Block
-	1,  // 9: infrapad.v1.AddBlockResponse.block:type_name -> infrapad.v1.Block
-	1,  // 10: infrapad.v1.UpdateBlockRequest.block:type_name -> infrapad.v1.Block
-	1,  // 11: infrapad.v1.UpdateBlockResponse.block:type_name -> infrapad.v1.Block
-	1,  // 12: infrapad.v1.GetBlockResponse.block:type_name -> infrapad.v1.Block
-	1,  // 13: infrapad.v1.ListBlocksResponse.blocks:type_name -> infrapad.v1.Block
-	1,  // 14: infrapad.v1.ListBlockHistoryResponse.blocks:type_name -> infrapad.v1.Block
-	2,  // 15: infrapad.v1.InfrapadService.CreateDocument:input_type -> infrapad.v1.CreateDocumentRequest
-	4,  // 16: infrapad.v1.InfrapadService.GetDocument:input_type -> infrapad.v1.GetDocumentRequest
-	6,  // 17: infrapad.v1.InfrapadService.ListDocuments:input_type -> infrapad.v1.ListDocumentsRequest
-	8,  // 18: infrapad.v1.InfrapadService.AddBlock:input_type -> infrapad.v1.AddBlockRequest
-	10, // 19: infrapad.v1.InfrapadService.UpdateBlock:input_type -> infrapad.v1.UpdateBlockRequest
-	12, // 20: infrapad.v1.InfrapadService.GetBlock:input_type -> infrapad.v1.GetBlockRequest
-	14, // 21: infrapad.v1.InfrapadService.ListBlocks:input_type -> infrapad.v1.ListBlocksRequest
-	16, // 22: infrapad.v1.InfrapadService.ListBlockHistory:input_type -> infrapad.v1.ListBlockHistoryRequest
-	3,  // 23: infrapad.v1.InfrapadService.CreateDocument:output_type -> infrapad.v1.CreateDocumentResponse
-	5,  // 24: infrapad.v1.InfrapadService.GetDocument:output_type -> infrapad.v1.GetDocumentResponse
-	7,  // 25: infrapad.v1.InfrapadService.ListDocuments:output_type -> infrapad.v1.ListDocumentsResponse
-	9,  // 26: infrapad.v1.InfrapadService.AddBlock:output_type -> infrapad.v1.AddBlockResponse
-	11, // 27: infrapad.v1.InfrapadService.UpdateBlock:output_type -> infrapad.v1.UpdateBlockResponse
-	13, // 28: infrapad.v1.InfrapadService.GetBlock:output_type -> infrapad.v1.GetBlockResponse
-	15, // 29: infrapad.v1.InfrapadService.ListBlocks:output_type -> infrapad.v1.ListBlocksResponse
-	17, // 30: infrapad.v1.InfrapadService.ListBlockHistory:output_type -> infrapad.v1.ListBlockHistoryResponse
-	23, // [23:31] is the sub-list for method output_type
-	15, // [15:23] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	18, // 3: infrapad.v1.Block.timestamp:type_name -> google.protobuf.Timestamp
+	19, // 4: infrapad.v1.Block.content:type_name -> google.protobuf.Struct
+	1,  // 5: infrapad.v1.CreateDocumentRequest.blocks:type_name -> infrapad.v1.Block
+	0,  // 6: infrapad.v1.CreateDocumentResponse.document:type_name -> infrapad.v1.Document
+	0,  // 7: infrapad.v1.GetDocumentResponse.document:type_name -> infrapad.v1.Document
+	0,  // 8: infrapad.v1.ListDocumentsResponse.documents:type_name -> infrapad.v1.Document
+	1,  // 9: infrapad.v1.AddBlockRequest.block:type_name -> infrapad.v1.Block
+	1,  // 10: infrapad.v1.AddBlockResponse.block:type_name -> infrapad.v1.Block
+	1,  // 11: infrapad.v1.UpdateBlockRequest.block:type_name -> infrapad.v1.Block
+	1,  // 12: infrapad.v1.UpdateBlockResponse.block:type_name -> infrapad.v1.Block
+	1,  // 13: infrapad.v1.GetBlockResponse.block:type_name -> infrapad.v1.Block
+	1,  // 14: infrapad.v1.ListBlocksResponse.blocks:type_name -> infrapad.v1.Block
+	1,  // 15: infrapad.v1.ListBlockHistoryResponse.blocks:type_name -> infrapad.v1.Block
+	2,  // 16: infrapad.v1.InfrapadService.CreateDocument:input_type -> infrapad.v1.CreateDocumentRequest
+	4,  // 17: infrapad.v1.InfrapadService.GetDocument:input_type -> infrapad.v1.GetDocumentRequest
+	6,  // 18: infrapad.v1.InfrapadService.ListDocuments:input_type -> infrapad.v1.ListDocumentsRequest
+	8,  // 19: infrapad.v1.InfrapadService.AddBlock:input_type -> infrapad.v1.AddBlockRequest
+	10, // 20: infrapad.v1.InfrapadService.UpdateBlock:input_type -> infrapad.v1.UpdateBlockRequest
+	12, // 21: infrapad.v1.InfrapadService.GetBlock:input_type -> infrapad.v1.GetBlockRequest
+	14, // 22: infrapad.v1.InfrapadService.ListBlocks:input_type -> infrapad.v1.ListBlocksRequest
+	16, // 23: infrapad.v1.InfrapadService.ListBlockHistory:input_type -> infrapad.v1.ListBlockHistoryRequest
+	3,  // 24: infrapad.v1.InfrapadService.CreateDocument:output_type -> infrapad.v1.CreateDocumentResponse
+	5,  // 25: infrapad.v1.InfrapadService.GetDocument:output_type -> infrapad.v1.GetDocumentResponse
+	7,  // 26: infrapad.v1.InfrapadService.ListDocuments:output_type -> infrapad.v1.ListDocumentsResponse
+	9,  // 27: infrapad.v1.InfrapadService.AddBlock:output_type -> infrapad.v1.AddBlockResponse
+	11, // 28: infrapad.v1.InfrapadService.UpdateBlock:output_type -> infrapad.v1.UpdateBlockResponse
+	13, // 29: infrapad.v1.InfrapadService.GetBlock:output_type -> infrapad.v1.GetBlockResponse
+	15, // 30: infrapad.v1.InfrapadService.ListBlocks:output_type -> infrapad.v1.ListBlocksResponse
+	17, // 31: infrapad.v1.InfrapadService.ListBlockHistory:output_type -> infrapad.v1.ListBlockHistoryResponse
+	24, // [24:32] is the sub-list for method output_type
+	16, // [16:24] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_infrapad_v1alpha1_infrapad_proto_init() }
