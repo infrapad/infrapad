@@ -160,21 +160,22 @@ var errNotFound = notFoundError{}
 // Controller tests
 // ---------------------------------------------------------------------------
 
-func newTestController(t *testing.T) (*controller.Controller, *fakeStore) {
+func newTestController(t *testing.T) (*controller.Controller, *core.MarkdownType, *fakeStore) {
 	t.Helper()
-	registry, err := content.NewRegistry(core.ContentTypes(), prometheus.ContentTypes())
+	markdown := core.NewMarkdownType()
+	registry, err := content.NewRegistry([]content.ContentType{markdown}, prometheus.ContentTypes())
 	if err != nil {
 		t.Fatalf("build registry: %v", err)
 	}
 	s := newFakeStore()
-	return controller.New(s, registry), s
+	return controller.New(s, registry), markdown, s
 }
 
 // TestRecordPersistenceRoundTrip checks that a submitted inner content value
 // is persisted as a full host record envelope and restored losslessly.
 func TestRecordPersistenceRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	ctrl, _ := newTestController(t)
+	ctrl, _, _ := newTestController(t)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
 	if err != nil {
@@ -225,7 +226,7 @@ func TestRecordPersistenceRoundTrip(t *testing.T) {
 // on updates.
 func TestTimestampPreservationAcrossRevisions(t *testing.T) {
 	ctx := context.Background()
-	ctrl, _ := newTestController(t)
+	ctrl, _, _ := newTestController(t)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
 	if err != nil {
@@ -265,7 +266,7 @@ func TestTimestampPreservationAcrossRevisions(t *testing.T) {
 // as invalid input without changing the document.
 func TestStrictInputRejection(t *testing.T) {
 	ctx := context.Background()
-	ctrl, _ := newTestController(t)
+	ctrl, _, _ := newTestController(t)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
 	if err != nil {

@@ -159,6 +159,59 @@ most one immediate parent, and references never cross documents.
   expansion/reconciliation decides otherwise, and reviving a child requires
   a live parent.
 
+## Generated-block identities
+
+Generated (extension-emitted) constituents carry a stable identity inside
+the existing `serialized_content` envelope: a `key` field on standalone
+records and per-member `key` fields inside collection envelopes, next to
+the member event timestamps. There are no extra columns, tables, or
+migrations for identities; the store stays content-type agnostic and the
+controller owns the record codecs.
+
+**Identity scope**: a generated constituent's identity is its document,
+its immediate generating parent block (`parent_block_number`), and its
+opaque non-empty key. Keys are unique across the parent's complete live
+direct output — different content types and separate groups included —
+so different parents (including at different nesting levels) may reuse
+the same key. Matching additionally requires the same content type: a
+key changing content type does not retain its old block number; a later
+reconciliation retires the old block and allocates new output.
+
+**Writes**: generated children are created and revised only through the
+transaction-scoped host helpers, which take validated full
+`content.Record` values rather than inner-content submissions:
+
+- `Controller.CreateChildBlockTx` retains the supplied record as-is, so
+  generated keys, complete memberships, member order, event timestamps,
+  and inner values survive creation.
+- `Controller.AppendGeneratedRevisionTx` appends a revision of a matched
+  live generated block, preserving the immutable parent and content type
+  and the key of a standalone reference, while collection membership (and
+  the derived first-member anchor) may change freely with the block
+  number staying stable.
+
+Both reject, as invalid input and without writing: missing or malformed
+keys, keys colliding with the parent's live direct output (deleted blocks
+are not part of it, so a returning key gets a new block), content-type
+changes, and standalone key changes. Ordinary public writes keep
+submitting inner content only; producers never assign generated keys
+through them. Since collisions are checked against the *live* output, a
+key changing content type must retire the old block before the new
+output is created within the same reconciliation transaction.
+
+**Membership matching** (`controller.MatchGeneratedOutput`) is a pure
+helper over previous latest blocks and already-formed desired records of
+one immediate parent; it performs no writes and allocates no block
+numbers. For each live same-parent block, the first member in persisted
+order whose key survives in desired output of the same content type
+nominates that desired record; a standalone keyed reference counts as a
+one-member record. When several old blocks nominate the same desired
+record, the lower existing block number wins and losers do not fall back
+to another desired record. Deleted blocks are never candidates. The
+matcher returns matches, unmatched desired records, and unmatched old
+blocks; applying them (revisions, fresh block allocation, retirement of
+unmatched output) is owned by the later snapshot reconciliation.
+
 ## Document mutation locking
 
 All block mutations within a document — public block add/update as well as

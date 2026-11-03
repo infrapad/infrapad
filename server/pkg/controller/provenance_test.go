@@ -6,6 +6,7 @@ package controller_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
@@ -20,16 +21,23 @@ func markdownBlock(text string) model.Block {
 	}
 }
 
+// keyedMarkdown builds a keyed Core/Markdown record, standing in for a
+// generated record carried through the internal host path.
+func keyedMarkdown(markdown *core.MarkdownType, key, text string) content.Record {
+	return content.NewKeyedItem(markdown, key, time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC), core.Markdown{Text: text})
+}
+
 // createChild is a small helper around the transaction-scoped host path.
-func createChild(t *testing.T, ctrl *controller.Controller, ctx context.Context,
+func createChild(t *testing.T, ctx context.Context, ctrl *controller.Controller, markdown *core.MarkdownType,
 	documentUID model.DocumentUID, parent model.BlockNumber, text string) model.Block {
 	t.Helper()
+	record := keyedMarkdown(markdown, "md:"+text, text)
 	tx, err := ctrl.BeginHostTx(ctx, documentUID)
 	if err != nil {
 		t.Fatalf("begin host tx: %v", err)
 	}
 	defer tx.Rollback()
-	child, err := ctrl.CreateChildBlockTx(ctx, tx, documentUID, parent, markdownBlock(text))
+	child, err := ctrl.CreateChildBlockTx(ctx, tx, documentUID, parent, record, "host")
 	if err != nil {
 		t.Fatalf("create child block: %v", err)
 	}
@@ -61,7 +69,7 @@ func recordContentView(blk model.Block) (string, error) {
 // preserved content and parents, and parent-only restoration.
 func TestProvenanceLifecycle(t *testing.T) {
 	ctx := context.Background()
-	ctrl, _ := newTestController(t)
+	ctrl, markdown, _ := newTestController(t)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
 	if err != nil {
@@ -76,8 +84,8 @@ func TestProvenanceLifecycle(t *testing.T) {
 		t.Fatalf("public block unexpectedly carries provenance: %d", *root.ParentBlockNumber)
 	}
 
-	child := createChild(t, ctrl, ctx, doc.Uid, root.BlockNumber, "child")
-	grandchild := createChild(t, ctrl, ctx, doc.Uid, child.BlockNumber, "grandchild")
+	child := createChild(t, ctx, ctrl, markdown, doc.Uid, root.BlockNumber, "child")
+	grandchild := createChild(t, ctx, ctrl, markdown, doc.Uid, child.BlockNumber, "grandchild")
 	if parentOf(t, child) != root.BlockNumber || parentOf(t, grandchild) != child.BlockNumber {
 		t.Fatalf("unexpected provenance: child=%d grandchild=%d", child.BlockNumber, grandchild.BlockNumber)
 	}
@@ -215,7 +223,7 @@ func TestProvenanceLifecycle(t *testing.T) {
 // ancestry validation, including rollback of rejected operations.
 func TestProvenanceRejection(t *testing.T) {
 	ctx := context.Background()
-	ctrl, store := newTestController(t)
+	ctrl, markdown, store := newTestController(t)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "incident"})
 	if err != nil {
@@ -263,22 +271,16 @@ func TestProvenanceRejection(t *testing.T) {
 		t.Fatalf("expected invalid input for provenance assignment on update, got: %v", err)
 	}
 
-	// Invalid ancestry is rejected: missing parent and self-reference.
+	// Invalid ancestry is rejected: missing parent and a non-positive
+	// parent number.
 	tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 	if err != nil {
 		t.Fatalf("begin host tx: %v", err)
 	}
-	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, model.BlockNumber(999), markdownBlock("orphan")); err == nil || !controller.IsInvalidInput(err) {
+	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, model.BlockNumber(999), keyedMarkdown(markdown, "md:orphan", "orphan"), "host"); err == nil || !controller.IsInvalidInput(err) {
 		t.Fatalf("expected invalid input for missing parent, got: %v", err)
 	}
-	// Host child creation always assigns a fresh block number; preset
-	// numbers (including self-references) are rejected.
-	preset := markdownBlock("preset")
-	preset.BlockNumber = root.BlockNumber
-	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, preset); err == nil || !controller.IsInvalidInput(err) {
-		t.Fatalf("expected invalid input for preset block number, got: %v", err)
-	}
-	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, 0, markdownBlock("zero")); err == nil || !controller.IsInvalidInput(err) {
+	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, 0, keyedMarkdown(markdown, "md:zero", "zero"), "host"); err == nil || !controller.IsInvalidInput(err) {
 		t.Fatalf("expected invalid input for zero parent, got: %v", err)
 	}
 	tx.Rollback()
@@ -290,7 +292,7 @@ func TestProvenanceRejection(t *testing.T) {
 
 	// A child cannot be created beneath a deleted parent; the failing
 	// transaction is rolled back without changes.
-	child := createChild(t, ctrl, ctx, doc.Uid, root.BlockNumber, "child")
+	child := createChild(t, ctx, ctrl, markdown, doc.Uid, root.BlockNumber, "child")
 	deleteTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 	if err != nil {
 		t.Fatalf("begin delete tx: %v", err)
@@ -305,7 +307,7 @@ func TestProvenanceRejection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin host tx: %v", err)
 	}
-	if _, err := ctrl.CreateChildBlockTx(ctx, failTx, doc.Uid, root.BlockNumber, markdownBlock("late")); err == nil || !controller.IsInvalidInput(err) {
+	if _, err := ctrl.CreateChildBlockTx(ctx, failTx, doc.Uid, root.BlockNumber, keyedMarkdown(markdown, "md:late", "late"), "host"); err == nil || !controller.IsInvalidInput(err) {
 		t.Fatalf("expected invalid input for child beneath deleted parent, got: %v", err)
 	}
 	failTx.Rollback()

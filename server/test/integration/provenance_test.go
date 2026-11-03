@@ -25,6 +25,24 @@ func markdownBlock(text string) model.Block {
 	}
 }
 
+// keyedMarkdownRecord builds a keyed Core/Markdown record standing in for
+// a generated record carried through the internal host path.
+func keyedMarkdownRecord(markdown *core.MarkdownType, key, text string) content.Record {
+	return content.NewKeyedItem(markdown, key, time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC), core.Markdown{Text: text})
+}
+
+// markdownRegistry builds a registry holding one Core/Markdown instance
+// that is also returned to the caller for record construction.
+func markdownRegistry(t *testing.T) (*content.Registry, *core.MarkdownType) {
+	t.Helper()
+	markdown := core.NewMarkdownType()
+	registry, err := content.NewRegistry([]content.ContentType{markdown})
+	if err != nil {
+		t.Fatalf("build registry: %v", err)
+	}
+	return registry, markdown
+}
+
 // TestProvenancePersistenceRoundTrip checks the nullable parent column
 // round-trip through the transaction-scoped host path: creation, reads,
 // cascading deletion, and parent-only restoration.
@@ -37,10 +55,7 @@ func TestProvenancePersistenceRoundTrip(t *testing.T) {
 	}
 	defer db.Close()
 
-	registry, err := content.NewRegistry(core.ContentTypes())
-	if err != nil {
-		t.Fatalf("build registry: %v", err)
-	}
+	registry, markdown := markdownRegistry(t)
 	ctrl := controller.New(postgres.NewStore(db), registry)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "provenance round-trip"})
@@ -56,11 +71,11 @@ func TestProvenancePersistenceRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin host tx: %v", err)
 	}
-	child, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, markdownBlock("child"))
+	child, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, keyedMarkdownRecord(markdown, "md:child", "child"), "host")
 	if err != nil {
 		t.Fatalf("create child: %v", err)
 	}
-	grandchild, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, child.BlockNumber, markdownBlock("grandchild"))
+	grandchild, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, child.BlockNumber, keyedMarkdownRecord(markdown, "md:grandchild", "grandchild"), "host")
 	if err != nil {
 		t.Fatalf("create grandchild: %v", err)
 	}
@@ -143,10 +158,7 @@ func TestProvenanceConcurrency(t *testing.T) {
 	}
 	defer db.Close()
 
-	registry, err := content.NewRegistry(core.ContentTypes())
-	if err != nil {
-		t.Fatalf("build registry: %v", err)
-	}
+	registry, markdown := markdownRegistry(t)
 	ctrl := controller.New(postgres.NewStore(db), registry)
 
 	for i := 0; i < 10; i++ {
@@ -170,13 +182,14 @@ func TestProvenanceConcurrency(t *testing.T) {
 			}
 			return tx.Commit()
 		}
+		childRecord := keyedMarkdownRecord(markdown, fmt.Sprintf("md:child-%d", i), "child")
 		createChild := func() error {
 			tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 			if err != nil {
 				return err
 			}
 			defer tx.Rollback()
-			if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, markdownBlock("child")); err != nil {
+			if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, childRecord, "host"); err != nil {
 				return err
 			}
 			return tx.Commit()
@@ -247,10 +260,7 @@ func TestProvenanceLockSerialization(t *testing.T) {
 	}
 	defer db.Close()
 
-	registry, err := content.NewRegistry(core.ContentTypes())
-	if err != nil {
-		t.Fatalf("build registry: %v", err)
-	}
+	registry, markdown := markdownRegistry(t)
 	ctrl := controller.New(postgres.NewStore(db), registry)
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "provenance lock serialization"})
@@ -271,6 +281,7 @@ func TestProvenanceLockSerialization(t *testing.T) {
 		t.Fatalf("delete tree: %v", err)
 	}
 
+	lateRecord := keyedMarkdownRecord(markdown, "md:late", "late")
 	done := make(chan error, 1)
 	go func() {
 		tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
@@ -279,7 +290,7 @@ func TestProvenanceLockSerialization(t *testing.T) {
 			return
 		}
 		defer tx.Rollback()
-		if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, markdownBlock("late")); err != nil {
+		if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, root.BlockNumber, lateRecord, "host"); err != nil {
 			done <- err
 			return
 		}

@@ -20,8 +20,9 @@ package controller
 import (
 	"context"
 	"fmt"
-	"time"
+	"sort"
 
+	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/model"
 	"github.com/infrapad/infrapad/server/pkg/store"
 )
@@ -46,19 +47,30 @@ func (c *Controller) BeginHostTx(ctx context.Context, documentUID model.Document
 }
 
 // CreateChildBlockTx creates a generated child block under
-// parentBlockNumber in the same document and transaction. It is the only
-// path that assigns provenance; public block creation always rejects it.
-// The parent must already exist and be live (non-deleted) in the same
-// document, and the ancestry must be well-formed (no self-reference, no
-// cycles, no missing intermediate parents); otherwise the operation fails
-// as invalid input and the transaction is left untouched for rollback.
-// Callers create nested trees parent-first in one transaction.
-func (c *Controller) CreateChildBlockTx(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, parentBlockNumber model.BlockNumber, blk model.Block) (model.Block, error) {
+// parentBlockNumber in the same document and transaction, retaining the
+// supplied validated record as-is rather than rebuilding it from an
+// inner-content submission: generated keys, complete memberships, event
+// timestamps, and inner values survive the write. The record must be
+// keyed and pass Registry.ValidateRecord, and its member keys must not
+// collide with the parent's live direct output (see generated-block
+// identities in identities.go).
+//
+// It is the only path that assigns provenance; public block creation
+// always rejects it. The parent must already exist and be live
+// (non-deleted) in the same document, and the ancestry must be
+// well-formed (no self-reference, no cycles, no missing intermediate
+// parents); otherwise the operation fails as invalid input and the
+// transaction is left untouched for rollback. Callers create nested
+// trees parent-first in one transaction.
+func (c *Controller) CreateChildBlockTx(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, parentBlockNumber model.BlockNumber, record content.Record, author model.AuthorID) (model.Block, error) {
 	if parentBlockNumber <= 0 {
 		return model.Block{}, invalidInput("child block parent %d: must be positive", parentBlockNumber)
 	}
-	if blk.BlockNumber != 0 {
-		return model.Block{}, invalidInput("child block %d: block numbers are assigned by the host", blk.BlockNumber)
+	if err := checkGeneratedRecord(record); err != nil {
+		return model.Block{}, err
+	}
+	if err := c.registry.ValidateRecord(record); err != nil {
+		return model.Block{}, err
 	}
 
 	latest, err := c.latestBlocks(ctx, tx, documentUID)
@@ -68,17 +80,24 @@ func (c *Controller) CreateChildBlockTx(ctx context.Context, tx store.Tx, docume
 	if err := validateParentAncestry(latest, parentBlockNumber); err != nil {
 		return model.Block{}, err
 	}
+	if err := c.checkSiblingKeys(ctx, tx, documentUID, parentBlockNumber, record, 0); err != nil {
+		return model.Block{}, err
+	}
 
-	parent := model.BlockNumber(parentBlockNumber)
-	blk.ParentBlockNumber = &parent
-	if err := c.prepareNew(&blk, time.Now().UTC()); err != nil {
+	blk := model.Block{
+		Type:              record.ContentType().Name(),
+		ParentBlockNumber: &parentBlockNumber,
+		AuthorID:          author,
+		Record:            record,
+	}
+	if err := serializeRecord(&blk); err != nil {
 		return model.Block{}, err
 	}
 	created, err := tx.Blocks().Create(ctx, documentUID, blk)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("create child block: %w", err)
 	}
-	created.Record = blk.Record
+	created.Record = record
 	return created, nil
 }
 
@@ -173,6 +192,27 @@ func (c *Controller) latestBlocks(ctx context.Context, tx store.Tx, documentUID 
 	return latest, nil
 }
 
+// childBlocks returns the latest revision of every block whose immediate
+// parent is parentBlockNumber, in block-number order, with records
+// deserialized. Children of every status are included (deleted children
+// keep their content and parent); callers apply their own filtering.
+func (c *Controller) childBlocks(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, parentBlockNumber model.BlockNumber) ([]model.Block, error) {
+	latest, err := c.latestBlocks(ctx, tx, documentUID)
+	if err != nil {
+		return nil, err
+	}
+	indexed := childrenByParent(latest)[parentBlockNumber]
+	children := make([]model.Block, 0, len(indexed))
+	for _, blk := range indexed {
+		if err := c.deserializeRecord(&blk); err != nil {
+			return nil, err
+		}
+		children = append(children, blk)
+	}
+	sort.Slice(children, func(i, j int) bool { return children[i].BlockNumber < children[j].BlockNumber })
+	return children, nil
+}
+
 // validateParentAncestry checks that parentBlockNumber refers to a live
 // block in the same document with a well-formed ancestry chain: no missing
 // parents and no cycles. Parent-first creation plus immutable provenance
@@ -204,16 +244,24 @@ func validateParentAncestry(latest map[model.BlockNumber]model.Block, parentBloc
 	}
 }
 
+// childrenByParent indexes latest blocks by their immediate parent.
+// Root blocks (nil parent) are not descendants of anything and are
+// skipped.
+func childrenByParent(latest map[model.BlockNumber]model.Block) map[model.BlockNumber][]model.Block {
+	children := map[model.BlockNumber][]model.Block{}
+	for _, blk := range latest {
+		if parent := blk.ParentBlockNumber; parent != nil {
+			children[*parent] = append(children[*parent], blk)
+		}
+	}
+	return children
+}
+
 // liveDescendants returns the live (non-deleted) descendants of blockNumber
 // at every depth, in breadth-first order. Already deleted descendants are
 // skipped.
 func liveDescendants(latest map[model.BlockNumber]model.Block, blockNumber model.BlockNumber) []model.Block {
-	children := map[model.BlockNumber][]model.Block{}
-	for _, blk := range latest {
-		if blk.ParentBlockNumber != nil {
-			children[*blk.ParentBlockNumber] = append(children[*blk.ParentBlockNumber], blk)
-		}
-	}
+	children := childrenByParent(latest)
 
 	var out []model.Block
 	queue := []model.Block{latest[blockNumber]}
