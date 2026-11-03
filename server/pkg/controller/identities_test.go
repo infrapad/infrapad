@@ -1,8 +1,8 @@
 package controller_test
 
 // Generated-block identity contract tests: the pure membership matcher and
-// the record-preserving internal write helpers, using the thin Slack/agent
-// fixture. Full persistence round-trips live in the integration tests.
+// the record-preserving internal write helpers, using the Slack/agent types
+// of the shared fixture. Full persistence round-trips live in the integration tests.
 
 import (
 	"context"
@@ -19,95 +19,17 @@ import (
 
 var identityTS = time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
 
-func at(minute int) time.Time {
-	return time.Date(2026, 10, 25, 10, minute, 0, 0, time.UTC)
-}
-
-// identityFixture holds the controller and the concrete content type
-// instances it registered, so the record builders below take the types
-// directly instead of looking them up through the registry.
-type identityFixture struct {
-	ctrl         *controller.Controller
-	markdown     *core.MarkdownType
-	conversation *slack.ConversationType
-	agent        *aiagent.MessageType
-	store        *fakeStore
-}
-
-func newIdentityFixture(t *testing.T) *identityFixture {
-	t.Helper()
-	agent := aiagent.NewMessageType()
-	conversation := slack.NewConversationType()
-	thread := slack.NewThreadType(conversation, agent)
-	markdown := core.NewMarkdownType()
-	registry, err := content.NewRegistry([]content.ContentType{agent, thread, conversation, markdown})
-	if err != nil {
-		t.Fatalf("build registry: %v", err)
-	}
-	s := newFakeStore()
-	return &identityFixture{
-		ctrl:         controller.New(s, registry),
-		markdown:     markdown,
-		conversation: conversation,
-		agent:        agent,
-		store:        s,
-	}
-}
-
-// messageRecord builds one keyed Slack/Conversation member.
-func messageRecord(conversation *slack.ConversationType, key string, ts time.Time, author string) content.KeyedRecord {
-	return content.NewKeyedItem(conversation, key, ts, slack.Message{Author: author, Text: "message " + key})
-}
-
-// conversationRecord builds a collection record from message keys,
-// timestamps increasing with position.
-func conversationRecord(t *testing.T, conversation *slack.ConversationType, keys ...string) content.Record {
-	t.Helper()
-	items := make([]content.KeyedRecord, len(keys))
-	for n, key := range keys {
-		items[n] = messageRecord(conversation, key, at(n), "author-"+key)
-	}
-	collection, err := conversation.NewCollection(items)
-	if err != nil {
-		t.Fatalf("build conversation: %v", err)
-	}
-	return collection
-}
-
-// agentRecord builds a keyed standalone AIAgent/Message reference.
-func agentRecord(agent *aiagent.MessageType, key string) content.Record {
-	return content.NewKeyedItem(agent, key, at(0), aiagent.Message{Agent: "agent", Text: "message " + key})
-}
-
-// generatedBlock wraps a record into a latest-revision model block.
-func generatedBlock(number, parent model.BlockNumber, status model.BlockStatus, record content.Record) model.Block {
-	return model.Block{
-		BlockNumber:       number,
-		ParentBlockNumber: &parent,
-		Status:            status,
-		Type:              record.ContentType().Name(),
-		Record:            record,
-	}
-}
-
-func memberKeys(t *testing.T, record content.Record) []string {
-	t.Helper()
-	var keys []string
-	for _, member := range content.Members(record) {
-		keys = append(keys, member.Key())
-	}
-	return keys
-}
-
 // TestMembershipMatcher covers the focused matching contracts: anchor
 // removal, splits, collision resolution with no fallback, type isolation,
 // deleted-block exclusion, and standalone one-member records.
 func TestMembershipMatcher(t *testing.T) {
-	fixture := newIdentityFixture(t)
+	f := newFixture(t)
 	conversation := func(keys ...string) content.Record {
-		return conversationRecord(t, fixture.conversation, keys...)
+		return conversationRecord(t, f.conversationType, keys...)
 	}
-	agent := func(keys ...string) content.Record { return agentRecord(fixture.agent, keys[0]) }
+	agent := func(keys ...string) content.Record {
+		return content.NewKeyedItem(f.agentType, keys[0], identityTS, aiagent.Message{Agent: "agent", Text: "message " + keys[0]})
+	}
 
 	cases := []struct {
 		name string
@@ -206,9 +128,8 @@ func TestMembershipMatcher(t *testing.T) {
 // rollback leaving stored revisions unchanged.
 func TestGeneratedWriteRejection(t *testing.T) {
 	ctx := context.Background()
-	fixture := newIdentityFixture(t)
-	ctrl := fixture.ctrl
-
+	f := newFixture(t)
+	ctrl := f.ctrl
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "identities"})
 	if err != nil {
 		t.Fatalf("create document: %v", err)
@@ -222,7 +143,7 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	}
 
 	// Generated children require keyed records.
-	unkeyed := content.NewItem(fixture.conversation, identityTS, slack.Message{Author: "a", Text: "b"})
+	unkeyed := content.NewItem(f.conversationType, identityTS, slack.Message{Author: "a", Text: "b"})
 	tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 	if err != nil {
 		t.Fatalf("begin host tx: %v", err)
@@ -237,25 +158,26 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin host tx: %v", err)
 	}
-	convRecord := conversationRecord(t, fixture.conversation, "m1", "m2")
+	defer tx.Rollback()
+	convRecord := conversationRecord(t, f.conversationType, "m1", "m2")
 	convBlock, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, thread.BlockNumber, convRecord, "host")
 	if err != nil {
 		t.Fatalf("create conversation child: %v", err)
 	}
-	agent := agentRecord(fixture.agent, "m3")
+	agent := content.NewKeyedItem(f.agentType, "m3", identityTS, aiagent.Message{Agent: "agent", Text: "message m3"})
 	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, thread.BlockNumber, agent, "host"); err != nil {
 		t.Fatalf("create agent child: %v", err)
 	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit host tx: %v", err)
 	}
-	revisionsBefore := len(fixture.store.blocks[doc.Uid])
+	revisionsBefore := len(f.store.blocks[doc.Uid])
 
 	// Duplicate keys are rejected within the parent's live output, both
 	// for the same content type and across types.
 	for name, record := range map[string]content.Record{
-		"same type":  conversationRecord(t, fixture.conversation, "m1", "m4"),
-		"other type": agentRecord(fixture.agent, "m1"),
+		"same type":  conversationRecord(t, f.conversationType, "m1", "m4"),
+		"other type": content.NewKeyedItem(f.agentType, "m1", identityTS, aiagent.Message{Agent: "agent", Text: "message m1"}),
 	} {
 		tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 		if err != nil {
@@ -269,9 +191,9 @@ func TestGeneratedWriteRejection(t *testing.T) {
 
 	// Revisions keep the content type and standalone keys.
 	for name, record := range map[string]content.Record{
-		"type change":          keyedMarkdown(fixture.markdown, "m2", "edited"),
-		"reference key change": agentRecord(fixture.agent, "m9"),
-		"sibling collision":    conversationRecord(t, fixture.conversation, "m2", "m3"),
+		"type change":          content.NewKeyedItem(f.markdownType, "m2", identityTS, core.Markdown{Text: "edited"}),
+		"reference key change": content.NewKeyedItem(f.agentType, "m9", identityTS, aiagent.Message{Agent: "agent", Text: "message m9"}),
+		"sibling collision":    conversationRecord(t, f.conversationType, "m2", "m3"),
 	} {
 		number := convBlock.BlockNumber
 		if name == "reference key change" {
@@ -288,13 +210,13 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	}
 
 	// Rejected operations committed nothing.
-	if got := len(fixture.store.blocks[doc.Uid]); got != revisionsBefore {
+	if got := len(f.store.blocks[doc.Uid]); got != revisionsBefore {
 		t.Fatalf("rejected operations changed stored revisions: %d != %d", got, revisionsBefore)
 	}
 
 	// A collection revision may change membership (and the derived anchor)
 	// while the block number stays stable.
-	revised := conversationRecord(t, fixture.conversation, "m2")
+	revised := conversationRecord(t, f.conversationType, "m2")
 	tx, err = ctrl.BeginHostTx(ctx, doc.Uid)
 	if err != nil {
 		t.Fatalf("begin host tx: %v", err)
@@ -312,4 +234,45 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	if keys := memberKeys(t, revision.Record); len(keys) != 1 || keys[0] != "m2" {
 		t.Fatalf("unexpected revised membership: %v", keys)
 	}
+}
+
+// conversationRecord builds a collection record from message keys,
+// timestamps increasing with position.
+func conversationRecord(t *testing.T, conversationType *slack.ConversationType, keys ...string) content.Record {
+	t.Helper()
+	items := make([]content.KeyedRecord, len(keys))
+	for n, key := range keys {
+		items[n] = content.NewKeyedItem(conversationType, key, at(n), slack.Message{Author: "author-" + key, Text: "message " + key})
+	}
+	collection, err := conversationType.NewCollection(items)
+	if err != nil {
+		t.Fatalf("build conversation: %v", err)
+	}
+	return collection
+}
+
+// generatedBlock wraps a record into a latest-revision model block.
+func generatedBlock(number, parent model.BlockNumber, status model.BlockStatus, record content.Record) model.Block {
+	return model.Block{
+		BlockNumber:       number,
+		ParentBlockNumber: &parent,
+		Status:            status,
+		Type:              record.ContentType().Name(),
+		Record:            record,
+	}
+}
+
+func memberKeys(t *testing.T, record content.Record) []string {
+	t.Helper()
+	var keys []string
+	for _, member := range content.Members(record) {
+		keys = append(keys, member.Key())
+	}
+	return keys
+}
+
+// at returns a fixed timestamp offset by minutes, for ordering-relevant
+// record timestamps.
+func at(minute int) time.Time {
+	return time.Date(2026, 10, 25, 10, minute, 0, 0, time.UTC)
 }
