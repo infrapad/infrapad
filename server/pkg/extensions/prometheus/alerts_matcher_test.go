@@ -17,9 +17,9 @@ import (
 // the absence of a Markdown updater capability.
 func TestAlertsMatcherScenario(t *testing.T) {
 	registry, err := content.NewRegistry(prometheus.ContentTypes())
-	must(t, err)
+	testutil.NoErr(t, err)
 	matcher, err := registry.Lookup(prometheus.AlertsMatcherTypeName)
-	must(t, err)
+	testutil.NoErr(t, err)
 
 	value := prometheus.AlertsMatcher{
 		// Alternatives across entries, AND across label names, OR across
@@ -34,7 +34,7 @@ func TestAlertsMatcherScenario(t *testing.T) {
 	}
 	reloaded := testutil.RoundTripRecord(t, registry, content.NewItem(matcher, at("10:00"), value))
 	view, err := content.ItemView[prometheus.AlertsMatcher](reloaded)
-	must(t, err)
+	testutil.NoErr(t, err)
 	if !view.ContentValue.Since.Equal(at("09:00")) || !view.ContentValue.Until.Equal(at("12:00")) ||
 		len(view.ContentValue.LabelsMatchers) != 2 || view.ContentValue.Extras["dashboard"] != "https://grafana.example/x" {
 		t.Fatalf("unexpected content: %#v", view.ContentValue)
@@ -43,7 +43,7 @@ func TestAlertsMatcherScenario(t *testing.T) {
 	// A zero Until means an open-ended interval and survives the round trip.
 	open := prometheus.AlertsMatcher{LabelsMatchers: value.LabelsMatchers, Since: value.Since}
 	view, err = content.ItemView[prometheus.AlertsMatcher](testutil.RoundTripRecord(t, registry, content.NewItem(matcher, at("10:00"), open)))
-	must(t, err)
+	testutil.NoErr(t, err)
 	if !view.ContentValue.Until.IsZero() {
 		t.Fatalf("expected an open-ended interval, got %v", view.ContentValue.Until)
 	}
@@ -53,16 +53,16 @@ func TestAlertsMatcherScenario(t *testing.T) {
 		"labels_matchers": [{"severity": ["critical"]}],
 		"since": "2026-10-25T09:00:00Z"
 	}`))
-	must(t, err)
+	testutil.NoErr(t, err)
 	view, err = content.ItemView[prometheus.AlertsMatcher](decoded)
-	must(t, err)
+	testutil.NoErr(t, err)
 	if !view.ContentValue.Until.IsZero() || !view.ContentValue.Since.Equal(at("09:00")) {
 		t.Fatalf("unexpected decoded content: %#v", view.ContentValue)
 	}
 
 	// The matcher renders no Markdown body of its own.
 	body, err := matcher.RenderMarkdown(reloaded)
-	must(t, err)
+	testutil.NoErr(t, err)
 	if body != "" {
 		t.Fatalf("expected an empty body, got %q", body)
 	}
@@ -78,7 +78,7 @@ func TestAlertsMatcherScenario(t *testing.T) {
 // uppercase aliases, no unknown fields outside extras.
 func TestAlertsMatcherValidation(t *testing.T) {
 	registry, err := content.NewRegistry(prometheus.ContentTypes())
-	must(t, err)
+	testutil.NoErr(t, err)
 
 	cases := []struct {
 		name    string
@@ -128,11 +128,4 @@ func at(clock string) time.Time {
 		panic(err)
 	}
 	return value
-}
-
-func must(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
 }

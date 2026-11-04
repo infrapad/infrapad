@@ -33,10 +33,30 @@ func (t *ConversationType) NewCollection(items []content.KeyedRecord) (content.G
 	return content.NewCollection[Message](t, items)
 }
 
+// conversationTimestampFormat is the full UTC event timestamp rendered in
+// each conversation member header.
+const conversationTimestampFormat = "2006-01-02 15:04:05 MST"
+
+// renderConversation renders each member with author, full UTC timestamp,
+// optional source link, and the multiline message body on separate
+// indented lines.
 func renderConversation(collection content.GroupableCollection[Message]) (string, error) {
 	var out strings.Builder
 	for _, item := range collection.Items {
-		fmt.Fprintf(&out, "- %s **%s:** %s\n", item.Timestamp().UTC().Format("15:04"), item.ContentValue.Author, item.ContentValue.Text)
+		message := item.ContentValue
+		header := fmt.Sprintf("- **%s** · %s", message.Author, item.Timestamp().UTC().Format(conversationTimestampFormat))
+		if message.URL != "" {
+			header += fmt.Sprintf(" · [source](%s)", message.URL)
+		}
+		out.WriteString(header)
+		out.WriteString("\n")
+		for _, line := range strings.Split(message.Text, "\n") {
+			if line != "" {
+				out.WriteString("  ")
+				out.WriteString(line)
+			}
+			out.WriteString("\n")
+		}
 	}
 	return out.String(), nil
 }

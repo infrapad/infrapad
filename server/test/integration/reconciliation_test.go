@@ -7,8 +7,9 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
@@ -35,13 +36,13 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 
 	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "snapshot reconciliation"})
 	testutil.NoErr(t, err)
-	addThread := func(url string) model.Block {
-		blk, err := ctrl.AddBlock(ctx, doc.Uid, model.Block{Type: slack.ThreadTypeName, Content: []byte(`{"url":"` + url + `"}`)})
+	addThread := func(ts string) model.Block {
+		blk, err := ctrl.AddBlock(ctx, doc.Uid, model.Block{Type: slack.ThreadTypeName, Content: []byte(`{"url":"https://slack.example/archives/C1/p` + strings.ReplaceAll(ts, ".", "") + `"}`)})
 		testutil.NoErr(t, err)
 		return blk
 	}
-	t1 := addThread("https://slack.example/archives/C1/p1")
-	t2 := addThread("https://slack.example/archives/C1/p2")
+	t1 := addThread("1788873542.000000")
+	t2 := addThread("1788873542.000100")
 
 	// reconcile expands, validates, and reconciles one thread snapshot in
 	// its own host transaction, returning it for the caller to finish.
@@ -62,8 +63,15 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 		}
 		return res, tx.Commit, tx.Rollback
 	}
+	// slackBase aligns Slack timestamps with the identityAt wall clock.
+	slackBase := identityAt(0).Unix()
 	message := func(id string, minute, second int) slack.SourceMessage {
-		return slack.SourceMessage{ID: id, Timestamp: identityAt(minute).Add(time.Duration(second) * time.Second), Author: "author-" + id, Text: "message " + id}
+		return slack.SourceMessage{
+			Ts:       slackMessageTS(slackBase, minute, second, 0),
+			User:     "U" + id,
+			Text:     "message " + id,
+			UserName: "author-" + id,
+		}
 	}
 	// revisionCounts returns the number of revisions per block.
 	revisionCounts := func() map[model.BlockNumber]int {
@@ -80,7 +88,7 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 
 	res, commit, _ := reconcile(t1, message("1", 0, 0), message("2", 1, 0), message("3", 2, 0))
 	testutil.NoErr(t, commit())
-	conversation := res.Output[slack.MessageKey("1")]
+	conversation := res.Output[slack.MessageKey(slackMessageTS(slackBase, 0, 0, 0))]
 
 	// Thread 2's late event splits thread 1's conversation: both
 	// primaries' changes commit together.
@@ -91,7 +99,7 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 	}
 	latest, err := ctrl.GetBlock(ctx, doc.Uid, conversation, 0)
 	testutil.NoErr(t, err)
-	if keys := content.Members(latest.Record); len(keys) != 2 || keys[1].Key() != slack.MessageKey("2") || latest.RevisionNumber != 2 {
+	if keys := content.Members(latest.Record); len(keys) != 2 || keys[1].Key() != slack.MessageKey(slackMessageTS(slackBase, 1, 0, 0)) || latest.RevisionNumber != 2 {
 		t.Fatalf("conversation not split atomically: revision %d, %d members", latest.RevisionNumber, len(keys))
 	}
 
@@ -112,4 +120,10 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 			t.Fatalf("rollback changed revisions of block %d: %d -> %d", number, count, after[number])
 		}
 	}
+}
+
+// slackMessageTS formats a realistic Slack message timestamp aligned with
+// the identityAt wall clock of the fixture.
+func slackMessageTS(base int64, minute, second, micro int) string {
+	return fmt.Sprintf("%d.%06d", base+int64(minute)*60+int64(second), micro)
 }

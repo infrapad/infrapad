@@ -13,31 +13,108 @@ import "time"
 #ConversationTypeName: "Slack/Conversation"
 
 // ThreadReference is the inner content of a Slack/Thread primary record.
+// URL is the absolute HTTP(S) Slack permalink of the thread parent message.
 #ThreadReference: {
 	url: string @go(URL)
 }
 
-// Message is the inner content of one Slack/Conversation member.
+// Message is the inner content of one Slack/Conversation member:
+// a normalized readable message with attribution and source link.
 #Message: {
+	// Author is the resolved author name, falling back to the Slack user
+	// ID or an explicit unknown-author label.
 	author: string @go(Author)
-	text:   string @go(Text)
+
+	// Text is the normalized Markdown body, with readable attachment
+	// previews appended.
+	text: string @go(Text)
+
+	// URL is the optional absolute HTTP(S) permalink of the message.
+	// It is omitted when unavailable; an empty value is never valid.
+	url?: string @go(URL)
+
+	// Extras carries additional metadata not anticipated by the schema,
+	// such as source-system identifiers.
+	extras?: {...} @go(Extras,map[string]any)
 }
 
 // Snapshot is the transient payload of a Slack/Thread expansion: a complete
-// snapshot of the thread. This is a minimal representative format, not a
-// Slack API response.
+// enriched snapshot of the thread (parent and all replies) plus the
+// per-snapshot Slack user-ID → agent-name mapping. External producers
+// build the typed payload (converting their own enriched Slack responses,
+// including raw attachments, on their side); the server only validates it.
+// Raw Slack attachments never appear here, only their typed readable
+// previews.
 #Snapshot: {
+	// Agents maps the Slack user IDs of AI-agent messages to the agent
+	// names used for attribution. Matching is by exact user ID; unmapped
+	// messages, including other bots, remain ordinary conversation members.
+	// It is never stored on the thread reference or in server-wide
+	// configuration.
+	agents?: {[string]: string} @go(Agents,map[string]string)
+
+	// Messages is the complete thread in chronological order. An explicit
+	// empty array is valid and means no desired generated children;
+	// missing or null arrays are errors.
 	messages: [...#SourceMessage] @go(Messages,[]SourceMessage)
 }
 
-// SourceMessage is one message in a Snapshot.
+// SourceMessage is one enriched Slack message of a Snapshot.
 #SourceMessage: {
-	id:        string    @go(ID)
-	timestamp: time.Time @go(Timestamp)
-	author:    string    @go(Author)
-	text:      string    @go(Text)
+	// Ts is the Slack message timestamp; it is the stable source identity.
+	ts: string @go(Ts)
 
-	// Agent marks messages produced by an AI agent (representative fixture
-	// flag, not a finalized detection mechanism).
-	agent?: bool @go(Agent)
+	// User is the raw Slack user ID, empty when the message has no author.
+	user?: string @go(User)
+
+	// Text is the raw Slack message text, possibly empty for
+	// attachment-only messages.
+	text: string @go(Text)
+
+	// UserName is the resolved author name, empty when unresolved.
+	user_name?: string @go(UserName)
+
+	// ReadableText is Text with user mentions resolved, empty when
+	// unavailable.
+	readable_text?: string @go(ReadableText)
+
+	// Previews are typed readable attachment previews in attachment order.
+	previews?: [...#AttachmentPreview] @go(Previews,[]AttachmentPreview)
+}
+
+// AttachmentPreview is a typed readable preview of one message attachment
+// (an app unfurl or Work Object preview such as a PagerDuty incident card).
+// It reflects what Slack stored at unfurl time and may be stale; it is not
+// authoritative external state. Zero values mean the piece is unavailable
+// in the stored attachment.
+#AttachmentPreview: {
+	// Title is the displayed title.
+	title?: string @go(Title)
+
+	// TitleLink is the link attached to the title (ordinary attachments).
+	title_link?: string @go(TitleLink)
+
+	// URL is the external object identity URL (Work Objects).
+	url?: string @go(URL)
+
+	// EntityType identifies the Work Object entity type.
+	entity_type?: string @go(EntityType)
+
+	// ProductName is the product that produced the unfurl.
+	product_name?: string @go(ProductName)
+
+	// UpdatedAt is the Work Object update time, zero when unavailable.
+	updated_at: time.Time @go(UpdatedAt)
+
+	// Text is the preview body or fallback text.
+	text?: string @go(Text)
+
+	// Fields are labeled readable fields.
+	fields?: [...#PreviewField] @go(Fields,[]PreviewField)
+}
+
+// PreviewField is one labeled field of an AttachmentPreview.
+#PreviewField: {
+	label: string @go(Label)
+	value: string @go(Value)
 }

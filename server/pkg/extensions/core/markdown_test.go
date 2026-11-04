@@ -16,9 +16,9 @@ import (
 // rendering, and immutable Markdown updates preserving metadata and extras.
 func TestMarkdownScenario(t *testing.T) {
 	registry, err := content.NewRegistry(core.ContentTypes())
-	must(t, err)
+	testutil.NoErr(t, err)
 	markdown, err := registry.Lookup(core.MarkdownTypeName)
-	must(t, err)
+	testutil.NoErr(t, err)
 
 	text := "# Incident\n\nSomething **happened**.\n"
 	record := content.NewItem(markdown, at("10:00"), core.Markdown{
@@ -29,7 +29,7 @@ func TestMarkdownScenario(t *testing.T) {
 
 	// Rendering returns the text unchanged, without host framing.
 	body, err := reloaded.ContentType().RenderMarkdown(reloaded)
-	must(t, err)
+	testutil.NoErr(t, err)
 	if body != text {
 		t.Fatalf("unexpected rendering: %q", body)
 	}
@@ -41,9 +41,9 @@ func TestMarkdownScenario(t *testing.T) {
 		Extras: map[string]any{"origin": "agent"},
 	})
 	updated, err := markdown.(content.MarkdownUpdater).UpdateMarkdown(testutil.RoundTripRecord(t, registry, keyed), text)
-	must(t, err)
+	testutil.NoErr(t, err)
 	view, err := content.KeyedItemView[core.Markdown](updated)
-	must(t, err)
+	testutil.NoErr(t, err)
 	if view.ContentValue.Text != text || view.Key() != "summary-1" || !view.Timestamp().Equal(at("10:05")) {
 		t.Fatalf("unexpected update: %#v", view)
 	}
@@ -53,7 +53,7 @@ func TestMarkdownScenario(t *testing.T) {
 	if keyed.ContentValue.Text != "old body" {
 		t.Fatal("update modified the existing record")
 	}
-	must(t, registry.ValidateRecord(updated))
+	testutil.NoErr(t, registry.ValidateRecord(updated))
 	testutil.RoundTripRecord(t, registry, updated)
 	if _, ok := updated.(content.KeyedRecord); !ok {
 		t.Fatal("update dropped the generated key")
@@ -63,7 +63,7 @@ func TestMarkdownScenario(t *testing.T) {
 // TestMarkdownValidation checks the schema boundaries of Core/Markdown.
 func TestMarkdownValidation(t *testing.T) {
 	registry, err := content.NewRegistry(core.ContentTypes())
-	must(t, err)
+	testutil.NoErr(t, err)
 
 	// Unknown fields outside extras do not disappear through Go decoding.
 	_, err = registry.DecodeRecord(core.MarkdownTypeName, record(`{"text": "x", "Text": "y"}`))
@@ -100,11 +100,4 @@ func at(clock string) time.Time {
 		panic(err)
 	}
 	return value
-}
-
-func must(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
 }

@@ -135,7 +135,7 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	testutil.NoErr(t, err)
 	thread, err := ctrl.AddBlock(ctx, doc.Uid, model.Block{
 		Type:    slack.ThreadTypeName,
-		Content: []byte(`{"url":"https://slack.example/archives/C1/p1"}`),
+		Content: []byte(`{"url":"https://slack.example/archives/C1/p1788873542000000"}`),
 	})
 	testutil.NoErr(t, err)
 

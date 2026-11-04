@@ -21,20 +21,21 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
 	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
+	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
 	"github.com/infrapad/infrapad/server/pkg/store/postgres"
 	grpcTransport "github.com/infrapad/infrapad/server/pkg/transport/grpc"
 	transporthttp "github.com/infrapad/infrapad/server/pkg/transport/http"
 )
 
 var (
-	flagDBString                        string
-	flagPort                            int
-	flagHTTPAddr                        string
-	flagUIDir                           string
-	flagPrometheusURL                   string
-	flagPrometheusUpstreamURL           string
-	flagPrometheusUpstreamCAFile        string
-	flagPrometheusUpstreamInsecureSkip  bool
+	flagDBString                       string
+	flagPort                           int
+	flagHTTPAddr                       string
+	flagUIDir                          string
+	flagPrometheusURL                  string
+	flagPrometheusUpstreamURL          string
+	flagPrometheusUpstreamCAFile       string
+	flagPrometheusUpstreamInsecureSkip bool
 )
 
 func init() {
@@ -71,7 +72,11 @@ var startCmd = &cobra.Command{
 		// One explicit registry of the built-in extensions, constructed at
 		// startup and injected into the host/controller path. Additional
 		// extensions register their content types here.
-		registry, err := content.NewRegistry(core.ContentTypes(), prometheus.ContentTypes(), aiagent.ContentTypes())
+		agentType := aiagent.NewMessageType()
+		conversationType := slack.NewConversationType()
+		registry, err := content.NewRegistry(
+			core.ContentTypes(), prometheus.ContentTypes(),
+			[]content.ContentType{agentType, slack.NewThreadType(conversationType, agentType), conversationType})
 		if err != nil {
 			return fmt.Errorf("build content registry: %w", err)
 		}

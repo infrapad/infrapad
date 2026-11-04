@@ -26,12 +26,14 @@ func TestGeneratedSchemas(t *testing.T) {
 		data   string
 		err    string // empty when valid
 	}{
-		{"thread reference", thread.ContentSchema(), `{"url": "https://slack.example/x"}`, ""},
+		{"thread reference", thread.ContentSchema(), `{"url": "` + threadURL + `"}`, ""},
+		{"thread reference not a permalink", thread.ContentSchema(), `{"url": "https://workspace.example.test/x"}`, "url"},
 		{"message missing text", conversation.ContentSchema(), `{"author": "Alice"}`, "text"},
 		{"message unknown field", conversation.ContentSchema(), `{"author": "Alice", "text": "x", "ts": 1}`, "ts: field not allowed"},
-		{"snapshot", thread.PayloadSchema(), `{"messages": [{"id": "1", "timestamp": "2026-10-25T10:00:00Z", "author": "a", "text": "b", "agent": true}]}`, ""},
-		{"snapshot nested unknown field", thread.PayloadSchema(), `{"messages": [{"id": "1", "timestamp": "2026-10-25T10:00:00Z", "author": "a", "text": "b", "extra": 1}]}`, "messages.0.extra: field not allowed"},
-		{"snapshot malformed timestamp", thread.PayloadSchema(), `{"messages": [{"id": "1", "timestamp": "yesterday", "author": "a", "text": "b"}]}`, "time.Time"},
+		{"snapshot", thread.PayloadSchema(), `{"agents": {"U3": "investigation-agent"}, "messages": [{"ts": "1788873542.372739", "user": "U1", "text": "hi", "user_name": "Alice", "readable_text": "hi", "previews": [{"title": "T", "title_link": "https://example.com", "product_name": "P", "updated_at": "2026-09-08T13:19:02Z", "text": "b", "fields": [{"label": "L", "value": "V"}]}]}]}`, ""},
+		{"snapshot empty messages", thread.PayloadSchema(), `{"messages": []}`, ""},
+		{"snapshot blank agent name", thread.PayloadSchema(), `{"agents": {"U3": " "}, "messages": []}`, "agents"},
+		{"snapshot nested unknown field", thread.PayloadSchema(), `{"messages": [{"ts": "1.2", "text": "b", "extra": 1}]}`, "messages.0.extra: field not allowed"},
 		{"agent message extras", agent.ContentSchema(), `{"agent": "a", "text": "b", "extras": {"slack": {"ids": [1, "2"], "thread": {"ts": "1.2"}}}}`, ""},
 		{"agent message unknown field", agent.ContentSchema(), `{"agent": "a", "text": "b", "extra": {}}`, "extra: field not allowed"},
 	}
