@@ -2,6 +2,9 @@
 // Self-contained schema assembled from schema/*_go_gen.cue and
 // schema/*_patch.cue; run 'task server:extensions:schema:generate'.
 
+// Companion constraints for #Message, unified with the generated
+// schema/aiagent_go_gen.cue during schema assembly (see server/README.md).
+
 // Package aiagent implements the shared AIAgent/Message content type, which
 // other extensions (e.g. Slack) emit for messages produced by AI agents.
 package aiagent
@@ -10,8 +13,22 @@ package aiagent
 
 // Message is the inner content of an AIAgent/Message record.
 #Message: {
-	agent: string @go(Agent)
-	text:  string @go(Text)
+	// Agent is the required display name of the producing agent.
+
+	// Required display name containing a non-whitespace character.
+	agent: =~"\\S" @go(Agent)
+
+	// Text is the required Markdown body of the message.
+
+	// Required Markdown body containing a non-whitespace character.
+	text: =~"\\S" @go(Text)
+
+	// URL is the optional absolute HTTP(S) source URL of the message.
+	// It is omitted when unavailable; an empty value is never valid.
+
+	// Optional absolute HTTP(S) source URL with a host. An empty value is
+	// invalid; omit the field when no URL is available.
+	url?: =~"^(?i)https?://[^/\\s][^\\s]*$" @go(URL)
 
 	// Extras carries additional metadata not anticipated by the schema,
 	// such as source-system identifiers.

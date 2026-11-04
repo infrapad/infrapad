@@ -1,12 +1,12 @@
 package prometheus_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 )
@@ -32,7 +32,7 @@ func TestAlertsMatcherScenario(t *testing.T) {
 		Until:  at("12:00"),
 		Extras: map[string]any{"dashboard": "https://grafana.example/x"},
 	}
-	reloaded := roundTrip(t, registry, content.NewItem(matcher, at("10:00"), value))
+	reloaded := testutil.RoundTripRecord(t, registry, content.NewItem(matcher, at("10:00"), value))
 	view, err := content.ItemView[prometheus.AlertsMatcher](reloaded)
 	must(t, err)
 	if !view.ContentValue.Since.Equal(at("09:00")) || !view.ContentValue.Until.Equal(at("12:00")) ||
@@ -42,7 +42,7 @@ func TestAlertsMatcherScenario(t *testing.T) {
 
 	// A zero Until means an open-ended interval and survives the round trip.
 	open := prometheus.AlertsMatcher{LabelsMatchers: value.LabelsMatchers, Since: value.Since}
-	view, err = content.ItemView[prometheus.AlertsMatcher](roundTrip(t, registry, content.NewItem(matcher, at("10:00"), open)))
+	view, err = content.ItemView[prometheus.AlertsMatcher](testutil.RoundTripRecord(t, registry, content.NewItem(matcher, at("10:00"), open)))
 	must(t, err)
 	if !view.ContentValue.Until.IsZero() {
 		t.Fatalf("expected an open-ended interval, got %v", view.ContentValue.Until)
@@ -105,21 +105,6 @@ func TestAlertsMatcherValidation(t *testing.T) {
 // item wraps inner content in a host item record envelope.
 func item(content string) json.RawMessage {
 	return json.RawMessage(`{"timestamp": "2026-10-25T10:00:00Z", "content": ` + content + `}`)
-}
-
-// roundTrip encodes and decodes a record, checking the encoding is stable.
-func roundTrip[R content.Record](t *testing.T, registry *content.Registry, record R) content.Record {
-	t.Helper()
-	data, err := content.EncodeRecord(record)
-	must(t, err)
-	decoded, err := registry.DecodeRecord(record.ContentType().Name(), data)
-	must(t, err)
-	again, err := content.EncodeRecord(decoded)
-	must(t, err)
-	if !bytes.Equal(data, again) {
-		t.Fatalf("record changed through codec:\n%s\n%s", data, again)
-	}
-	return decoded
 }
 
 // expectField asserts a content-stage validation error reporting path.

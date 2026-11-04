@@ -10,8 +10,15 @@ package aiagent
 
 // Message is the inner content of an AIAgent/Message record.
 #Message: {
+	// Agent is the required display name of the producing agent.
 	agent: string @go(Agent)
-	text:  string @go(Text)
+
+	// Text is the required Markdown body of the message.
+	text: string @go(Text)
+
+	// URL is the optional absolute HTTP(S) source URL of the message.
+	// It is omitted when unavailable; an empty value is never valid.
+	url?: string @go(URL)
 
 	// Extras carries additional metadata not anticipated by the schema,
 	// such as source-system identifiers.

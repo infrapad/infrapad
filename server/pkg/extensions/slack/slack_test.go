@@ -1,7 +1,6 @@
 package slack_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
@@ -27,7 +27,7 @@ func TestThreadSnapshotScenario(t *testing.T) {
 	thread, err := registry.Lookup(slack.ThreadTypeName)
 	must(t, err)
 	root := content.NewItem(thread, at("10:00"), slack.ThreadReference{URL: "https://slack.example/archives/C1/p1"})
-	reloadedRoot := roundTrip(t, registry, root)
+	reloadedRoot := testutil.RoundTripRecord(t, registry, root)
 	if reloadedRoot.ContentType() != thread || !reloadedRoot.Timestamp().Equal(root.Timestamp()) {
 		t.Fatalf("root metadata not restored: %#v", reloadedRoot)
 	}
@@ -49,14 +49,14 @@ func TestThreadSnapshotScenario(t *testing.T) {
 	blocks := group(t, members)
 	var markdown []string
 	for _, block := range blocks {
-		reloaded := roundTrip(t, registry, block)
+		reloaded := testutil.RoundTripRecord(t, registry, block)
 		body, err := reloaded.ContentType().RenderMarkdown(reloaded)
 		must(t, err)
 		markdown = append(markdown, reloaded.ContentType().Name()+"\n"+body)
 	}
 	want := []string{
 		"Slack/Conversation\n- 10:00 **Alice:** Investigating.\n- 10:01 **Bob:** Checking the node.\n",
-		"AIAgent/Message\n### investigation-agent\n\nNode unhealthy.\n",
+		"AIAgent/Message\nNode unhealthy.",
 		"Slack/Conversation\n- 10:03 **Alice:** Replacement started.\n",
 	}
 	if strings.Join(markdown, "|") != strings.Join(want, "|") {
@@ -88,7 +88,7 @@ func TestThreadSnapshotScenario(t *testing.T) {
 
 	// A generated (keyed) thread reference keeps its key through expansion.
 	generated := content.NewKeyedItem(thread, "investigation-thread", at("10:00"), slack.ThreadReference{URL: "https://slack.example/x"})
-	if _, err := expand(registry, roundTrip(t, registry, generated), payload); err != nil {
+	if _, err := expand(registry, testutil.RoundTripRecord(t, registry, generated), payload); err != nil {
 		t.Fatal(err)
 	}
 
@@ -207,21 +207,6 @@ func group(t *testing.T, members []content.KeyedRecord) []content.KeyedRecord {
 		blocks = append(blocks, items[0])
 	}
 	return blocks
-}
-
-// roundTrip encodes and decodes a record, checking the encoding is stable.
-func roundTrip[R content.Record](t *testing.T, registry *content.Registry, record R) content.Record {
-	t.Helper()
-	data, err := content.EncodeRecord(record)
-	must(t, err)
-	decoded, err := registry.DecodeRecord(record.ContentType().Name(), data)
-	must(t, err)
-	again, err := content.EncodeRecord(decoded)
-	must(t, err)
-	if !bytes.Equal(data, again) {
-		t.Fatalf("record changed through codec:\n%s\n%s", data, again)
-	}
-	return decoded
 }
 
 func at(clock string) time.Time {

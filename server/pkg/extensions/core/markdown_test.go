@@ -1,12 +1,12 @@
 package core_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
 )
@@ -25,7 +25,7 @@ func TestMarkdownScenario(t *testing.T) {
 		Text:   text,
 		Extras: map[string]any{"origin": map[string]any{"tool": "cli"}},
 	})
-	reloaded := roundTrip(t, registry, record)
+	reloaded := testutil.RoundTripRecord(t, registry, record)
 
 	// Rendering returns the text unchanged, without host framing.
 	body, err := reloaded.ContentType().RenderMarkdown(reloaded)
@@ -40,7 +40,7 @@ func TestMarkdownScenario(t *testing.T) {
 		Text:   "old body",
 		Extras: map[string]any{"origin": "agent"},
 	})
-	updated, err := markdown.(content.MarkdownUpdater).UpdateMarkdown(roundTrip(t, registry, keyed), text)
+	updated, err := markdown.(content.MarkdownUpdater).UpdateMarkdown(testutil.RoundTripRecord(t, registry, keyed), text)
 	must(t, err)
 	view, err := content.KeyedItemView[core.Markdown](updated)
 	must(t, err)
@@ -54,7 +54,7 @@ func TestMarkdownScenario(t *testing.T) {
 		t.Fatal("update modified the existing record")
 	}
 	must(t, registry.ValidateRecord(updated))
-	roundTrip(t, registry, updated)
+	testutil.RoundTripRecord(t, registry, updated)
 	if _, ok := updated.(content.KeyedRecord); !ok {
 		t.Fatal("update dropped the generated key")
 	}
@@ -77,21 +77,6 @@ func TestMarkdownValidation(t *testing.T) {
 // record wraps inner content in a host item record envelope.
 func record(content string) json.RawMessage {
 	return json.RawMessage(`{"timestamp": "2026-10-25T10:00:00Z", "content": ` + content + `}`)
-}
-
-// roundTrip encodes and decodes a record, checking the encoding is stable.
-func roundTrip[R content.Record](t *testing.T, registry *content.Registry, record R) content.Record {
-	t.Helper()
-	data, err := content.EncodeRecord(record)
-	must(t, err)
-	decoded, err := registry.DecodeRecord(record.ContentType().Name(), data)
-	must(t, err)
-	again, err := content.EncodeRecord(decoded)
-	must(t, err)
-	if !bytes.Equal(data, again) {
-		t.Fatalf("record changed through codec:\n%s\n%s", data, again)
-	}
-	return decoded
 }
 
 // expectField asserts a content-stage validation error reporting path.
