@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v3"
 
+	"github.com/infrapad/infrapad/cli/pkg/content"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 )
 
@@ -43,11 +44,16 @@ func BlockColumns() []Column {
 		{Header: "Type", Value: func(m proto.Message) string { return m.(*pb.Block).GetType() }},
 		{Header: "Content", FullRow: true, Value: func(m proto.Message) string {
 			block := m.(*pb.Block)
-			content := block.GetContent()
-			if content == nil {
+			if content.IsGrouped(block) {
+				// Grouped records show their members (keys, timestamps,
+				// content) as stored.
+				return blockContentYAML(block.GetType(), block.GetRecord().AsMap())
+			}
+			inner := content.InnerContent(block)
+			if inner == nil {
 				return ""
 			}
-			return blockContentYAML(block.GetType(), content.AsMap())
+			return blockContentYAML(block.GetType(), inner)
 		}},
 	}
 }

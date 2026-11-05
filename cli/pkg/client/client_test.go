@@ -82,7 +82,7 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 			requestErr = fmt.Errorf("decode request: %w", err)
 			return
 		}
-		if request.GetParent() != "documents/doc %?" || request.GetBlock().GetContent().AsMap()["text"] != "hello" {
+		if request.GetParent() != "documents/doc %?" || request.GetBlock().GetRecord().AsMap()["content"].(map[string]any)["text"] != "hello" {
 			requestErr = fmt.Errorf("unexpected request: %s", payload)
 			return
 		}
@@ -95,7 +95,7 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 				"revisionNumber": 2,
 				"type": "Core/Markdown",
 				"createdAt": "2026-08-20T15:15:03Z",
-				"content": {"text": "hello"}
+				"record": {"timestamp": "2026-08-20T15:15:03Z", "content": {"text": "hello"}}
 			},
 			"futureField": true
 		}`)
@@ -106,11 +106,11 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	content, err := structpb.NewStruct(map[string]any{"text": "hello"})
+	record, err := structpb.NewStruct(map[string]any{"content": map[string]any{"text": "hello"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	block, err := client.AddBlock(context.Background(), "documents/doc %?", &pb.Block{Type: "Core/Markdown", Content: content})
+	block, err := client.AddBlock(context.Background(), "documents/doc %?", &pb.Block{Type: "Core/Markdown", Record: record})
 	requestErr := <-requestErrors
 	if requestErr != nil {
 		t.Fatal(requestErr)
@@ -121,7 +121,7 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 	if block.GetBlockNumber() != 1 || block.GetRevisionNumber() != 2 || block.GetCreatedAt() == nil {
 		t.Fatalf("unexpected response block: %v", block)
 	}
-	if got := block.GetContent().AsMap()["text"]; got != "hello" {
+	if got := block.GetRecord().AsMap()["content"].(map[string]any)["text"]; got != "hello" {
 		t.Fatalf("content text = %v, want hello", got)
 	}
 }

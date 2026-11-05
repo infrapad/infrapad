@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/infrapad/infrapad/cli/pkg/content"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // NewCmd builds the `block` command tree.
@@ -36,11 +36,11 @@ func buildBlock(blockType, contentJSON string) (*pb.Block, error) {
 		return nil, fmt.Errorf("invalid --content JSON: %w", err)
 	}
 
-	s, err := structpb.NewStruct(raw)
+	record, err := content.FromContent(raw)
 	if err != nil {
-		return nil, fmt.Errorf("convert content to struct: %w", err)
+		return nil, err
 	}
-	block.Content = s
+	block.Record = record
 
 	return block, nil
 }

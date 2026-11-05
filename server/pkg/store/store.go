@@ -2,9 +2,15 @@ package store
 
 import (
 	"context"
+	"errors"
 
 	"github.com/infrapad/infrapad/server/pkg/model"
 )
+
+// ErrNotFound is wrapped by store errors for missing documents or blocks
+// (Documents.Get/Lock, Blocks.Get), so callers can distinguish them from
+// unexpected storage failures.
+var ErrNotFound = errors.New("not found")
 
 // Store provides transactional access to all data. Use
 // [Store.Begin] to start a read-write transaction or

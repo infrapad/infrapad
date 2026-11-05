@@ -244,6 +244,48 @@ func (r *Registry) decodeItem(ct ContentType, wire wireItem) (Record, error) {
 	return NewItem(ct, wire.TimestampValue, value), nil
 }
 
+// RecordInput is the writable part of a public record envelope submitted
+// through ordinary block writes: the inner content value and an optional
+// timestamp echo. Host-owned metadata (generated keys, collection
+// membership) has no representation here.
+type RecordInput struct {
+	// Timestamp is the optional submitted timestamp echo; nil when omitted.
+	Timestamp *time.Time
+	// Content is the raw inner content JSON (nil when omitted).
+	Content json.RawMessage
+}
+
+// wireRecordInput mirrors the standalone record envelope; key and items
+// are recognized only to reject them explicitly.
+type wireRecordInput struct {
+	Timestamp *time.Time      `json:"timestamp,omitempty"`
+	Content   json.RawMessage `json:"content,omitempty"`
+	Key       *string         `json:"key,omitempty"`
+	Items     json.RawMessage `json:"items,omitempty"`
+}
+
+// DecodeRecordInput decodes a public record envelope submitted through
+// ordinary writes ({"content": …} plus an optional "timestamp" echo). It
+// rejects generated keys, collection membership, and unknown fields as
+// record-stage *ValidationError values; content validation and timestamp
+// echo rules remain with the host write path.
+func DecodeRecordInput(blockType string, data json.RawMessage) (RecordInput, error) {
+	inputError := func(format string, args ...any) error {
+		return &ValidationError{ContentType: blockType, Stage: StageRecord, Err: fmt.Errorf(format, args...)}
+	}
+	var wire wireRecordInput
+	if err := decodeStrict(data, &wire); err != nil {
+		return RecordInput{}, inputError("decode record: %w", err)
+	}
+	if wire.Key != nil {
+		return RecordInput{}, inputError("record key: generated keys cannot be assigned through public input")
+	}
+	if wire.Items != nil {
+		return RecordInput{}, inputError("record items: collection membership cannot be assigned through public input")
+	}
+	return RecordInput{Timestamp: wire.Timestamp, Content: wire.Content}, nil
+}
+
 func decodeStrict(data []byte, into any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()

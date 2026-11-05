@@ -48,6 +48,12 @@ func IsInvalidInput(err error) bool {
 	return errors.Is(err, content.ErrUnknownContentType)
 }
 
+// IsNotFound reports whether err was caused by a missing document or
+// block rather than invalid input or an unexpected server failure.
+func IsNotFound(err error) bool {
+	return errors.Is(err, store.ErrNotFound)
+}
+
 // InvalidInputError marks a rejection caused by invalid submitted input
 // (e.g. illegal provenance changes) as opposed to an unexpected server
 // failure. Transports map it to invalid-argument responses through
@@ -239,6 +245,21 @@ func (c *Controller) GetDocument(ctx context.Context, uid model.DocumentUID) (mo
 	}
 	defer tx.Rollback()
 
+	doc, err := c.loadDocumentTx(ctx, tx, uid)
+	if err != nil {
+		return model.Document{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.Document{}, fmt.Errorf("commit tx: %w", err)
+	}
+	return doc, nil
+}
+
+// loadDocumentTx loads a document with the latest revision of each block
+// (records deserialized, chronological order) within an open transaction,
+// so mutating operations can capture their response before committing.
+func (c *Controller) loadDocumentTx(ctx context.Context, tx store.Tx, uid model.DocumentUID) (model.Document, error) {
 	doc, err := tx.Documents().Get(ctx, uid)
 	if err != nil {
 		return model.Document{}, fmt.Errorf("get document: %w", err)
@@ -255,10 +276,6 @@ func (c *Controller) GetDocument(ctx context.Context, uid model.DocumentUID) (mo
 	}
 	sortBlocksChronologically(blocks)
 	doc.Blocks = blocks
-
-	if err := tx.Commit(); err != nil {
-		return model.Document{}, fmt.Errorf("commit tx: %w", err)
-	}
 	return doc, nil
 }
 
@@ -456,6 +473,9 @@ func (c *Controller) ListBlockHistory(ctx context.Context, documentUID model.Doc
 // blocks): provenance and the event timestamp are assigned only by the
 // host, so both must be omitted entirely.
 func checkPublicBlockCreation(blk *model.Block) error {
+	if err := decodePublicRecord(blk); err != nil {
+		return err
+	}
 	if parent := blk.ParentBlockNumber; parent != nil {
 		return invalidInput("block parent %d: provenance cannot be assigned through public input", *parent)
 	}
@@ -486,6 +506,12 @@ func checkPublicBlockUpdate(documentUID model.DocumentUID, submitted, latest *mo
 			ParentBlockNumber: *parent,
 		}
 	}
+	// Only then is the submitted record envelope interpreted, so even an
+	// exact echo of a generated record (keys, membership) is forbidden
+	// rather than rejected as invalid input.
+	if err := decodePublicRecord(submitted); err != nil {
+		return err
+	}
 	if parent := submitted.ParentBlockNumber; parent != nil {
 		switch stored := latest.ParentBlockNumber; {
 		case stored == nil:
@@ -498,6 +524,24 @@ func checkPublicBlockUpdate(documentUID model.DocumentUID, submitted, latest *mo
 		return invalidInput("event timestamp %s cannot be changed to %s through public input",
 			latest.Record.Timestamp().Format(time.RFC3339), ts.Format(time.RFC3339))
 	}
+	return nil
+}
+
+// decodePublicRecord decodes the submitted public record envelope (if
+// any) into the inner content and the optional timestamp echo, rejecting
+// generated keys, collection membership, and unknown fields as invalid
+// input.
+func decodePublicRecord(blk *model.Block) error {
+	if blk.PublicRecord == nil {
+		return nil
+	}
+	input, err := content.DecodeRecordInput(blk.Type, blk.PublicRecord)
+	if err != nil {
+		return err
+	}
+	blk.Content = input.Content
+	blk.Timestamp = input.Timestamp
+	blk.PublicRecord = nil
 	return nil
 }
 

@@ -52,40 +52,28 @@ func blockToProto(b model.Block, documentUID model.DocumentUID) (*pb.Block, erro
 		out.ParentBlockNumber = int32Ptr(*b.ParentBlockNumber)
 	}
 
-	// The public event timestamp is read-only metadata derived from the
-	// authoritative record: ordinary blocks expose their creation time,
-	// generated blocks their source event time, and collections their
-	// first member's event time. It is distinct from created_at, the
-	// creation time of this particular revision.
+	// The public record is the serialized host record envelope, verbatim:
+	// standalone {timestamp, content[, key]} or grouped {items: [...]}.
 	if b.Record != nil {
-		out.Timestamp = timestamppb.New(b.Record.Timestamp())
-	}
-
-	// The public API exposes the inner extension content value, not the
-	// host record envelope: the record's host metadata (event timestamp,
-	// keys) never appears inside content.
-	if b.Record != nil {
-		item, ok := b.Record.(content.ItemRecord)
-		if !ok {
-			// Grouped records: the public representation of grouped
-			// records is deferred to a later task.
-			return out, nil
-		}
-		data, err := json.Marshal(item.Content())
+		data, err := content.EncodeRecord(b.Record)
 		if err != nil {
-			return nil, fmt.Errorf("block %d: encode inner content: %w", b.BlockNumber, err)
+			return nil, fmt.Errorf("block %d: encode record: %w", b.BlockNumber, err)
 		}
-		var m map[string]any
-		if err := json.Unmarshal(data, &m); err != nil {
-			return nil, fmt.Errorf("block %d: decode inner content: %w", b.BlockNumber, err)
-		}
-		s, err := structpb.NewStruct(m)
+		record, err := structFromJSON(data)
 		if err != nil {
-			return nil, fmt.Errorf("block %d: convert content: %w", b.BlockNumber, err)
+			return nil, fmt.Errorf("block %d: convert record: %w", b.BlockNumber, err)
 		}
-		out.Content = s
+		out.Record = record
 	}
 	return out, nil
+}
+
+func structFromJSON(data []byte) (*structpb.Struct, error) {
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return structpb.NewStruct(m)
 }
 
 // ---------------------------------------------------------------------------
@@ -109,24 +97,16 @@ func blockFromProto(b *pb.Block) (model.Block, error) {
 	if b.ParentBlockNumber != nil {
 		out.ParentBlockNumber = blockNumberPtr(model.BlockNumber(*b.ParentBlockNumber))
 	}
-	// A supplied event timestamp is preserved as an input echo so the
-	// controller can distinguish omission from an unchanged echo; it is
-	// never authoritative and never reaches the record.
-	if b.GetTimestamp() != nil {
-		echo := b.GetTimestamp().AsTime()
-		out.Timestamp = &echo
-	}
-
-	// The public API carries the inner extension content value. It is
-	// passed through as raw JSON; validation, record construction, and
-	// host timestamps are owned by the controller through the content
-	// registry. Conversion failures are propagated, never discarded.
-	if b.Content != nil {
-		data, err := json.Marshal(b.Content.AsMap())
+	// The public record envelope is passed through as raw JSON: the
+	// controller's public write boundary decodes it (inner content plus an
+	// optional timestamp echo) after the ownership checks, rejecting
+	// generated keys and collection membership.
+	if b.Record != nil {
+		data, err := json.Marshal(b.Record.AsMap())
 		if err != nil {
-			return model.Block{}, fmt.Errorf("encode block content: %w", err)
+			return model.Block{}, fmt.Errorf("encode block record: %w", err)
 		}
-		out.Content = data
+		out.PublicRecord = data
 	}
 	return out, nil
 }

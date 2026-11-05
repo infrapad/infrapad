@@ -287,9 +287,5 @@ func liveDescendants(latest map[model.BlockNumber]model.Block, blockNumber model
 
 // errNotFound marks a missing block/document in host operations. It is
 // deliberately not mapped to invalid input: not-found is not a property of
-// the submitted data.
-type notFoundError struct{}
-
-func (notFoundError) Error() string { return "not found" }
-
-var errNotFound = notFoundError{}
+// the submitted data (see IsNotFound).
+var errNotFound = store.ErrNotFound

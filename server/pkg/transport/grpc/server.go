@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -17,21 +18,6 @@ import (
 
 // DefaultPort is the default gRPC listen port.
 const DefaultPort = 50061
-
-// rpcError maps operation failures to gRPC statuses: forbidden edits of
-// extension-managed blocks become permission-denied responses, invalid
-// submitted content becomes an explicit invalid-argument response, and
-// anything else is an unexpected server error. The HTTP gateway derives
-// its status codes from the same mapping (PermissionDenied → 403).
-func rpcError(op string, err error) error {
-	if controller.IsForbiddenEdit(err) {
-		return status.Errorf(codes.PermissionDenied, "%s: %v", op, err)
-	}
-	if controller.IsInvalidInput(err) {
-		return status.Errorf(codes.InvalidArgument, "%s: %v", op, err)
-	}
-	return status.Errorf(codes.Internal, "%s: %v", op, err)
-}
 
 // Server wraps the gRPC server and the controller.
 type Server struct {
@@ -79,7 +65,7 @@ func (s *Server) CreateDocument(ctx context.Context, req *pb.CreateDocumentReque
 	for _, b := range req.GetBlocks() {
 		blk, err := blockFromProto(b)
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "create document: %v", err)
+			return nil, rpcError("create document", err)
 		}
 		doc.Blocks = append(doc.Blocks, blk)
 	}
@@ -108,7 +94,7 @@ func documentUIDFromParent(parent string) model.DocumentUID {
 func (s *Server) GetDocument(ctx context.Context, req *pb.GetDocumentRequest) (*pb.GetDocumentResponse, error) {
 	doc, err := s.ctrl.GetDocument(ctx, documentUIDFromName(req.GetName()))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get document: %v", err)
+		return nil, rpcError("get document", err)
 	}
 	out, err := documentToProto(doc)
 	if err != nil {
@@ -141,7 +127,7 @@ func (s *Server) AddBlock(ctx context.Context, req *pb.AddBlockRequest) (*pb.Add
 	documentUID := documentUIDFromParent(req.GetParent())
 	blk, err := blockFromProto(req.GetBlock())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "add block: %v", err)
+		return nil, rpcError("add block", err)
 	}
 	created, err := s.ctrl.AddBlock(ctx, documentUID, blk)
 	if err != nil {
@@ -158,7 +144,7 @@ func (s *Server) UpdateBlock(ctx context.Context, req *pb.UpdateBlockRequest) (*
 	documentUID := documentUIDFromParent(req.GetParent())
 	blk, err := blockFromProto(req.GetBlock())
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "update block: %v", err)
+		return nil, rpcError("update block", err)
 	}
 	updated, err := s.ctrl.UpdateBlock(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()), blk)
 	if err != nil {
@@ -175,7 +161,7 @@ func (s *Server) GetBlock(ctx context.Context, req *pb.GetBlockRequest) (*pb.Get
 	documentUID := documentUIDFromParent(req.GetParent())
 	blk, err := s.ctrl.GetBlock(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()), model.RevisionNumber(req.GetRevisionNumber()))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get block: %v", err)
+		return nil, rpcError("get block", err)
 	}
 	out, err := blockToProto(blk, documentUID)
 	if err != nil {
@@ -188,7 +174,7 @@ func (s *Server) ListBlocks(ctx context.Context, req *pb.ListBlocksRequest) (*pb
 	documentUID := documentUIDFromParent(req.GetParent())
 	blocks, err := s.ctrl.ListBlocks(ctx, documentUID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list blocks: %v", err)
+		return nil, rpcError("list blocks", err)
 	}
 	resp := &pb.ListBlocksResponse{}
 	for _, b := range blocks {
@@ -205,7 +191,7 @@ func (s *Server) ListBlockHistory(ctx context.Context, req *pb.ListBlockHistoryR
 	documentUID := documentUIDFromParent(req.GetParent())
 	revisions, err := s.ctrl.ListBlockHistory(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list block history: %v", err)
+		return nil, rpcError("list block history", err)
 	}
 	resp := &pb.ListBlockHistoryResponse{}
 	for _, b := range revisions {
@@ -216,4 +202,24 @@ func (s *Server) ListBlockHistory(ctx context.Context, req *pb.ListBlockHistoryR
 		resp.Blocks = append(resp.Blocks, out)
 	}
 	return resp, nil
+}
+
+// SubmitBlockPayload processes a complete payload snapshot for a live
+// root primary and returns the refreshed document captured within the
+// submission transaction.
+func (s *Server) SubmitBlockPayload(ctx context.Context, req *pb.SubmitBlockPayloadRequest) (*pb.SubmitBlockPayloadResponse, error) {
+	documentUID := documentUIDFromParent(req.GetParent())
+	payload, err := json.Marshal(req.GetPayload().AsMap())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "submit payload: encode payload: %v", err)
+	}
+	doc, err := s.ctrl.SubmitBlockPayload(ctx, documentUID, model.BlockNumber(req.GetBlockNumber()), payload, "")
+	if err != nil {
+		return nil, rpcError("submit payload", err)
+	}
+	out, err := documentToProto(doc)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "submit payload: %v", err)
+	}
+	return &pb.SubmitBlockPayloadResponse{Document: out}, nil
 }

@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 )
@@ -36,19 +35,18 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 	docName := createDocResp.GetDocument().GetName()
 
 	// Creation must omit the timestamp: assigning it is invalid input.
-	supplied := timestamppb.New(time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC))
+	supplied := time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
 	_, err = client.CreateDocument(ctx, &pb.CreateDocumentRequest{
 		Title:  "timestamp assignment",
-		Blocks: []*pb.Block{{Type: "Core/Markdown", Content: mustStruct(t, map[string]any{"text": "x"}), Timestamp: supplied}},
+		Blocks: []*pb.Block{{Type: "Core/Markdown", Record: timestampedRecord(t, map[string]any{"text": "x"}, supplied)}},
 	})
 	requireCode(t, err, codes.InvalidArgument, "initial block timestamp assignment")
 
 	_, err = client.AddBlock(ctx, &pb.AddBlockRequest{
 		Parent: docName,
 		Block: &pb.Block{
-			Type:      "Core/Markdown",
-			Content:   mustStruct(t, map[string]any{"text": "first"}),
-			Timestamp: supplied,
+			Type:   "Core/Markdown",
+			Record: timestampedRecord(t, map[string]any{"text": "first"}, supplied),
 		},
 	})
 	requireCode(t, err, codes.InvalidArgument, "add block timestamp assignment")
@@ -56,8 +54,8 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 	addResp, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 		Parent: docName,
 		Block: &pb.Block{
-			Type:    "Core/Markdown",
-			Content: mustStruct(t, map[string]any{"text": "first"}),
+			Type:   "Core/Markdown",
+			Record: contentRecord(t, map[string]any{"text": "first"}),
 		},
 	})
 	if err != nil {
@@ -69,11 +67,11 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 	// block it is the creation time (the revision's created_at is the DB
 	// row timestamp of the same creation, so they coincide up to storage
 	// precision).
-	eventTS := blk.GetTimestamp()
-	if eventTS == nil || !eventTS.IsValid() {
-		t.Fatalf("expected a populated event timestamp on the created block, got %v", eventTS)
+	eventTS := recordTimestamp(t, blk)
+	if eventTS.IsZero() {
+		t.Fatalf("expected a populated event timestamp on the created block, got %v", blk.GetRecord())
 	}
-	if blk.GetCreatedAt() == nil || blk.GetCreatedAt().AsTime().Sub(eventTS.AsTime()) > time.Minute {
+	if blk.GetCreatedAt() == nil || blk.GetCreatedAt().AsTime().Sub(eventTS) > time.Minute {
 		t.Fatalf("ordinary block event timestamp %v is not its creation time %v", eventTS, blk.GetCreatedAt())
 	}
 
@@ -82,15 +80,15 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 		Parent:      docName,
 		BlockNumber: blk.GetBlockNumber(),
 		Block: &pb.Block{
-			Type:    "Core/Markdown",
-			Content: mustStruct(t, map[string]any{"text": "second"}),
+			Type:   "Core/Markdown",
+			Record: contentRecord(t, map[string]any{"text": "second"}),
 		},
 	})
 	if err != nil {
 		t.Fatalf("UpdateBlock without timestamp: %v", err)
 	}
-	if !updated.GetBlock().GetTimestamp().AsTime().Equal(eventTS.AsTime()) {
-		t.Fatalf("event timestamp not preserved across the edit: %v != %v", updated.GetBlock().GetTimestamp(), eventTS)
+	if got := recordTimestamp(t, updated.GetBlock()); !got.Equal(eventTS) {
+		t.Fatalf("event timestamp not preserved across the edit: %v != %v", got, eventTS)
 	}
 
 	// An exactly echoed timestamp is accepted.
@@ -98,9 +96,8 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 		Parent:      docName,
 		BlockNumber: blk.GetBlockNumber(),
 		Block: &pb.Block{
-			Type:      "Core/Markdown",
-			Content:   mustStruct(t, map[string]any{"text": "third"}),
-			Timestamp: eventTS,
+			Type:   "Core/Markdown",
+			Record: timestampedRecord(t, map[string]any{"text": "third"}, eventTS),
 		},
 	})
 	if err != nil {
@@ -111,14 +108,13 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 	}
 
 	// A changed timestamp is rejected without committing anything.
-	changed := timestamppb.New(eventTS.AsTime().Add(time.Minute))
+	changed := eventTS.Add(time.Minute)
 	_, err = client.UpdateBlock(ctx, &pb.UpdateBlockRequest{
 		Parent:      docName,
 		BlockNumber: blk.GetBlockNumber(),
 		Block: &pb.Block{
-			Type:      "Core/Markdown",
-			Content:   mustStruct(t, map[string]any{"text": "illegal"}),
-			Timestamp: changed,
+			Type:   "Core/Markdown",
+			Record: timestampedRecord(t, map[string]any{"text": "illegal"}, changed),
 		},
 	})
 	requireCode(t, err, codes.InvalidArgument, "changed event timestamp")
@@ -130,11 +126,11 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 	if final.GetBlock().GetRevisionNumber() != 3 {
 		t.Fatalf("rejected timestamp change committed a revision: %d", final.GetBlock().GetRevisionNumber())
 	}
-	if got := final.GetBlock().GetContent().GetFields()["text"].GetStringValue(); got != "third" {
+	if got := recordContent(final.GetBlock())["text"]; got != "third" {
 		t.Fatalf("rejected timestamp change committed content: %q", got)
 	}
-	if !final.GetBlock().GetTimestamp().AsTime().Equal(eventTS.AsTime()) {
-		t.Fatalf("event timestamp changed after the rejected update: %v", final.GetBlock().GetTimestamp())
+	if got := recordTimestamp(t, final.GetBlock()); !got.Equal(eventTS) {
+		t.Fatalf("event timestamp changed after the rejected update: %v", got)
 	}
 
 	// Document views embed the same read-only event timestamps.
@@ -143,7 +139,7 @@ func TestTimestampLifecycleGRPC(t *testing.T) {
 		t.Fatalf("GetDocument: %v", err)
 	}
 	for _, b := range docResp.GetDocument().GetBlocks() {
-		if b.GetTimestamp() == nil || !b.GetTimestamp().IsValid() {
+		if recordTimestamp(t, b).IsZero() {
 			t.Fatalf("document block %d carries no event timestamp", b.GetBlockNumber())
 		}
 	}

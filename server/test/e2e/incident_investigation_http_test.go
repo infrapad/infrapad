@@ -1,65 +1,9 @@
 package e2e
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
 	"testing"
 )
-
-func httpBaseURL() string {
-	if s := os.Getenv("HTTP_ADDR"); s != "" {
-		return s
-	}
-	return "http://localhost:8088"
-}
-
-// httpDo is a small helper that performs an HTTP request, checks for a 2xx
-// status, and decodes the JSON response body into dest.
-func httpDo(t *testing.T, method, url string, body any, dest any) {
-	t.Helper()
-
-	var reqBody io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			t.Fatalf("marshal request body: %v", err)
-		}
-		reqBody = bytes.NewReader(b)
-	}
-
-	req, err := http.NewRequest(method, url, reqBody)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("%s %s: %v", method, url, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read response: %v", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		t.Fatalf("%s %s returned %d: %s", method, url, resp.StatusCode, string(respBody))
-	}
-
-	if dest != nil {
-		if err := json.Unmarshal(respBody, dest); err != nil {
-			t.Fatalf("decode response JSON: %v\nbody: %s", err, string(respBody))
-		}
-	}
-}
 
 func TestIncidentInvestigationHTTP(t *testing.T) {
 	base := httpBaseURL()
@@ -103,14 +47,14 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	httpDo(t, "POST", docURL+"/blocks", map[string]any{
 		"block": map[string]any{
 			"type": "Prometheus/AlertsMatcher",
-			"content": map[string]any{
+			"record": map[string]any{"content": map[string]any{
 				"labels_matchers": []any{
 					map[string]any{
 						"alertname": []any{"CrashLoopBackOff"},
 					},
 				},
 				"since": "2026-08-14T09:00:00Z",
-			},
+			}},
 		},
 	}, &addAlertsResp)
 
@@ -134,9 +78,9 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	httpDo(t, "POST", docURL+"/blocks", map[string]any{
 		"block": map[string]any{
 			"type": "Core/Markdown",
-			"content": map[string]any{
+			"record": map[string]any{"content": map[string]any{
 				"text": "initial investigation writeup",
-			},
+			}},
 		},
 	}, &addMdResp)
 
@@ -157,7 +101,7 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	httpDo(t, "PUT", fmt.Sprintf("%s/blocks/%d", docURL, addAlertsResp.Block.BlockNumber), map[string]any{
 		"block": map[string]any{
 			"type": "Prometheus/AlertsMatcher",
-			"content": map[string]any{
+			"record": map[string]any{"content": map[string]any{
 				"labels_matchers": []any{
 					map[string]any{
 						"alertname": []any{"CrashLoopBackOff"},
@@ -167,7 +111,7 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 					},
 				},
 				"since": "2026-08-14T09:00:00Z",
-			},
+			}},
 		},
 	}, &updateAlertsResp)
 
@@ -188,9 +132,9 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	httpDo(t, "PUT", fmt.Sprintf("%s/blocks/%d", docURL, addMdResp.Block.BlockNumber), map[string]any{
 		"block": map[string]any{
 			"type": "Core/Markdown",
-			"content": map[string]any{
+			"record": map[string]any{"content": map[string]any{
 				"text": "updated investigation writeup",
-			},
+			}},
 		},
 	}, &updateMdResp)
 
@@ -226,9 +170,11 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	// -----------------------------------------------------------------------
 	var histResp struct {
 		Blocks []struct {
-			BlockNumber    int            `json:"blockNumber"`
-			RevisionNumber int            `json:"revisionNumber"`
-			Content        map[string]any `json:"content"`
+			BlockNumber    int `json:"blockNumber"`
+			RevisionNumber int `json:"revisionNumber"`
+			Record         struct {
+				Content map[string]any `json:"content"`
+			} `json:"record"`
 		} `json:"blocks"`
 	}
 	httpDo(t, "GET", fmt.Sprintf("%s/blocks/%d/history", docURL, addAlertsResp.Block.BlockNumber), nil, &histResp)
@@ -238,8 +184,8 @@ func TestIncidentInvestigationHTTP(t *testing.T) {
 	}
 
 	// First revision should have 1 matcher, second should have 2.
-	matchers1, _ := histResp.Blocks[0].Content["labels_matchers"].([]any)
-	matchers2, _ := histResp.Blocks[1].Content["labels_matchers"].([]any)
+	matchers1, _ := histResp.Blocks[0].Record.Content["labels_matchers"].([]any)
+	matchers2, _ := histResp.Blocks[1].Record.Content["labels_matchers"].([]any)
 	if len(matchers1) != 1 {
 		t.Errorf("rev 1: expected 1 matcher, got %d", len(matchers1))
 	}

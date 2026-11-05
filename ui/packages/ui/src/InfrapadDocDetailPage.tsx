@@ -26,6 +26,7 @@ import { marked } from "marked";
 import { useCallback, useEffect, useState } from "react";
 
 import AlertsTimelineChart from "./AlertsTimelineChart.js";
+import { blockContent } from "./api.js";
 import type { InfrapadBlock, InfrapadDocument } from "./api.js";
 import { useInfrapadClient } from "./infrapadClient.js";
 import BlockRevisionsPanel, { formatDate } from "./BlockRevisionsPanel.js";
@@ -165,12 +166,12 @@ function renderBlockContent(block: InfrapadBlock) {
   switch (block.type) {
     case "Core/Markdown":
       return (
-        <MarkdownBlockContent text={(block.content.text as string) ?? ""} />
+        <MarkdownBlockContent text={(blockContent(block).text as string) ?? ""} />
       );
     case "Prometheus/AlertsMatcher":
-      return <AlertsMatcherBlockContent content={block.content} />;
+      return <AlertsMatcherBlockContent content={blockContent(block)} />;
     default:
-      return <GenericBlockContent content={block.content} />;
+      return <GenericBlockContent content={blockContent(block)} />;
   }
 }
 

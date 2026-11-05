@@ -91,7 +91,7 @@ UPDATE_ALERTS_JSON=$($CLI block get -o json --document "$DOC_ID" --block-number 
 MATCHERS_COUNT=$(echo "$UPDATE_ALERTS_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data.get('content', {}).get('labels_matchers', [])))
+print(len(data.get('record', {}).get('content', {}).get('labels_matchers', [])))
 " 2>/dev/null || echo "?")
 assert_equals "matchers_count is 2" "$MATCHERS_COUNT" "2"
 
@@ -146,12 +146,12 @@ HISTORY_JSON=$($CLI block history -o json --document "$DOC_ID" --block-number 1)
 REV1_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data[0].get('content', {}).get('labels_matchers', [])))
+print(len(data[0].get('record', {}).get('content', {}).get('labels_matchers', [])))
 " 2>/dev/null || echo "?")
 REV2_MATCHERS=$(echo "$HISTORY_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-print(len(data[1].get('content', {}).get('labels_matchers', [])))
+print(len(data[1].get('record', {}).get('content', {}).get('labels_matchers', [])))
 " 2>/dev/null || echo "?")
 assert_equals "first revision has 1 matcher" "$REV1_MATCHERS" "1"
 assert_equals "second revision has 2 matchers" "$REV2_MATCHERS" "2"

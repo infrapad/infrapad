@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
+	"github.com/infrapad/infrapad/cli/pkg/content"
 	"github.com/infrapad/infrapad/cli/pkg/markdown"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func newPushCmd() *cobra.Command {
@@ -61,14 +61,14 @@ with the current server state. Only changed existing blocks and new blocks
 
 			// 4. Push changed/new blocks.
 			for _, a := range actions {
-				contentStruct, err := structpb.NewStruct(a.Block.Content)
+				record, err := content.FromContent(a.Block.Content)
 				if err != nil {
-					return fmt.Errorf("convert content to struct: %w", err)
+					return err
 				}
 
 				block := &pb.Block{
-					Type:    a.Block.Meta.Type,
-					Content: contentStruct,
+					Type:   a.Block.Meta.Type,
+					Record: record,
 				}
 
 				if a.IsNew {

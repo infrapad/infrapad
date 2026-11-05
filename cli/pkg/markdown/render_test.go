@@ -16,16 +16,16 @@ func TestRender(t *testing.T) {
 		Status:    "active",
 	}
 
-	alertsContent, _ := structpb.NewStruct(map[string]any{
+	alertsContent, _ := structpb.NewStruct(map[string]any{"content": map[string]any{
 		"labels_matchers": []any{
 			map[string]any{"alertname": []any{"CrashLoopBackOff"}},
 			map[string]any{"alertname": []any{"KubeNodeNotReady"}},
 		},
-	})
+	}})
 
-	mdContent, _ := structpb.NewStruct(map[string]any{
+	mdContent, _ := structpb.NewStruct(map[string]any{"content": map[string]any{
 		"text": "# Initial investigation\n\nThis incident started at 2026-07-12 12:42 by CrashLoopBackOff...\n",
-	})
+	}})
 
 	blocks := []*pb.Block{
 		{
@@ -33,14 +33,14 @@ func TestRender(t *testing.T) {
 			RevisionNumber: 2,
 			AuthorId:       "incident_detector:123",
 			Type:           "Prometheus/AlertsMatcher",
-			Content:        alertsContent,
+			Record:         alertsContent,
 		},
 		{
 			BlockNumber:    2,
 			RevisionNumber: 2,
 			AuthorId:       "agentic_run_analysis:456",
 			Type:           "Core/Markdown",
-			Content:        mdContent,
+			Record:         mdContent,
 		},
 	}
 
@@ -113,13 +113,13 @@ func TestRenderNoAuthor(t *testing.T) {
 		Namespace: "ns",
 		Status:    "active",
 	}
-	content, _ := structpb.NewStruct(map[string]any{"text": "hello\n"})
+	content, _ := structpb.NewStruct(map[string]any{"content": map[string]any{"text": "hello\n"}})
 	blocks := []*pb.Block{
 		{
 			BlockNumber:    1,
 			RevisionNumber: 1,
 			Type:           "Core/Markdown",
-			Content:        content,
+			Record:         content,
 		},
 	}
 

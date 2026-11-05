@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -114,7 +115,7 @@ func (d *pgDocuments) Get(ctx context.Context, uid model.DocumentUID) (model.Doc
 	var out model.Document
 	var status string
 	if err := row.Scan(&out.Uid, &status, &out.Title, &out.Namespace, &out.CreatedAt); err != nil {
-		return model.Document{}, fmt.Errorf("get document %s: %w", uid, err)
+		return model.Document{}, fmt.Errorf("get document %s: %w", uid, mapSqlError(err))
 	}
 	out.Status = model.DocumentStatus(status)
 	return out, nil
@@ -147,7 +148,7 @@ func (d *pgDocuments) Lock(ctx context.Context, uid model.DocumentUID) error {
 	var out model.DocumentUID
 	if err := d.tx.QueryRowContext(ctx,
 		`SELECT uid FROM documents WHERE uid = $1 FOR UPDATE`, uid).Scan(&out); err != nil {
-		return fmt.Errorf("lock document %s: %w", uid, err)
+		return fmt.Errorf("lock document %s: %w", uid, mapSqlError(err))
 	}
 	return nil
 }
@@ -255,6 +256,15 @@ func (b *pgBlocks) ListLatest(ctx context.Context, documentUid model.DocumentUID
 // helpers
 // ---------------------------------------------------------------------------
 
+// mapSqlError translates SQL errors into store-level errors, leaving
+// unrecognized errors unchanged.
+func mapSqlError(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return store.ErrNotFound
+	}
+	return err
+}
+
 func scanBlock(documentUid model.DocumentUID, row *sql.Row) (model.Block, error) {
 	var blk model.Block
 	var status, typ string
@@ -262,7 +272,7 @@ func scanBlock(documentUid model.DocumentUID, row *sql.Row) (model.Block, error)
 	var parent sql.NullInt64
 	if err := row.Scan(&blk.BlockNumber, &blk.RevisionNumber, &blk.AuthorID,
 		&typ, &status, &data, &blk.CreatedAt, &parent); err != nil {
-		return model.Block{}, err
+		return model.Block{}, mapSqlError(err)
 	}
 	blk.Type = typ
 	blk.Status = model.BlockStatus(status)

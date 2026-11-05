@@ -2,32 +2,13 @@ package e2e
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/types/known/structpb"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 )
-
-func grpcAddr() string {
-	if s := os.Getenv("GRPC_ADDR"); s != "" {
-		return s
-	}
-	return "localhost:50061"
-}
-
-// mustStruct is a test helper that creates a structpb.Struct from a map.
-func mustStruct(t *testing.T, m map[string]any) *structpb.Struct {
-	t.Helper()
-	s, err := structpb.NewStruct(m)
-	if err != nil {
-		t.Fatalf("structpb.NewStruct: %v", err)
-	}
-	return s
-}
 
 func TestIncidentInvestigationGRPC(t *testing.T) {
 	ctx := context.Background()
@@ -68,7 +49,7 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		Parent: docName,
 		Block: &pb.Block{
 			Type: "Prometheus/AlertsMatcher",
-			Content: mustStruct(t, map[string]any{
+			Record: contentRecord(t, map[string]any{
 				"labels_matchers": []any{
 					map[string]any{
 						"alertname": []any{"CrashLoopBackOff"},
@@ -97,7 +78,7 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		Parent: docName,
 		Block: &pb.Block{
 			Type: "Core/Markdown",
-			Content: mustStruct(t, map[string]any{
+			Record: contentRecord(t, map[string]any{
 				"text": "initial investigation writeup",
 			}),
 		},
@@ -119,7 +100,7 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		BlockNumber: alertsBlock.GetBlockNumber(),
 		Block: &pb.Block{
 			Type: "Prometheus/AlertsMatcher",
-			Content: mustStruct(t, map[string]any{
+			Record: contentRecord(t, map[string]any{
 				"labels_matchers": []any{
 					map[string]any{
 						"alertname": []any{"CrashLoopBackOff"},
@@ -149,7 +130,7 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		BlockNumber: mdBlock.GetBlockNumber(),
 		Block: &pb.Block{
 			Type: "Core/Markdown",
-			Content: mustStruct(t, map[string]any{
+			Record: contentRecord(t, map[string]any{
 				"text": "updated investigation writeup",
 			}),
 		},
@@ -194,8 +175,8 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	}
 
 	// First revision should have 1 matcher, second should have 2.
-	am1 := alertHistory[0].GetContent().AsMap()
-	am2 := alertHistory[1].GetContent().AsMap()
+	am1 := recordContent(alertHistory[0])
+	am2 := recordContent(alertHistory[1])
 	matchers1, _ := am1["labels_matchers"].([]any)
 	matchers2, _ := am2["labels_matchers"].([]any)
 	if len(matchers1) != 1 {

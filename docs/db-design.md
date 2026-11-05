@@ -15,7 +15,9 @@ records are owned by the controller through the injected content registry
 The `type` column carries the canonical namespaced content type name
 (e.g. `Core/Markdown`), and `serialized_content` holds the **full host record
 envelope** (event timestamp, optional generated key, and the inner extension
-content) — not the flat inner content value exposed by the public API.
+content). The public API exposes this envelope verbatim as `Block.record`;
+ordinary writes may only supply its inner `content` (plus an optional
+unchanged `timestamp` echo on updates).
 
 ## Schema
 
@@ -154,10 +156,10 @@ timestamp is preserved.
 
 The event timestamp is read-only through the public API: creations must
 omit it, updates may omit it or exactly echo the stored value, and
-assignments or changes are rejected as invalid input. The block-level
-`timestamp` field of the public API is derived from the record; there is
-no second authoritative event-time value and no extra column or
-migration.
+assignments or changes are rejected as invalid input. The public API
+exposes it only as `timestamp` inside the verbatim `Block.record`
+envelope (collections: inside each member); there is no second
+authoritative event-time value and no extra column or migration.
 
 Latest-block document views are ordered by event timestamp ascending,
 then block number ascending, in the controller after record decoding —

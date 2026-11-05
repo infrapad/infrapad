@@ -19,14 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InfrapadService_CreateDocument_FullMethodName   = "/infrapad.v1.InfrapadService/CreateDocument"
-	InfrapadService_GetDocument_FullMethodName      = "/infrapad.v1.InfrapadService/GetDocument"
-	InfrapadService_ListDocuments_FullMethodName    = "/infrapad.v1.InfrapadService/ListDocuments"
-	InfrapadService_AddBlock_FullMethodName         = "/infrapad.v1.InfrapadService/AddBlock"
-	InfrapadService_UpdateBlock_FullMethodName      = "/infrapad.v1.InfrapadService/UpdateBlock"
-	InfrapadService_GetBlock_FullMethodName         = "/infrapad.v1.InfrapadService/GetBlock"
-	InfrapadService_ListBlocks_FullMethodName       = "/infrapad.v1.InfrapadService/ListBlocks"
-	InfrapadService_ListBlockHistory_FullMethodName = "/infrapad.v1.InfrapadService/ListBlockHistory"
+	InfrapadService_CreateDocument_FullMethodName     = "/infrapad.v1.InfrapadService/CreateDocument"
+	InfrapadService_GetDocument_FullMethodName        = "/infrapad.v1.InfrapadService/GetDocument"
+	InfrapadService_ListDocuments_FullMethodName      = "/infrapad.v1.InfrapadService/ListDocuments"
+	InfrapadService_AddBlock_FullMethodName           = "/infrapad.v1.InfrapadService/AddBlock"
+	InfrapadService_UpdateBlock_FullMethodName        = "/infrapad.v1.InfrapadService/UpdateBlock"
+	InfrapadService_GetBlock_FullMethodName           = "/infrapad.v1.InfrapadService/GetBlock"
+	InfrapadService_ListBlocks_FullMethodName         = "/infrapad.v1.InfrapadService/ListBlocks"
+	InfrapadService_SubmitBlockPayload_FullMethodName = "/infrapad.v1.InfrapadService/SubmitBlockPayload"
+	InfrapadService_ListBlockHistory_FullMethodName   = "/infrapad.v1.InfrapadService/ListBlockHistory"
 )
 
 // InfrapadServiceClient is the client API for InfrapadService service.
@@ -42,6 +43,19 @@ type InfrapadServiceClient interface {
 	UpdateBlock(ctx context.Context, in *UpdateBlockRequest, opts ...grpc.CallOption) (*UpdateBlockResponse, error)
 	GetBlock(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (*GetBlockResponse, error)
 	ListBlocks(ctx context.Context, in *ListBlocksRequest, opts ...grpc.CallOption) (*ListBlocksResponse, error)
+	// Submits a complete transient payload snapshot for an existing live
+	// root primary block whose type supports expansion (e.g. a
+	// "Slack/Thread" reference). The server validates the payload, runs
+	// the registered extension selected by the stored block type, and
+	// reconciles the generated output atomically. The payload is never
+	// persisted. Concurrent submissions serialize per document; the last
+	// successful submission wins. Identical snapshots create no
+	// revisions.
+	//
+	// Failures use standard gRPC error details (google.rpc.ErrorInfo with
+	// a stable reason and target metadata, google.rpc.BadRequest field
+	// violations where available) and leave the document unchanged.
+	SubmitBlockPayload(ctx context.Context, in *SubmitBlockPayloadRequest, opts ...grpc.CallOption) (*SubmitBlockPayloadResponse, error)
 	ListBlockHistory(ctx context.Context, in *ListBlockHistoryRequest, opts ...grpc.CallOption) (*ListBlockHistoryResponse, error)
 }
 
@@ -123,6 +137,16 @@ func (c *infrapadServiceClient) ListBlocks(ctx context.Context, in *ListBlocksRe
 	return out, nil
 }
 
+func (c *infrapadServiceClient) SubmitBlockPayload(ctx context.Context, in *SubmitBlockPayloadRequest, opts ...grpc.CallOption) (*SubmitBlockPayloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubmitBlockPayloadResponse)
+	err := c.cc.Invoke(ctx, InfrapadService_SubmitBlockPayload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *infrapadServiceClient) ListBlockHistory(ctx context.Context, in *ListBlockHistoryRequest, opts ...grpc.CallOption) (*ListBlockHistoryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListBlockHistoryResponse)
@@ -146,6 +170,19 @@ type InfrapadServiceServer interface {
 	UpdateBlock(context.Context, *UpdateBlockRequest) (*UpdateBlockResponse, error)
 	GetBlock(context.Context, *GetBlockRequest) (*GetBlockResponse, error)
 	ListBlocks(context.Context, *ListBlocksRequest) (*ListBlocksResponse, error)
+	// Submits a complete transient payload snapshot for an existing live
+	// root primary block whose type supports expansion (e.g. a
+	// "Slack/Thread" reference). The server validates the payload, runs
+	// the registered extension selected by the stored block type, and
+	// reconciles the generated output atomically. The payload is never
+	// persisted. Concurrent submissions serialize per document; the last
+	// successful submission wins. Identical snapshots create no
+	// revisions.
+	//
+	// Failures use standard gRPC error details (google.rpc.ErrorInfo with
+	// a stable reason and target metadata, google.rpc.BadRequest field
+	// violations where available) and leave the document unchanged.
+	SubmitBlockPayload(context.Context, *SubmitBlockPayloadRequest) (*SubmitBlockPayloadResponse, error)
 	ListBlockHistory(context.Context, *ListBlockHistoryRequest) (*ListBlockHistoryResponse, error)
 	mustEmbedUnimplementedInfrapadServiceServer()
 }
@@ -177,6 +214,9 @@ func (UnimplementedInfrapadServiceServer) GetBlock(context.Context, *GetBlockReq
 }
 func (UnimplementedInfrapadServiceServer) ListBlocks(context.Context, *ListBlocksRequest) (*ListBlocksResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListBlocks not implemented")
+}
+func (UnimplementedInfrapadServiceServer) SubmitBlockPayload(context.Context, *SubmitBlockPayloadRequest) (*SubmitBlockPayloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitBlockPayload not implemented")
 }
 func (UnimplementedInfrapadServiceServer) ListBlockHistory(context.Context, *ListBlockHistoryRequest) (*ListBlockHistoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListBlockHistory not implemented")
@@ -328,6 +368,24 @@ func _InfrapadService_ListBlocks_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InfrapadService_SubmitBlockPayload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitBlockPayloadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfrapadServiceServer).SubmitBlockPayload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfrapadService_SubmitBlockPayload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfrapadServiceServer).SubmitBlockPayload(ctx, req.(*SubmitBlockPayloadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InfrapadService_ListBlockHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListBlockHistoryRequest)
 	if err := dec(in); err != nil {
@@ -380,6 +438,10 @@ var InfrapadService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListBlocks",
 			Handler:    _InfrapadService_ListBlocks_Handler,
+		},
+		{
+			MethodName: "SubmitBlockPayload",
+			Handler:    _InfrapadService_SubmitBlockPayload_Handler,
 		},
 		{
 			MethodName: "ListBlockHistory",

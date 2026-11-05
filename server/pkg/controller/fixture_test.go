@@ -1,7 +1,8 @@
 package controller_test
 
 // Package-local test fixture: one controller over a fresh in-memory store
-// with the Markdown, Prometheus, Slack, and AI-agent types registered.
+// with the Markdown, Prometheus, Slack, and AI-agent types registered, plus
+// the test-only Test/Ref expander (testext_test.go).
 // Tests use the exposed dependencies directly; the fixture has no methods
 // wrapping controller operations, store inspection, or record construction.
 
@@ -34,6 +35,8 @@ type fixture struct {
 	agentType        *aiagent.MessageType
 	conversationType *slack.ConversationType
 	threadType       *slack.ThreadType
+	// refType is the test-only expandable reference (testext_test.go).
+	refType *refType
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -44,10 +47,11 @@ func newFixture(t *testing.T) *fixture {
 		alertsType:       prometheus.NewAlertsMatcherType(),
 		agentType:        aiagent.NewMessageType(),
 		conversationType: slack.NewConversationType(),
+		refType:          newRefType(),
 	}
 	f.threadType = slack.NewThreadType(f.conversationType, f.agentType)
 	registry, err := content.NewRegistry([]content.ContentType{
-		f.markdownType, f.alertsType, f.agentType, f.threadType, f.conversationType,
+		f.markdownType, f.alertsType, f.agentType, f.threadType, f.conversationType, f.refType,
 	})
 	testutil.NoErr(t, err)
 	f.registry = registry
@@ -198,8 +202,4 @@ func (b *fakeBlocks) ListLatest(ctx context.Context, documentUid model.DocumentU
 	return out, nil
 }
 
-type notFoundError struct{}
-
-func (notFoundError) Error() string { return "not found" }
-
-var errNotFound = notFoundError{}
+var errNotFound = store.ErrNotFound

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/infrapad/infrapad/cli/pkg/content"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"gopkg.in/yaml.v3"
 )
@@ -32,16 +33,13 @@ type RemoteDocument struct {
 func NewRemoteDocument(docID string, blocks []*pb.Block) *RemoteDocument {
 	rd := &RemoteDocument{DocumentID: docID}
 	for _, b := range blocks {
-		var content map[string]any
-		if b.GetContent() != nil {
-			content = b.GetContent().AsMap()
-		}
+		inner := content.InnerContent(b)
 		rd.Blocks = append(rd.Blocks, RemoteBlock{
 			BlockNumber:    int(b.GetBlockNumber()),
 			RevisionNumber: int(b.GetRevisionNumber()),
 			Type:           b.GetType(),
 			AuthorID:       b.GetAuthorId(),
-			Content:        content,
+			Content:        inner,
 		})
 	}
 	return rd

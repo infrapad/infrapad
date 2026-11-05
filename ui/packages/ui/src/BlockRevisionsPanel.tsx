@@ -7,6 +7,7 @@ import {
 import jsYaml from "js-yaml";
 import { useEffect, useMemo, useState } from "react";
 
+import { blockContent } from "./api.js";
 import type { InfrapadBlock, ListBlockHistoryResponse } from "./api.js";
 import { useInfrapadClient } from "./infrapadClient.js";
 import { computeLineDiff, formatUnifiedDiff } from "./diffHelpers.js";
@@ -32,12 +33,12 @@ export function formatDate(iso?: string): string {
  */
 export function blockContentToText(block: InfrapadBlock): string {
   if (block.type === "Core/Markdown") {
-    return (block.content.text as string) ?? "";
+    return (blockContent(block).text as string) ?? "";
   }
   // Structured types: serialize content to YAML.
   // flowLevel: 3 keeps leaf arrays (e.g. label values) inline [val]
   // while expanding top-level structure for readability.
-  return jsYaml.dump(block.content, { flowLevel: 3, lineWidth: -1 }).trimEnd();
+  return jsYaml.dump(blockContent(block), { flowLevel: 3, lineWidth: -1 }).trimEnd();
 }
 
 /**

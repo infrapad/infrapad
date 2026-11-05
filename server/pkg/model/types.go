@@ -31,10 +31,12 @@ const (
 // Content handling is split across three representations, each owned by a
 // different layer:
 //
-//   - Content is the raw inner content JSON submitted through the public
-//     API ({"text": "..."} for Core/Markdown). Producers never supply host
-//     record envelopes or timestamps. The controller validates it against
-//     the registered content type and builds the host record from it.
+//   - Content is the raw inner content JSON of a public write
+//     ({"text": "..."} for Core/Markdown), decoded by the controller from
+//     the submitted PublicRecord envelope ({"content": ...}). Producers
+//     never supply generated keys or collection membership. The controller
+//     validates it against the registered content type and builds the
+//     host record from it.
 //   - Record is the deserialized host record (content.Record). The
 //     controller converts between Content and Record.
 //   - SerializedRecord is the serialized full host record envelope. The
@@ -64,6 +66,13 @@ type Block struct {
 	// deletion and restoration. Public submissions can never assign or
 	// change it.
 	ParentBlockNumber *BlockNumber
+
+	// PublicRecord is the raw public record envelope submitted through the
+	// public API ({"content": …} plus an optional "timestamp" echo). The
+	// controller's public write boundary decodes it into Content and
+	// Timestamp (content.DecodeRecordInput) after the ownership checks,
+	// rejecting generated keys and collection membership.
+	PublicRecord json.RawMessage
 
 	// Timestamp carries the submitted public timestamp echo. It is
 	// input-only validation metadata: the authoritative event timestamp

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/infrapad/infrapad/cli/pkg/content"
 	"github.com/infrapad/infrapad/cli/pkg/output"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"gopkg.in/yaml.v3"
@@ -44,12 +45,13 @@ func renderBlock(block *pb.Block) string {
 	sb.WriteString("}\n")
 
 	// Content.
-	content := block.GetContent()
-	if content == nil {
+	// Grouped records (extension-generated collections) are not rendered
+	// in the CLI-owned Markdown format.
+	m := content.InnerContent(block)
+	if m == nil {
 		return sb.String()
 	}
 
-	m := content.AsMap()
 	if block.GetType() == MarkdownTypeName {
 		// Markdown blocks store content in a "text" field.
 		if text, ok := m["text"].(string); ok {

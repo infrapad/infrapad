@@ -16,17 +16,23 @@ const document = {
       revisionNumber: 2,
       type: "Core/Markdown",
       status: "published",
-      content: { text: "**Service recovered** after the deployment was rolled back. <script>window.infrapadXss = true</script>" },
+      record: {
+        timestamp: "2025-01-02T03:04:05Z",
+        content: { text: "**Service recovered** after the deployment was rolled back. <script>window.infrapadXss = true</script>" },
+      },
     },
     {
       name: "documents/doc-1/blocks/2",
       blockNumber: 2,
       revisionNumber: 1,
       type: "Prometheus/AlertsMatcher",
-      content: {
-        labels_matchers: [{ alertname: ["EndpointDown"], severity: ["critical"] }],
-        since: "2025-01-02T03:00:00Z",
-        until: "2025-01-02T03:05:00Z",
+      record: {
+        timestamp: "2025-01-02T03:04:05Z",
+        content: {
+          labels_matchers: [{ alertname: ["EndpointDown"], severity: ["critical"] }],
+          since: "2025-01-02T03:00:00Z",
+          until: "2025-01-02T03:05:00Z",
+        },
       },
     },
   ],
@@ -37,7 +43,7 @@ async function mockServices(page: Page) {
   await page.route("**/v1/documents**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const body = path.endsWith("/blocks/1/history")
-      ? { blocks: [document.blocks[0], { ...document.blocks[0], revisionNumber: 1, content: { text: "Service down." } }] }
+      ? { blocks: [document.blocks[0], { ...document.blocks[0], revisionNumber: 1, record: { timestamp: "2025-01-02T03:04:05Z", content: { text: "Service down." } } }] }
       : path === "/v1/documents" ? { documents: [document] } : { document };
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });

@@ -1,9 +1,12 @@
 package e2e
 
-// e2e capturing making requests with invalid data. It's currently known to not pass.
+// Invalid-input and forbidden-operation API checks. Known failing cases
+// are individually skipped until their validation/status mapping is implemented.
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -12,6 +15,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
@@ -29,60 +33,10 @@ func skip(t *testing.T) {
 	}
 }
 
-// requireCode fails the test if the error does not carry the expected gRPC
-// status code.  It also fails when err is nil but a non-OK code is expected.
-func requireCode(t *testing.T, err error, want codes.Code, msgAndArgs ...interface{}) {
+// validRecord returns a simple valid public record for testing.
+func validRecord(t *testing.T) *structpb.Struct {
 	t.Helper()
-	got := codes.OK
-	if err != nil {
-		got = status.Code(err)
-	}
-	if got != want {
-		label := ""
-		if len(msgAndArgs) > 0 {
-			label = msgAndArgs[0].(string) + ": "
-		}
-		t.Errorf("%sexpected code %s, got %s (err: %v)", label, want, got, err)
-	}
-}
-
-// helperCreateDocument creates a valid document and returns its name, failing the test
-// on error.
-func helperCreateDocument(t *testing.T, client pb.InfrapadServiceClient) string {
-	t.Helper()
-	resp, err := client.CreateDocument(context.Background(), &pb.CreateDocumentRequest{
-		Title: "helper document for invalid-data tests",
-	})
-	if err != nil {
-		t.Fatalf("helperCreateDocument: %v", err)
-	}
-	return resp.GetDocument().GetName()
-}
-
-// validContent returns a simple valid content struct for testing.
-func validContent(t *testing.T) *structpb.Struct {
-	t.Helper()
-	s, err := structpb.NewStruct(map[string]any{"text": "valid block"})
-	if err != nil {
-		t.Fatalf("structpb.NewStruct: %v", err)
-	}
-	return s
-}
-
-// helperAddBlock adds a valid markdown block and returns it.
-func helperAddBlock(t *testing.T, client pb.InfrapadServiceClient, docName string) *pb.Block {
-	t.Helper()
-	resp, err := client.AddBlock(context.Background(), &pb.AddBlockRequest{
-		Parent: docName,
-		Block: &pb.Block{
-			Type:    "Core/Markdown",
-			Content: validContent(t),
-		},
-	})
-	if err != nil {
-		t.Fatalf("helperAddBlock: %v", err)
-	}
-	return resp.GetBlock()
+	return contentRecord(t, map[string]any{"text": "valid block"})
 }
 
 func TestInvalidData(t *testing.T) {
@@ -137,8 +91,8 @@ func TestInvalidData(t *testing.T) {
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 			Parent: "",
 			Block: &pb.Block{
-				Type:    "Core/Markdown",
-				Content: validContent(t),
+				Type:   "Core/Markdown",
+				Record: validRecord(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "empty parent")
@@ -149,8 +103,8 @@ func TestInvalidData(t *testing.T) {
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 			Parent: "documents/does-not-exist-12345",
 			Block: &pb.Block{
-				Type:    "Core/Markdown",
-				Content: validContent(t),
+				Type:   "Core/Markdown",
+				Record: validRecord(t),
 			},
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent parent")
@@ -172,8 +126,8 @@ func TestInvalidData(t *testing.T) {
 		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 			Parent: validDocName,
 			Block: &pb.Block{
-				Type:    "",
-				Content: validContent(t),
+				Type:   "",
+				Record: validRecord(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "empty block type")
@@ -227,15 +181,11 @@ func TestInvalidData(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				s, err := structpb.NewStruct(tc.content)
-				if err != nil {
-					t.Fatalf("structpb.NewStruct: %v", err)
-				}
-				_, err = client.AddBlock(ctx, &pb.AddBlockRequest{
+				_, err := client.AddBlock(ctx, &pb.AddBlockRequest{
 					Parent: validDocName,
 					Block: &pb.Block{
-						Type:    tc.typeName,
-						Content: s,
+						Type:   tc.typeName,
+						Record: mustStruct(t, map[string]any{"content": tc.content}),
 					},
 				})
 				requireCode(t, err, codes.InvalidArgument, tc.name)
@@ -247,6 +197,13 @@ func TestInvalidData(t *testing.T) {
 				}
 			})
 		}
+	})
+
+	t.Run("AddBlock/public_key_assignment", func(t *testing.T) {
+		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{Parent: validDocName, Block: &pb.Block{
+			Type: "Core/Markdown", Record: mustStruct(t, map[string]any{"key": "k", "content": map[string]any{"text": "x"}}),
+		}})
+		requireCode(t, err, codes.InvalidArgument, "public key assignment")
 	})
 
 	// ===================================================================
@@ -261,7 +218,7 @@ func TestInvalidData(t *testing.T) {
 			Parent: validDocName,
 			Block: &pb.Block{
 				Type:              "Core/Markdown",
-				Content:           validContent(t),
+				Record:            validRecord(t),
 				ParentBlockNumber: &parent,
 			},
 		})
@@ -274,7 +231,7 @@ func TestInvalidData(t *testing.T) {
 			Parent: validDocName,
 			Block: &pb.Block{
 				Type:              "Core/Markdown",
-				Content:           validContent(t),
+				Record:            validRecord(t),
 				ParentBlockNumber: &zero,
 			},
 		})
@@ -288,7 +245,7 @@ func TestInvalidData(t *testing.T) {
 			BlockNumber: validBlock.GetBlockNumber(),
 			Block: &pb.Block{
 				Type:              "Core/Markdown",
-				Content:           validContent(t),
+				Record:            validRecord(t),
 				ParentBlockNumber: &wrong,
 			},
 		})
@@ -304,7 +261,7 @@ func TestInvalidData(t *testing.T) {
 			BlockNumber: validBlock.GetBlockNumber(),
 			Block: &pb.Block{
 				Type:              "Core/Markdown",
-				Content:           validContent(t),
+				Record:            validRecord(t),
 				ParentBlockNumber: &parent,
 			},
 		})
@@ -321,8 +278,8 @@ func TestInvalidData(t *testing.T) {
 			Parent:      "",
 			BlockNumber: validBlock.GetBlockNumber(),
 			Block: &pb.Block{
-				Type:    "Core/Markdown",
-				Content: validContent(t),
+				Type:   "Core/Markdown",
+				Record: validRecord(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "empty parent")
@@ -334,8 +291,8 @@ func TestInvalidData(t *testing.T) {
 			Parent:      "documents/does-not-exist-12345",
 			BlockNumber: 1,
 			Block: &pb.Block{
-				Type:    "Core/Markdown",
-				Content: validContent(t),
+				Type:   "Core/Markdown",
+				Record: validRecord(t),
 			},
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent parent")
@@ -348,8 +305,8 @@ func TestInvalidData(t *testing.T) {
 			Parent:      validDocName,
 			BlockNumber: 0,
 			Block: &pb.Block{
-				Type:    "Core/Markdown",
-				Content: validContent(t),
+				Type:   "Core/Markdown",
+				Record: validRecord(t),
 			},
 		})
 		requireCode(t, err, codes.InvalidArgument, "zero block_number")
@@ -361,8 +318,8 @@ func TestInvalidData(t *testing.T) {
 			Parent:      validDocName,
 			BlockNumber: 99999,
 			Block: &pb.Block{
-				Type:    "Core/Markdown",
-				Content: validContent(t),
+				Type:   "Core/Markdown",
+				Record: validRecord(t),
 			},
 		})
 		requireCode(t, err, codes.NotFound, "nonexistent block_number")
@@ -495,4 +452,122 @@ func TestInvalidData(t *testing.T) {
 	})
 
 	_ = ctx // suppress unused warning if all tests use it inline
+}
+
+// Submission rejection checks need only a small populated thread, not the
+// changed-snapshot/history lifecycle in payload_submission_test.go.
+func TestInvalidPayloadSubmission(t *testing.T) {
+	ctx := context.Background()
+	conn, err := grpc.NewClient(grpcAddr(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial grpc: %v", err)
+	}
+	defer conn.Close()
+	client := pb.NewInfrapadServiceClient(conn)
+	docName := helperCreateDocument(t, client)
+	ordinary := helperAddBlock(t, client, docName)
+	thread, err := client.AddBlock(ctx, &pb.AddBlockRequest{Parent: docName, Block: &pb.Block{
+		Type:   "Slack/Thread",
+		Record: contentRecord(t, map[string]any{"url": "https://slack.example/archives/C1/p" + slackID(0)}),
+	}})
+	if err != nil {
+		t.Fatalf("AddBlock thread: %v", err)
+	}
+	threadNumber := thread.GetBlock().GetBlockNumber()
+	submitted, err := client.SubmitBlockPayload(ctx, &pb.SubmitBlockPayloadRequest{
+		Parent: docName, BlockNumber: threadNumber,
+		Payload: slackSnapshot(t, slackMessage(1, "U1", "Alice", "hello"), slackMessage(2, "U3", "", "analysis")),
+	})
+	if err != nil {
+		t.Fatalf("SubmitBlockPayload: %v", err)
+	}
+	doc := submitted.GetDocument()
+	generated := generatedBlocks(doc, threadNumber)
+	if len(generated) != 2 {
+		t.Fatalf("expected conversation and agent blocks, got %v", generated)
+	}
+	conversation, agent := generated[0], generated[1]
+
+	// Every rejection must preserve the populated document, including cached
+	// content and revision numbers. Register per-subtest so failures are named.
+	unchanged := func(t *testing.T) {
+		t.Helper()
+		t.Cleanup(func() {
+			resp, err := client.GetDocument(ctx, &pb.GetDocumentRequest{Name: docName})
+			if err != nil {
+				t.Fatalf("GetDocument: %v", err)
+			}
+			if !proto.Equal(resp.GetDocument(), doc) {
+				t.Fatalf("rejected operation changed the document: got %v, want %v", resp.GetDocument(), doc)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name     string
+		document string
+		block    int32
+		payload  *structpb.Struct
+		code     codes.Code
+		reason   string
+		field    string
+	}{
+		{
+			name: "invalid_schema", document: docName, block: threadNumber,
+			payload: mustStruct(t, map[string]any{"messages": []any{map[string]any{"ts": "x", "text": "t", "bogus": 1}}}),
+			code:    codes.InvalidArgument, reason: "INVALID_PAYLOAD", field: "payload.messages.0.bogus",
+		},
+		{
+			name: "generated_target", document: docName, block: conversation.GetBlockNumber(),
+			code: codes.PermissionDenied, reason: "GENERATED_BLOCK",
+		},
+		{
+			name: "unsupported_target", document: docName, block: ordinary.GetBlockNumber(),
+			code: codes.FailedPrecondition, reason: "EXPANSION_UNSUPPORTED",
+		},
+		{
+			name: "missing_block", document: docName, block: 999,
+			code: codes.NotFound, reason: "BLOCK_NOT_FOUND",
+		},
+		{
+			name: "missing_document", document: "documents/00000000-0000-4000-8000-000000000000", block: threadNumber,
+			code: codes.NotFound, reason: "DOCUMENT_NOT_FOUND",
+		},
+	} {
+		t.Run("SubmitBlockPayload/"+tc.name, func(t *testing.T) {
+			unchanged(t)
+			payload := tc.payload
+			if payload == nil {
+				payload = slackSnapshot(t)
+			}
+			_, err := client.SubmitBlockPayload(ctx, &pb.SubmitBlockPayloadRequest{
+				Parent: tc.document, BlockNumber: tc.block, Payload: payload,
+			})
+			expectRejection(t, err, tc.code, tc.reason, tc.field)
+		})
+	}
+
+	t.Run("SubmitBlockPayload/http_generated_target", func(t *testing.T) {
+		unchanged(t)
+		url := fmt.Sprintf("%s/v1/%s/blocks/%d:submitPayload", httpBaseURL(), docName, conversation.GetBlockNumber())
+		code, body := httpPost(t, url, map[string]any{"payload": slackSnapshot(t).AsMap()})
+		if code != http.StatusForbidden || !strings.Contains(body, "GENERATED_BLOCK") || !strings.Contains(body, "google.rpc.ErrorInfo") {
+			t.Fatalf("expected HTTP 403 with ErrorInfo details, got %d: %s", code, body)
+		}
+	})
+
+	t.Run("AddBlock/public_collection_membership", func(t *testing.T) {
+		unchanged(t)
+		_, err := client.AddBlock(ctx, &pb.AddBlockRequest{Parent: docName, Block: &pb.Block{
+			Type: conversation.GetType(), Record: conversation.GetRecord(),
+		}})
+		requireCode(t, err, codes.InvalidArgument, "public collection membership")
+	})
+
+	t.Run("UpdateBlock/generated_echo", func(t *testing.T) {
+		unchanged(t)
+		_, err := client.UpdateBlock(ctx, &pb.UpdateBlockRequest{Parent: docName, BlockNumber: agent.GetBlockNumber(), Block: &pb.Block{
+			Type: agent.GetType(), Record: agent.GetRecord(),
+		}})
+		requireCode(t, err, codes.PermissionDenied, "generated echo")
+	})
 }

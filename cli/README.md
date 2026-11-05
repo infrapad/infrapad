@@ -92,7 +92,7 @@ infrapad block add --document <id> --type Core/Markdown \
 |------|----------|-------------|
 | `--document` | yes | Parent document name |
 | `--type` | yes | Block type (e.g. `Core/Markdown`, `Prometheus/AlertsMatcher`) |
-| `--content` | no | Block content as a JSON object (default `{}`) |
+| `--content` | no | Inner block content as a JSON object (default `{}`); sent as the block's `record.content` |
 
 **Update a block:**
 
@@ -106,7 +106,7 @@ infrapad block update --document <id> --block-number 1 --type Prometheus/AlertsM
 | `--document` | yes | Parent document name |
 | `--block-number` | yes | Block number to update |
 | `--type` | yes | Block type |
-| `--content` | no | Block content as a JSON object (default `{}`) |
+| `--content` | no | Inner block content as a JSON object (default `{}`); sent as the block's `record.content` |
 
 **Get a block:**
 
