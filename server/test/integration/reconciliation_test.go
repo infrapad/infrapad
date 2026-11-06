@@ -17,6 +17,7 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
 	"github.com/infrapad/infrapad/server/pkg/model"
+	"github.com/infrapad/infrapad/server/pkg/store"
 	"github.com/infrapad/infrapad/server/pkg/store/postgres"
 )
 
@@ -44,24 +45,22 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 	t1 := addThread("1788873542.000000")
 	t2 := addThread("1788873542.000100")
 
-	// reconcile expands, validates, and reconciles one thread snapshot in
-	// its own host transaction, returning it for the caller to finish.
-	reconcile := func(thread model.Block, messages ...slack.SourceMessage) (controller.ReconcileResult, func() error, func() error) {
+	// reconcile processes a snapshot through the production host entry
+	// point, returning the transaction and actual appended revision count.
+	// The caller decides whether to commit or roll back.
+	reconcile := func(thread model.Block, messages ...slack.SourceMessage) (store.Tx, int) {
 		t.Helper()
 		payload, err := json.Marshal(slack.Snapshot{Messages: append([]slack.SourceMessage{}, messages...)})
 		testutil.NoErr(t, err)
-		testutil.NoErr(t, registry.ValidatePayload(slack.ThreadTypeName, payload))
-		result, err := threadType.Expand(ctx, thread.Record, payload)
-		testutil.NoErr(t, err)
-		testutil.NoErr(t, registry.ValidateExpansion(thread.Record, result))
 		tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 		testutil.NoErr(t, err)
-		res, err := ctrl.ReconcileExpansionTx(ctx, tx, doc.Uid, thread.BlockNumber, result, "host")
-		if err != nil {
-			tx.Rollback()
-			t.Fatalf("reconcile: %v", err)
-		}
-		return res, tx.Commit, tx.Rollback
+		t.Cleanup(func() { tx.Rollback() })
+		before, err := tx.Blocks().List(ctx, doc.Uid)
+		testutil.NoErr(t, err)
+		testutil.NoErr(t, ctrl.ExpandTreeTx(ctx, tx, doc.Uid, thread, payload, "host"))
+		after, err := tx.Blocks().List(ctx, doc.Uid)
+		testutil.NoErr(t, err)
+		return tx, len(after) - len(before)
 	}
 	// slackBase aligns Slack timestamps with the identityAt wall clock.
 	slackBase := identityAt(0).Unix()
@@ -86,16 +85,30 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 		return counts
 	}
 
-	res, commit, _ := reconcile(t1, message("1", 0, 0), message("2", 1, 0), message("3", 2, 0))
-	testutil.NoErr(t, commit())
-	conversation := res.Output[slack.MessageKey(slackMessageTS(slackBase, 0, 0, 0))]
+	tx, _ := reconcile(t1, message("1", 0, 0), message("2", 1, 0), message("3", 2, 0))
+	testutil.NoErr(t, tx.Commit())
+	blocks, err := ctrl.ListBlocks(ctx, doc.Uid)
+	testutil.NoErr(t, err)
+	var conversation model.BlockNumber
+	for _, blk := range blocks {
+		if blk.ParentBlockNumber != nil && *blk.ParentBlockNumber == t1.BlockNumber {
+			for _, member := range content.Members(blk.Record) {
+				if member.Key() == slack.MessageKey(slackMessageTS(slackBase, 0, 0, 0)) {
+					conversation = blk.BlockNumber
+				}
+			}
+		}
+	}
+	if conversation == 0 {
+		t.Fatal("initial snapshot did not persist the conversation")
+	}
 
 	// Thread 2's late event splits thread 1's conversation: both
 	// primaries' changes commit together.
-	res, commit, _ = reconcile(t2, message("x", 1, 30))
-	testutil.NoErr(t, commit())
-	if len(res.Revisions) != 3 { // revision of the conversation + two new blocks
-		t.Fatalf("expected 3 revisions, got %d", len(res.Revisions))
+	tx, appended := reconcile(t2, message("x", 1, 30))
+	testutil.NoErr(t, tx.Commit())
+	if appended != 3 { // revision of the conversation + two new blocks
+		t.Fatalf("expected 3 revisions, got %d", appended)
 	}
 	latest, err := ctrl.GetBlock(ctx, doc.Uid, conversation, 0)
 	testutil.NoErr(t, err)
@@ -106,11 +119,11 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 	// A successful reconciliation rolled back leaves all revisions
 	// unchanged.
 	before := revisionCounts()
-	res, _, rollback := reconcile(t2)
-	if len(res.Revisions) == 0 {
+	tx, appended = reconcile(t2)
+	if appended == 0 {
 		t.Fatal("expected the removal to produce revisions before rollback")
 	}
-	testutil.NoErr(t, rollback())
+	testutil.NoErr(t, tx.Rollback())
 	after := revisionCounts()
 	if len(after) != len(before) {
 		t.Fatalf("rollback changed blocks: %v -> %v", before, after)

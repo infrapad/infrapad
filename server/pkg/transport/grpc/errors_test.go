@@ -1,6 +1,8 @@
 package grpc
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -22,7 +24,8 @@ func TestSubmissionReasonMapping(t *testing.T) {
 		{controller.ReasonGeneratedBlock, codes.PermissionDenied},
 		{controller.ReasonDeletedBlock, codes.FailedPrecondition},
 		{controller.ReasonExpansionUnsupported, codes.FailedPrecondition},
-		{controller.ReasonCascadingUnsupported, codes.FailedPrecondition},
+		{controller.ReasonExpansionCycle, codes.FailedPrecondition},
+		{controller.ReasonExpansionDepthExceeded, codes.FailedPrecondition},
 		{controller.ReasonInvalidOutput, codes.Internal},
 		{controller.ReasonExpansionFailed, codes.Internal},
 		{"UNKNOWN_REASON", codes.Internal},
@@ -31,8 +34,13 @@ func TestSubmissionReasonMapping(t *testing.T) {
 			// The same validation error can describe producer input or an
 			// extension's downstream payload. The reason, not the wrapped
 			// validation stage, determines its status and field prefix.
+			path := []controller.ExpansionPathStep{
+				{BlockNumber: 1},
+				{ReferenceKey: "a/b", BlockNumber: 3},
+				{ReferenceKey: "4"},
+			}
 			err := rpcError("submit payload", &controller.SubmissionError{
-				Reason: tc.reason, DocumentUID: "doc-1", BlockNumber: 1,
+				Reason: tc.reason, DocumentUID: "doc-1", ExpansionPath: path,
 				Err: &content.ValidationError{
 					Stage:  content.StagePayload,
 					Fields: []content.FieldError{{Path: "messages", Message: "invalid messages"}},
@@ -49,6 +57,16 @@ func TestSubmissionReasonMapping(t *testing.T) {
 			info, ok := details[0].(*errdetails.ErrorInfo)
 			if !ok || info.GetReason() != string(tc.reason) {
 				t.Fatalf("expected reason %s, got %v", tc.reason, details[0])
+			}
+			if got := info.GetMetadata()["expansion_path"]; got != "1/a%2Fb/4" {
+				t.Fatalf("unexpected rendered path %q", got)
+			}
+			var steps []controller.ExpansionPathStep
+			if err := json.Unmarshal([]byte(info.GetMetadata()["expansion_path_steps"]), &steps); err != nil {
+				t.Fatalf("decode path steps: %v", err)
+			}
+			if !reflect.DeepEqual(steps, path) {
+				t.Fatalf("expected structured path %v, got %v", path, steps)
 			}
 			field := "output.messages"
 			if tc.reason == controller.ReasonInvalidPayload {

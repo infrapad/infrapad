@@ -15,7 +15,6 @@ import (
 
 	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
-	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
 	"github.com/infrapad/infrapad/server/pkg/model"
@@ -34,16 +33,13 @@ func TestSnapshotReconciliationLifecycle(t *testing.T) {
 	t1 := addThread(t, f, doc.Uid, slackTS(0, 0, 0))
 	t2 := addThread(t, f, doc.Uid, slackTS(0, 0, 100))
 
-	reconcile := func(thread model.Block, messages ...slack.SourceMessage) controller.ReconcileResult {
+	reconcile := func(thread model.Block, messages ...slack.SourceMessage) {
 		t.Helper()
-		result := expandThread(t, f, thread, threadAgents, messages...)
 		tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 		testutil.NoErr(t, err)
 		defer tx.Rollback()
-		res, err := ctrl.ReconcileExpansionTx(ctx, tx, doc.Uid, thread.BlockNumber, result, "host")
-		testutil.NoErr(t, err)
+		testutil.NoErr(t, ctrl.ExpandTreeTx(ctx, tx, doc.Uid, thread, threadPayload(t, threadAgents, messages...), "host"))
 		testutil.NoErr(t, tx.Commit())
-		return res
 	}
 	revisions := func() int { return len(f.store.blocks[doc.Uid]) }
 
@@ -55,20 +51,15 @@ func TestSnapshotReconciliationLifecycle(t *testing.T) {
 	m5 := sourceMessage("5", 4, 0, "Bob")
 
 	// Initial output: the agent message splits the human conversation.
-	res := reconcile(t1, m1, m2, m3, m4, m5)
+	reconcile(t1, m1, m2, m3, m4, m5)
 	expectChildren(t, f, doc.Uid, t1.BlockNumber, map[model.BlockNumber][]string{
 		3: {slackTS(0, 0, 0), slackTS(1, 0, 0)}, 4: {slackTS(2, 0, 0)}, 5: {slackTS(3, 0, 0), slackTS(4, 0, 0)},
 	})
-	if res.Output[slack.MessageKey(slackTS(1, 0, 0))] != 3 ||
-		res.Output[slack.MessageKey(slackTS(2, 0, 0))] != 4 ||
-		res.Output[slack.MessageKey(slackTS(4, 0, 0))] != 5 {
-		t.Fatalf("unexpected output mapping: %v", res.Output)
-	}
-
 	// An identical snapshot creates no revisions anywhere.
 	before := revisions()
-	if res := reconcile(t1, m1, m2, m3, m4, m5); len(res.Revisions) != 0 || revisions() != before {
-		t.Fatalf("identical snapshot appended revisions: %+v", res.Revisions)
+	reconcile(t1, m1, m2, m3, m4, m5)
+	if got := revisions() - before; got != 0 {
+		t.Fatalf("identical snapshot appended %d revisions", got)
 	}
 
 	// A late event of another primary splits the existing conversation;
@@ -122,7 +113,7 @@ func TestSnapshotReconciliationLifecycle(t *testing.T) {
 	// Removing all output, then returning keys: no resurrection.
 	reconcile(t1)
 	expectChildren(t, f, doc.Uid, t1.BlockNumber, map[model.BlockNumber][]string{})
-	res = reconcile(t1, m1, m2, m3, m4, m5)
+	reconcile(t1, m1, m2, m3, m4, m5)
 	expectChildren(t, f, doc.Uid, t1.BlockNumber, map[model.BlockNumber][]string{
 		9:  {slackTS(0, 0, 0), slackTS(1, 0, 0)},
 		10: {slackTS(2, 0, 0)},
@@ -150,7 +141,7 @@ func TestReconciliationEqualTimePlanning(t *testing.T) {
 	tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 	testutil.NoErr(t, err)
 	defer tx.Rollback()
-	_, err = ctrl.ReconcileExpansionTx(ctx, tx, doc.Uid, t1.BlockNumber, expandThread(t, f, t1, threadAgents,
+	err = ctrl.ExpandTreeTx(ctx, tx, doc.Uid, t1, threadPayload(t, threadAgents,
 		sourceMessage("a", 0, 0, "Alice"),
 		sourceMessageAt("b", 0, 0, 100, "Bob"),
 		sourceMessage("d", 1, 0, "Dave"),
@@ -158,7 +149,7 @@ func TestReconciliationEqualTimePlanning(t *testing.T) {
 	testutil.NoErr(t, err)
 	// Same transaction: the second reconciliation sees the first one's
 	// output. Thread 2 sorts after thread 1 at equal time.
-	_, err = ctrl.ReconcileExpansionTx(ctx, tx, doc.Uid, t2.BlockNumber, expandThread(t, f, t2, threadAgents,
+	err = ctrl.ExpandTreeTx(ctx, tx, doc.Uid, t2, threadPayload(t, threadAgents,
 		sourceMessageAt("c", 0, 0, 200, "Carol"),
 		sourceMessage("e", 1, 0, "Erin"),
 	), "host")
@@ -185,17 +176,12 @@ func addThread(t *testing.T, f *fixture, documentUID model.DocumentUID, ts strin
 	return thread
 }
 
-// expandThread runs the Slack thread expansion and host validation for a
-// snapshot of messages, as the payload-submission caller would.
-func expandThread(t *testing.T, f *fixture, thread model.Block, agents map[string]string, messages ...slack.SourceMessage) content.ExpansionResult {
+// threadPayload builds a complete Slack snapshot for host expansion.
+func threadPayload(t *testing.T, agents map[string]string, messages ...slack.SourceMessage) json.RawMessage {
 	t.Helper()
 	payload, err := json.Marshal(slack.Snapshot{Agents: agents, Messages: append([]slack.SourceMessage{}, messages...)})
 	testutil.NoErr(t, err)
-	testutil.NoErr(t, f.registry.ValidatePayload(slack.ThreadTypeName, payload))
-	result, err := f.threadType.Expand(context.Background(), thread.Record, payload)
-	testutil.NoErr(t, err)
-	testutil.NoErr(t, f.registry.ValidateExpansion(thread.Record, result))
-	return result
+	return payload
 }
 
 // sourceMessage builds a realistic enriched source message keyed by a

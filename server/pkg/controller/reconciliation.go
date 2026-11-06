@@ -1,12 +1,12 @@
 package controller
 
-// Snapshot reconciliation: applying one validated expansion result for an
-// existing primary to the document.
+// Snapshot reconciliation: applying a desired output tree to the document.
 //
-// The primary's previous live direct output is replaced by its complete
-// desired output, and the whole document is re-planned from persisted
-// membership (other primaries' payloads are never needed and their
-// extensions never run):
+// Each parent in the tree replaces its previous live direct output with
+// its complete desired output. The whole document is re-planned from
+// pre-submission persisted membership. Reconciliation is independent of
+// how the desired records were prepared; it neither consumes payloads nor
+// invokes extensions:
 //
 //  1. Planning events. Every live block contributes events; generated
 //     groupable collections are flattened into their members, ordinary
@@ -28,16 +28,15 @@ package controller
 //     retired set is stable.
 //  4. Application of the validated final plan: retirements, record
 //     revisions (only for semantically changed records), then creations
-//     in planner order. Sibling-key uniqueness is checked against the
-//     complete final plan, so membership may move between blocks without
-//     intermediate revisions.
+//     in planner order, parent-first for new references. Sibling-key
+//     uniqueness is checked against the complete final plan, so
+//     membership may move between blocks without intermediate revisions.
 //
 // Final persisted block views keep their own ordering (timestamp, then
 // block number); planning order only decides grouping and allocation.
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -47,67 +46,38 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/store"
 )
 
-// ReconcileResult is the persisted outcome of ReconcileExpansionTx.
-type ReconcileResult struct {
-	// Primary is the latest revision of the primary block (unchanged when
-	// its record did not change), with its record deserialized.
-	Primary model.Block
-	// Output maps every key of the desired direct output (collection
-	// members included) to the block now holding it.
-	Output map[string]model.BlockNumber
-	// Expansions lists the emitted expandable references in emission
-	// order, including unchanged ones, with their transient payloads for
-	// downstream processing. Payloads are never persisted.
-	Expansions []PendingExpansion
-	// Revisions lists every appended revision (retirements, record
-	// revisions, and creations) in application order. Empty for an
-	// identical snapshot.
-	Revisions []model.Block
+// desiredTree describes final records and complete direct output for one
+// affected parent and its affected descendants. It carries no payloads or
+// information about how the desired state was prepared. Records must be
+// validated before reconciliation.
+type desiredTree struct {
+	// number identifies the existing block, or is a negative provisional
+	// number for a new parent. The root must identify a live block.
+	number model.BlockNumber
+	record content.Record
+	output []content.KeyedRecord
+	// children describe output replacements for records in output, in
+	// output order. An omitted child leaves that record's descendants
+	// unchanged; an included child with empty output retires them.
+	children []*desiredTree
 }
 
-// PendingExpansion is an emitted expandable reference handed to the
-// cascading caller.
-type PendingExpansion struct {
-	BlockNumber model.BlockNumber
-	Record      content.KeyedRecord
-	// Payload is the transient ExpansionPayload supplied by the emitting
-	// expansion (possibly empty).
-	Payload json.RawMessage
-}
-
-// ReconcileExpansionTx reconciles an already validated expansion result
-// (see Registry.ValidateExpansion) for the existing live primary block
-// inside a document-locked transaction obtained from BeginHostTx. The
-// caller owns Commit/Rollback; any error requires rolling back the whole
-// transaction. It neither runs expanders nor recurses into emitted
-// references: those are returned in ReconcileResult.Expansions.
-func (c *Controller) ReconcileExpansionTx(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, primaryBlockNumber model.BlockNumber, result content.ExpansionResult, author model.AuthorID) (ReconcileResult, error) {
-	latest, err := c.latestBlocks(ctx, tx, documentUID)
-	if err != nil {
-		return ReconcileResult{}, err
-	}
-	live, err := c.liveBlocks(latest)
-	if err != nil {
-		return ReconcileResult{}, err
-	}
-	primary, ok := live[primaryBlockNumber]
-	if !ok {
-		if _, exists := latest[primaryBlockNumber]; !exists {
-			return ReconcileResult{}, fmt.Errorf("reconcile block %d: %w", primaryBlockNumber, errNotFound)
-		}
-		return ReconcileResult{}, invalidInput("reconcile block %d: primary is deleted", primaryBlockNumber)
-	}
-	if err := checkPrimaryResult(primary, result); err != nil {
-		return ReconcileResult{}, err
-	}
-
+// reconcileTree plans and applies a complete desired tree inside the
+// caller's document-locked transaction: document-wide planning against
+// pre-submission live membership, a stable retirement-exclusion fixpoint,
+// whole-plan validation, then application of only the final differences.
+// The root block must be live. Preparation and expansion are outside this
+// boundary; only final records and parent relationships are inputs.
+func (c *Controller) reconcileTree(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, latest, live map[model.BlockNumber]model.Block, root model.Block, tree *desiredTree, author model.AuthorID) error {
+	nodes := tree.flatten(0)
 	// Plan until the retired set is stable: retiring a block excludes its
 	// descendants, which may in turn change grouping elsewhere.
 	excluded := map[model.BlockNumber]bool{}
 	var p *reconcilePlan
+	var err error
 	for iteration := 0; ; iteration++ {
-		if p, err = planReconciliation(live, primary, result, excluded); err != nil {
-			return ReconcileResult{}, err
+		if p, err = planReconciliation(live, root, nodes, excluded); err != nil {
+			return err
 		}
 		next := map[model.BlockNumber]bool{}
 		for _, blk := range p.retired {
@@ -119,20 +89,39 @@ func (c *Controller) ReconcileExpansionTx(ctx context.Context, tx store.Tx, docu
 			break
 		}
 		if iteration > len(live) {
-			return ReconcileResult{}, fmt.Errorf("reconcile block %d: planning did not converge", primaryBlockNumber)
+			return fmt.Errorf("reconcile block %d: planning did not converge", root.BlockNumber)
 		}
 		excluded = next
 	}
 
 	if err := c.validatePlan(p); err != nil {
-		return ReconcileResult{}, err
+		return err
 	}
-	return c.applyPlan(ctx, tx, documentUID, p, result, author)
+	return c.applyPlan(ctx, tx, documentUID, p, author)
 }
 
 // ---------------------------------------------------------------------------
 // Planning
 // ---------------------------------------------------------------------------
+
+// desiredNode is a flat planning node: its final record and complete
+// desired direct output, with its immediate generating parent (0 for the root).
+type desiredNode struct {
+	parentBlockNumber model.BlockNumber
+	blockNumber       model.BlockNumber
+	record            content.Record
+	output            []content.KeyedRecord
+}
+
+// flatten projects the desired tree into parent-first planning nodes.
+// Tree shape is independent of document-wide event order.
+func (n *desiredTree) flatten(parentBlockNumber model.BlockNumber) []desiredNode {
+	out := []desiredNode{{parentBlockNumber: parentBlockNumber, blockNumber: n.number, record: n.record, output: n.output}}
+	for _, child := range n.children {
+		out = append(out, child.flatten(n.number)...)
+	}
+	return out
+}
 
 // planEvent is one entry of the document-wide planning stream.
 type planEvent struct {
@@ -177,9 +166,10 @@ type reconcilePlan struct {
 	// final holds the complete final live direct output per planned
 	// parent, for sibling-key validation.
 	final map[model.BlockNumber][]content.Record
-	// matched maps (parent, anchor key) of matched desired records to the
-	// retaining block.
-	matched map[parentKey]model.BlockNumber
+	// provisional maps (parent, anchor key) of a creation that realizes a
+	// new parent to that parent's provisional number, so
+	// application can translate it to the allocated block number.
+	provisional map[parentKey]model.BlockNumber
 }
 
 type parentKey struct {
@@ -188,14 +178,17 @@ type parentKey struct {
 }
 
 // planReconciliation computes one planning pass from the live document,
-// ignoring excluded blocks (descendants of retired output). It only builds
-// a plan: the caller repeats planning if retirements change descendant
-// exclusions, then validates the stable plan before applying any writes.
-func planReconciliation(live map[model.BlockNumber]model.Block, primary model.Block, result content.ExpansionResult, excluded map[model.BlockNumber]bool) (*reconcilePlan, error) {
-	target := primary.BlockNumber
+// ignoring excluded blocks (descendants of retired output). The affected
+// parents' previous live direct output is replaced by their desired
+// output (for the root, its resulting record replaces the persisted one);
+// every other live, non-excluded block contributes its persisted members.
+// It only builds a plan: the caller repeats planning if retirements change
+// descendant exclusions, then validates the stable plan before applying
+// any writes.
+func planReconciliation(live map[model.BlockNumber]model.Block, root model.Block, nodes []desiredNode, excluded map[model.BlockNumber]bool) (*reconcilePlan, error) {
 	// Group across the whole document first: even another primary's output
 	// can split a collection. No block identities are assigned at this stage.
-	events, oldChildren := buildPlanningInput(live, primary, result, excluded)
+	events, oldChildren := buildPlanningInput(live, root, nodes, excluded)
 	desired, err := groupEvents(events)
 	if err != nil {
 		return nil, err
@@ -227,11 +220,11 @@ func planReconciliation(live map[model.BlockNumber]model.Block, primary model.Bl
 	// The primary's record change is independent of its output changes:
 	// either may be a no-op while the other still requires writes.
 	p := &reconcilePlan{
-		primary:        primary,
-		primaryRecord:  result.Record,
-		primaryChanged: !content.EqualRecords(primary.Record, result.Record),
+		primary:        root,
+		primaryRecord:  nodes[0].record,
+		primaryChanged: !content.EqualRecords(root.Record, nodes[0].record),
 		final:          map[model.BlockNumber][]content.Record{},
-		matched:        map[parentKey]model.BlockNumber{},
+		provisional:    map[parentKey]model.BlockNumber{},
 	}
 	for _, parent := range ordered {
 		records := byParent[parent]
@@ -253,9 +246,7 @@ func planReconciliation(live map[model.BlockNumber]model.Block, primary model.Bl
 			old[blk.BlockNumber] = blk
 		}
 		for _, m := range match.Matches {
-			// Record every retained identity for the output handoff, including
-			// unchanged blocks, but append revisions only for semantic changes.
-			p.matched[parentKey{parent, anchorKey(m.Record)}] = m.BlockNumber
+			// Append revisions only for semantic changes.
 			if blk := old[m.BlockNumber]; !content.EqualRecords(blk.Record, m.Record) {
 				p.revisions = append(p.revisions, plannedRevision{block: blk, record: m.Record})
 			}
@@ -272,20 +263,35 @@ func planReconciliation(live map[model.BlockNumber]model.Block, primary model.Bl
 	// without reserving provisional block numbers during planning.
 	sort.SliceStable(p.creations, func(i, j int) bool { return p.creations[i].pos < p.creations[j].pos })
 	sort.Slice(p.retired, func(i, j int) bool { return p.retired[i].BlockNumber < p.retired[j].BlockNumber })
-	// Represent an empty snapshot explicitly, even if the target had no
-	// previous output and therefore never appeared in either parent set.
-	if _, ok := p.final[target]; !ok {
-		p.final[target] = nil
+	// Represent empty snapshots explicitly, even for parents with no
+	// previous output that never appeared in either parent set. New
+	// (provisional) references have no old output at all.
+	for _, node := range nodes {
+		if _, ok := p.final[node.blockNumber]; !ok {
+			p.final[node.blockNumber] = nil
+		}
+		if node.blockNumber < 0 {
+			p.provisional[parentKey{node.parentBlockNumber, anchorKey(node.record)}] = node.blockNumber
+		}
 	}
 	return p, nil
 }
 
 // buildPlanningInput builds the document-wide event stream and
-// indexes old live children per parent for matching. The target's previous
-// live direct output is replaced by its desired output; every other live,
-// non-excluded block contributes its persisted members.
-func buildPlanningInput(live map[model.BlockNumber]model.Block, primary model.Block, result content.ExpansionResult, excluded map[model.BlockNumber]bool) ([]planEvent, map[model.BlockNumber][]model.Block) {
-	target := primary.BlockNumber
+// indexes old live children per parent for matching. Each affected parent's
+// previous live direct output is replaced by its desired output (the
+// root's own event carries its resulting record); every other live,
+// non-excluded block contributes its persisted members. Desired output
+// under a provisional (negative) parent number belongs to a reference
+// that will be created.
+func buildPlanningInput(live map[model.BlockNumber]model.Block, root model.Block, nodes []desiredNode, excluded map[model.BlockNumber]bool) ([]planEvent, map[model.BlockNumber][]model.Block) {
+	target := root.BlockNumber
+	replacedParents := map[model.BlockNumber]bool{}
+	for _, node := range nodes {
+		if node.blockNumber > 0 {
+			replacedParents[node.blockNumber] = true
+		}
+	}
 	oldChildren := map[model.BlockNumber][]model.Block{}
 	// origins indexes the live holder of every generated member by
 	// parent, content type, and key.
@@ -308,8 +314,8 @@ func buildPlanningInput(live map[model.BlockNumber]model.Block, primary model.Bl
 	for _, number := range numbers {
 		blk := live[number]
 		if number == target {
-			// The primary participates with its resulting record.
-			blk.Record = result.Record
+			// The root participates with its resulting record.
+			blk.Record = nodes[0].record
 		}
 		if blk.ParentBlockNumber == nil {
 			events = append(events, planEvent{ts: blk.Record.Timestamp(), owner: number})
@@ -320,13 +326,15 @@ func buildPlanningInput(live map[model.BlockNumber]model.Block, primary model.Bl
 		for _, member := range content.Members(blk.Record) {
 			origins[originKey{parent, blk.Type, member.Key()}] = number
 		}
-		if parent == target {
+		if replacedParents[parent] {
 			continue // replaced by the desired output below
 		}
 		events = append(events, generatedEvents(parent, blk.Record)...)
 	}
-	for _, block := range result.Blocks {
-		events = append(events, generatedEvents(target, block.Record)...)
+	for _, node := range nodes {
+		for _, record := range node.output {
+			events = append(events, generatedEvents(node.blockNumber, record)...)
+		}
 	}
 	for n := range events {
 		e := &events[n]
@@ -500,12 +508,14 @@ func (c *Controller) validatePlan(p *reconcilePlan) error {
 }
 
 // applyPlan writes the validated plan: retirements first (cascading),
-// then the primary and record revisions, then creations in planner order.
-// Per-write sibling-key checks are skipped: the final plan was validated
-// as a whole, which allows membership to move between blocks.
-func (c *Controller) applyPlan(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, p *reconcilePlan, result content.ExpansionResult, author model.AuthorID) (ReconcileResult, error) {
-	out := ReconcileResult{Primary: p.primary, Output: map[string]model.BlockNumber{}}
-
+// then the primary and record revisions, then creations. Creations run
+// parent-first: a child of a reference that is itself being created can
+// only be inserted after that reference, whatever the planner order
+// says, with provisional (negative) parent numbers translated to the
+// allocated block numbers as references are created. Per-write
+// sibling-key checks are skipped: the final plan was validated as a
+// whole, which allows membership to move between blocks.
+func (c *Controller) applyPlan(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, p *reconcilePlan, author model.AuthorID) error {
 	retired := map[model.BlockNumber]bool{}
 	for _, blk := range p.retired {
 		if retired[blk.BlockNumber] {
@@ -513,58 +523,56 @@ func (c *Controller) applyPlan(ctx context.Context, tx store.Tx, documentUID mod
 		}
 		revs, err := c.DeleteBlockTreeTx(ctx, tx, documentUID, blk.BlockNumber, author)
 		if err != nil {
-			return ReconcileResult{}, err
+			return err
 		}
 		for _, rev := range revs {
 			retired[rev.BlockNumber] = true
 		}
-		out.Revisions = append(out.Revisions, revs...)
 	}
 
 	if p.primaryChanged {
-		rev, err := storeRecordRevision(ctx, tx, documentUID, p.primary, p.primaryRecord, author)
-		if err != nil {
-			return ReconcileResult{}, err
+		if _, err := storeRecordRevision(ctx, tx, documentUID, p.primary, p.primaryRecord, author); err != nil {
+			return err
 		}
-		out.Primary = rev
-		out.Revisions = append(out.Revisions, rev)
 	}
 
 	for _, planned := range p.revisions {
-		rev, err := storeRecordRevision(ctx, tx, documentUID, planned.block, planned.record, author)
-		if err != nil {
-			return ReconcileResult{}, err
+		if _, err := storeRecordRevision(ctx, tx, documentUID, planned.block, planned.record, author); err != nil {
+			return err
 		}
-		out.Revisions = append(out.Revisions, rev)
 	}
 
-	target := p.primary.BlockNumber
-	for _, creation := range p.creations {
-		created, err := insertChildBlock(ctx, tx, documentUID, creation.parent, creation.record, author)
-		if err != nil {
-			return ReconcileResult{}, err
+	// Creations run in planner order, but a creation under a provisional
+	// parent waits until that reference has been created; each pass
+	// resolves at least one tree level.
+	allocated := map[model.BlockNumber]model.BlockNumber{}
+	creations := append([]plannedRecord(nil), p.creations...)
+	for len(creations) > 0 {
+		var deferred []plannedRecord
+		for _, creation := range creations {
+			parent := creation.parent
+			if real, ok := allocated[parent]; ok {
+				parent = real
+			} else if parent < 0 {
+				deferred = append(deferred, creation)
+				continue
+			}
+			created, err := insertChildBlock(ctx, tx, documentUID, parent, creation.record, author)
+			if err != nil {
+				return err
+			}
+			// A creation realizing a new parent publishes its
+			// allocated number for the reference's own children.
+			if prov, ok := p.provisional[parentKey{creation.parent, anchorKey(creation.record)}]; ok {
+				allocated[prov] = created.BlockNumber
+			}
 		}
-		p.matched[parentKey{creation.parent, anchorKey(creation.record)}] = created.BlockNumber
-		out.Revisions = append(out.Revisions, created)
-	}
-
-	for _, record := range p.final[target] {
-		number := p.matched[parentKey{target, anchorKey(record)}]
-		for _, member := range content.Members(record) {
-			out.Output[member.Key()] = number
+		if len(deferred) == len(creations) {
+			return fmt.Errorf("apply plan: unresolved provisional parent for %d creation(s)", len(deferred))
 		}
+		creations = deferred
 	}
-	for _, block := range result.Blocks {
-		if _, expands := block.Record.ContentType().(content.Expander); !expands {
-			continue
-		}
-		out.Expansions = append(out.Expansions, PendingExpansion{
-			BlockNumber: out.Output[block.Record.Key()],
-			Record:      block.Record,
-			Payload:     block.ExpansionPayload,
-		})
-	}
-	return out, nil
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -601,26 +609,6 @@ func liveAncestry(latest map[model.BlockNumber]model.Block, number model.BlockNu
 		seen[number] = true
 		number = *blk.ParentBlockNumber
 	}
-}
-
-// checkPrimaryResult rejects results changing the primary's identity: its
-// content type and (for keyed generated primaries) its key.
-func checkPrimaryResult(primary model.Block, result content.ExpansionResult) error {
-	if result.Record == nil || result.Record.ContentType() == nil || result.Record.ContentType().Name() != primary.Type {
-		return invalidInput("block %d: expansion changed or omitted the primary record type", primary.BlockNumber)
-	}
-	if old, keyed := primary.Record.(content.KeyedRecord); keyed {
-		updated, ok := result.Record.(content.KeyedRecord)
-		if !ok || updated.Key() != old.Key() {
-			return invalidInput("block %d: expansion changed the primary key %q", primary.BlockNumber, old.Key())
-		}
-	}
-	for n, block := range result.Blocks {
-		if block.Record == nil || block.Record.ContentType() == nil {
-			return invalidInput("block %d: emitted block %d has no record", primary.BlockNumber, n)
-		}
-	}
-	return nil
 }
 
 // anchorKey returns the key of a desired record (a collection's first

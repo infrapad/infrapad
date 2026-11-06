@@ -2,7 +2,7 @@ package controller_test
 
 // Package-local test fixture: one controller over a fresh in-memory store
 // with the Markdown, Prometheus, Slack, and AI-agent types registered, plus
-// the test-only Test/Ref expander (testext_test.go).
+// the test-only Test/Ref expander (internal/testext).
 // Tests use the exposed dependencies directly; the fixture has no methods
 // wrapping controller operations, store inspection, or record construction.
 
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/infrapad/infrapad/server/internal/testext"
 	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/controller"
@@ -35,8 +36,8 @@ type fixture struct {
 	agentType        *aiagent.MessageType
 	conversationType *slack.ConversationType
 	threadType       *slack.ThreadType
-	// refType is the test-only expandable reference (testext_test.go).
-	refType *refType
+	// refType is the test-only expandable reference (internal/testext).
+	refType *testext.RefType
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -47,7 +48,7 @@ func newFixture(t *testing.T) *fixture {
 		alertsType:       prometheus.NewAlertsMatcherType(),
 		agentType:        aiagent.NewMessageType(),
 		conversationType: slack.NewConversationType(),
-		refType:          newRefType(),
+		refType:          testext.NewRefType(),
 	}
 	f.threadType = slack.NewThreadType(f.conversationType, f.agentType)
 	registry, err := content.NewRegistry([]content.ContentType{

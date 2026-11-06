@@ -5,16 +5,18 @@ package controller
 //
 // SubmitBlockPayload owns the document-locked transaction (BeginHostTx),
 // the root-target checks, capturing the refreshed document, and
-// commit/rollback. Tree processing (payload validation, expansion, output
-// validation, reconciliation, and downstream expansion) is delegated to
-// the transaction-scoped ExpandTreeTx, which never commits on its own.
-// Any failure rolls back every change; payloads are never persisted.
+// commit/rollback. Tree processing (payload validation, expansion,
+// output validation, downstream expansion, and reconciliation) is
+// delegated to the transaction-scoped ExpandTreeTx, which never commits
+// on its own. Any failure rolls back every change; payloads are never
+// persisted.
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -104,85 +106,51 @@ func (c *Controller) submissionTarget(ctx context.Context, tx store.Tx, document
 }
 
 // ExpandTreeTx processes a payload for the live primary block inside a
-// document-locked transaction obtained from BeginHostTx: payload
-// validation, expansion, output validation, ReconcileExpansionTx, and
-// downstream processing of emitted expandable references, all sharing tx.
-// The caller owns Commit/Rollback and must roll back on any error: a
-// partial tree is never valid to commit. Failures are *SubmissionError
-// values carrying the expansion path.
+// document-locked transaction obtained from BeginHostTx: it stages the
+// complete bounded expansion tree (payload validation, expansion, output
+// validation, and recursive downstream expansion of emitted references,
+// with cycle and depth checks — see expansion.go), then reconciles the
+// whole tree as one plan (reconciliation.go). The caller owns
+// Commit/Rollback and must roll back on any error: a partial tree is
+// never valid to commit. Failures are *SubmissionError values carrying
+// the expansion path.
 func (c *Controller) ExpandTreeTx(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, primary model.Block, payload json.RawMessage, author model.AuthorID) error {
-	return c.expandNodeTx(ctx, tx, documentUID, primary, payload, nil, author)
-}
-
-// expandNodeTx processes one node of the expansion tree. path holds the
-// block numbers of the ancestors already being processed in this tree,
-// root first.
-func (c *Controller) expandNodeTx(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, primary model.Block, payload json.RawMessage, path []model.BlockNumber, author model.AuthorID) error {
-	path = append(append([]model.BlockNumber{}, path...), primary.BlockNumber)
-	root := len(path) == 1
-	fail := func(reason SubmissionReason, err error) error {
+	latest, err := c.latestBlocks(ctx, tx, documentUID)
+	if err != nil {
+		return err
+	}
+	live, err := c.liveBlocks(latest)
+	if err != nil {
+		return err
+	}
+	root := func(reason SubmissionReason, err error) error {
 		return &SubmissionError{
 			Reason: reason, DocumentUID: documentUID, BlockNumber: primary.BlockNumber,
-			ContentType: primary.Type, ExpansionPath: path, Err: err,
+			ContentType: primary.Type, ExpansionPath: []ExpansionPathStep{{BlockNumber: primary.BlockNumber}}, Err: err,
 		}
 	}
-	// Payloads of downstream references come from extensions: invalid ones
-	// are invalid extension output, not invalid producer input.
-	invalidPayload := func(err error) error {
-		if root {
-			return fail(ReasonInvalidPayload, err)
+	if _, ok := live[primary.BlockNumber]; !ok {
+		if _, exists := latest[primary.BlockNumber]; exists {
+			return root(ReasonDeletedBlock, fmt.Errorf("block %d is deleted", primary.BlockNumber))
 		}
-		return fail(ReasonInvalidOutput, err)
-	}
-
-	expander, ok := primary.Record.ContentType().(content.Expander)
-	if !ok {
-		return fail(ReasonExpansionUnsupported,
-			fmt.Errorf("content type %s does not accept payloads", primary.Type))
+		return root(ReasonBlockNotFound, fmt.Errorf("block %d: %w", primary.BlockNumber, errNotFound))
 	}
 	if err := c.registry.ValidateRecord(primary.Record); err != nil {
-		return fail(ReasonExpansionFailed, fmt.Errorf("stored primary record: %w", err))
-	}
-	if err := c.registry.ValidatePayload(primary.Type, payload); err != nil {
-		return invalidPayload(err)
+		return root(ReasonExpansionFailed, fmt.Errorf("stored primary record: %w", err))
 	}
 
-	result, err := expander.Expand(ctx, primary.Record, payload)
+	expander := &expander{controller: c, documentUID: documentUID, live: live, next: -1}
+	tree, err := expander.expand(ctx, primary.Record, payload, expansionStep{number: primary.BlockNumber}, nil, nil)
 	if err != nil {
-		// Extensions report semantic payload problems (beyond the schema)
-		// as payload-stage validation errors; anything else is a
-		// processing failure.
-		var validation *content.ValidationError
-		if errors.As(err, &validation) && validation.Stage == content.StagePayload {
-			return invalidPayload(err)
-		}
-		return fail(ReasonExpansionFailed, err)
+		return err
 	}
-	if err := c.registry.ValidateExpansion(primary.Record, result); err != nil {
-		return fail(ReasonInvalidOutput, err)
-	}
-
-	// TODO(cascading-extension-expansion): reconcile first, then recursively
-	// expand every ReconcileResult.Expansions entry (its BlockNumber with
-	// its transient Payload, loaded from tx) through expandNodeTx with
-	// path, enforcing the cycle and depth policy
-	// (mapped to FailedPrecondition by the transport). Until then, reject
-	// downstream work up front rather than committing only the root expansion.
-	for _, block := range result.Blocks {
-		if _, expands := block.Record.ContentType().(content.Expander); expands {
-			return fail(ReasonCascadingUnsupported,
-				fmt.Errorf("emitted %s reference %q requires downstream expansion, which is not supported yet",
-					block.Record.ContentType().Name(), block.Record.Key()))
-		}
-	}
-
-	if _, err := c.ReconcileExpansionTx(ctx, tx, documentUID, primary.BlockNumber, result, author); err != nil {
-		// The target and output were validated above; remaining invalid
-		// input concerns the extension output (e.g. key collisions).
+	if err := c.reconcileTree(ctx, tx, documentUID, latest, live, primary, tree, author); err != nil {
+		// The tree was staged and validated above; remaining invalid input
+		// concerns the extension output (e.g. key collisions).
 		if IsInvalidInput(err) {
-			return fail(ReasonInvalidOutput, err)
+			return root(ReasonInvalidOutput, err)
 		}
-		return fail(ReasonExpansionFailed, err)
+		return root(ReasonExpansionFailed, err)
 	}
 	return nil
 }
@@ -202,12 +170,26 @@ const (
 	ReasonGeneratedBlock       SubmissionReason = "GENERATED_BLOCK"
 	ReasonDeletedBlock         SubmissionReason = "DELETED_BLOCK"
 	ReasonExpansionUnsupported SubmissionReason = "EXPANSION_UNSUPPORTED"
-	// ReasonCascadingUnsupported is an interim rejection of downstream
-	// expansion until bounded cascading is implemented.
-	ReasonCascadingUnsupported SubmissionReason = "CASCADING_EXPANSION_UNSUPPORTED"
-	ReasonInvalidOutput        SubmissionReason = "INVALID_EXTENSION_OUTPUT"
-	ReasonExpansionFailed      SubmissionReason = "EXPANSION_FAILED"
+	// ReasonExpansionCycle marks an emitted reference whose input tuple
+	// (content type, reference content, payload) repeats an active
+	// ancestor's, so the tree would never terminate.
+	ReasonExpansionCycle SubmissionReason = "EXPANSION_CYCLE"
+	// ReasonExpansionDepthExceeded marks a tree deeper than the fixed
+	// maximum of eight levels (the submitted root included).
+	ReasonExpansionDepthExceeded SubmissionReason = "EXPANSION_DEPTH_EXCEEDED"
+	ReasonInvalidOutput          SubmissionReason = "INVALID_EXTENSION_OUTPUT"
+	ReasonExpansionFailed        SubmissionReason = "EXPANSION_FAILED"
 )
+
+// ExpansionPathStep locates one reference in an expansion path. The root
+// carries the submitted block number; every downstream step carries its
+// emitted key, scoped to the preceding step. Known persisted block numbers
+// supplement keys but never replace them. Zero means not yet persisted;
+// provisional planning numbers are never exposed.
+type ExpansionPathStep struct {
+	ReferenceKey string            `json:"reference_key,omitempty"`
+	BlockNumber  model.BlockNumber `json:"block_number,omitempty"`
+}
 
 // SubmissionError is a structured, transport-neutral payload-submission
 // rejection. Inspect it with errors.As; a wrapped *content.ValidationError
@@ -221,9 +203,9 @@ type SubmissionError struct {
 	BlockNumber model.BlockNumber
 	// ContentType is the type of that block, when known.
 	ContentType string
-	// ExpansionPath lists the block numbers from the submitted root to
-	// BlockNumber; empty for target checks before processing started.
-	ExpansionPath []model.BlockNumber
+	// ExpansionPath locates the failure from the submitted root through
+	// the emitted reference keys; empty for target checks before processing.
+	ExpansionPath []ExpansionPathStep
 
 	Err error
 }
@@ -243,11 +225,18 @@ func (e *SubmissionError) Error() string {
 
 func (e *SubmissionError) Unwrap() error { return e.Err }
 
-// Path renders ExpansionPath as "1/5/7".
+// Path renders the root block number followed by emitted reference keys,
+// e.g. "1/thread/message". Keys are URL path-escaped so slashes within a
+// key cannot be confused with step separators. The path is independent
+// of whether downstream references have been persisted.
 func (e *SubmissionError) Path() string {
 	steps := make([]string, len(e.ExpansionPath))
-	for n, number := range e.ExpansionPath {
-		steps[n] = strconv.Itoa(int(number))
+	for n, step := range e.ExpansionPath {
+		if n == 0 {
+			steps[n] = strconv.Itoa(int(step.BlockNumber))
+		} else {
+			steps[n] = url.PathEscape(step.ReferenceKey)
+		}
 	}
 	return strings.Join(steps, "/")
 }

@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -50,15 +51,16 @@ func rpcError(op string, err error) error {
 // submissionCodes maps rejection reasons to gRPC codes. Unmapped reasons
 // are treated as internal failures.
 var submissionCodes = map[controller.SubmissionReason]codes.Code{
-	controller.ReasonInvalidPayload:       codes.InvalidArgument,
-	controller.ReasonDocumentNotFound:     codes.NotFound,
-	controller.ReasonBlockNotFound:        codes.NotFound,
-	controller.ReasonGeneratedBlock:       codes.PermissionDenied,
-	controller.ReasonDeletedBlock:         codes.FailedPrecondition,
-	controller.ReasonExpansionUnsupported: codes.FailedPrecondition,
-	controller.ReasonCascadingUnsupported: codes.FailedPrecondition,
-	controller.ReasonInvalidOutput:        codes.Internal,
-	controller.ReasonExpansionFailed:      codes.Internal,
+	controller.ReasonInvalidPayload:         codes.InvalidArgument,
+	controller.ReasonDocumentNotFound:       codes.NotFound,
+	controller.ReasonBlockNotFound:          codes.NotFound,
+	controller.ReasonGeneratedBlock:         codes.PermissionDenied,
+	controller.ReasonDeletedBlock:           codes.FailedPrecondition,
+	controller.ReasonExpansionUnsupported:   codes.FailedPrecondition,
+	controller.ReasonExpansionCycle:         codes.FailedPrecondition,
+	controller.ReasonExpansionDepthExceeded: codes.FailedPrecondition,
+	controller.ReasonInvalidOutput:          codes.Internal,
+	controller.ReasonExpansionFailed:        codes.Internal,
 }
 
 // submissionError builds the status of a rejected payload submission:
@@ -79,6 +81,10 @@ func submissionError(op string, e *controller.SubmissionError) error {
 	}
 	if len(e.ExpansionPath) > 0 {
 		metadata["expansion_path"] = e.Path()
+		// ErrorInfo metadata is string-valued. JSON preserves each step's
+		// key and optional persisted block number without parallel arrays.
+		steps, _ := json.Marshal(e.ExpansionPath)
+		metadata["expansion_path_steps"] = string(steps)
 	}
 	details := []protoadapt.MessageV1{}
 	if validation := e.Validation(); validation != nil {
