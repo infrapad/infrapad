@@ -63,6 +63,33 @@ paths:
           pattern: documents/[^/]+
       tags:
         - InfrapadService
+  /v1/{name}/markdown:
+    get:
+      summary: |-
+        Renders the complete document as InfraPad Markdown through the
+        registered content types: YAML frontmatter, one
+        ::infrapad_block directive per latest live block (deleted blocks are
+        omitted) in chronological order, optional `yaml infrapad` structured
+        headers, and extension-rendered bodies. Read-only; the response is
+        JSON containing the Markdown string, not raw text/markdown.
+      operationId: InfrapadService_ExportDocumentMarkdown
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1ExportDocumentMarkdownResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+          pattern: documents/[^/]+
+      tags:
+        - InfrapadService
   /v1/{parent}/blocks:
     get:
       operationId: InfrapadService_ListBlocks
@@ -419,6 +446,12 @@ definitions:
     description: Document represents an investigation document.
     required:
       - title
+  v1ExportDocumentMarkdownResponse:
+    type: object
+    properties:
+      markdown:
+        type: string
+        description: The rendered InfraPad Markdown document.
   v1GetBlockResponse:
     type: object
     properties:

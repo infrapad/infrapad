@@ -49,14 +49,19 @@ type DocumentsCollection interface {
 
 type BlocksCollection interface {
 	Create(ctx context.Context, documentUid model.DocumentUID, block model.Block) (model.Block, error)
-	// Get the block by id and revision number. If revisionNumber == 0, get the latest.
+	// Get the block by id and revision number. If revisionNumber == 0, get
+	// the latest, including a deletion revision (needed for restoration
+	// and lifecycle checks). Unlike ListLatest, this is a revision lookup.
 	Get(ctx context.Context,
 		documentUid model.DocumentUID,
 		blockNumber model.BlockNumber,
 		revisionNumber model.RevisionNumber) (model.Block, error)
+	// List all revisions in the document, including deletion revisions.
 	List(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error)
-	// List all revisionions for a given block
+	// List all revisions for a given block, including deletion revisions.
 	ListRevisions(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber) ([]model.Block, error)
-	// List only the latest blocks inside the document.
+	// ListLatest returns the latest revision of each live block in the
+	// document. Select the latest revision before excluding deleted blocks,
+	// so an older live revision of a deleted block is never returned.
 	ListLatest(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error)
 }

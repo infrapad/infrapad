@@ -99,11 +99,35 @@ func TestProvenancePersistenceRoundTrip(t *testing.T) {
 		t.Fatalf("expected 3 deletion revisions, got %d", len(deleted))
 	}
 
+	// Latest-state queries must not expose older live revisions after a
+	// deletion; history still retains both creation and deletion.
+	deletedDoc, err := ctrl.GetDocument(ctx, doc.Uid)
+	testutil.NoErr(t, err)
+	if len(deletedDoc.Blocks) != 0 {
+		t.Fatalf("deleted document blocks still visible: %v", deletedDoc.Blocks)
+	}
+	blocks, err = ctrl.ListBlocks(ctx, doc.Uid)
+	testutil.NoErr(t, err)
+	if len(blocks) != 0 {
+		t.Fatalf("deleted blocks still listed: %v", blocks)
+	}
+	history, err := ctrl.ListBlockHistory(ctx, doc.Uid, child.BlockNumber)
+	testutil.NoErr(t, err)
+	if len(history) != 2 || history[0].Status != model.PublishedBlock || history[1].Status != model.DeletedBlock {
+		t.Fatalf("expected creation and deletion in history: %v", history)
+	}
+
 	restTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 	testutil.NoErr(t, err)
 	_, err = ctrl.RestoreBlockTx(ctx, restTx, doc.Uid, root.BlockNumber, "host")
 	testutil.NoErr(t, err)
 	testutil.NoErr(t, restTx.Commit())
+
+	restoredDoc, err := ctrl.GetDocument(ctx, doc.Uid)
+	testutil.NoErr(t, err)
+	if len(restoredDoc.Blocks) != 1 || restoredDoc.Blocks[0].BlockNumber != root.BlockNumber || restoredDoc.Blocks[0].RevisionNumber != 3 {
+		t.Fatalf("expected only the restored root in the document: %v", restoredDoc.Blocks)
+	}
 
 	for _, number := range []model.BlockNumber{child.BlockNumber, grandchild.BlockNumber} {
 		blk, err := ctrl.GetBlock(ctx, doc.Uid, number, 0)

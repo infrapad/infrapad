@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
+	"github.com/infrapad/infrapad/server/pkg/markdown"
 	"github.com/infrapad/infrapad/server/pkg/model"
 	"github.com/infrapad/infrapad/server/pkg/store"
 )
@@ -236,8 +237,8 @@ func (c *Controller) CreateDocument(ctx context.Context, doc model.Document) (mo
 	return created, nil
 }
 
-// GetDocument returns a document together with the latest revision of each of its
-// blocks.
+// GetDocument returns a document together with the latest revision of each
+// live block. Deleted blocks are available through revision history.
 func (c *Controller) GetDocument(ctx context.Context, uid model.DocumentUID) (model.Document, error) {
 	tx, err := c.store.BeginReadOnly(ctx)
 	if err != nil {
@@ -256,7 +257,7 @@ func (c *Controller) GetDocument(ctx context.Context, uid model.DocumentUID) (mo
 	return doc, nil
 }
 
-// loadDocumentTx loads a document with the latest revision of each block
+// loadDocumentTx loads a document with the latest revision of each live block
 // (records deserialized, chronological order) within an open transaction,
 // so mutating operations can capture their response before committing.
 func (c *Controller) loadDocumentTx(ctx context.Context, tx store.Tx, uid model.DocumentUID) (model.Document, error) {
@@ -277,6 +278,19 @@ func (c *Controller) loadDocumentTx(ctx context.Context, tx store.Tx, uid model.
 	sortBlocksChronologically(blocks)
 	doc.Blocks = blocks
 	return doc, nil
+}
+
+// ExportDocumentMarkdown renders the document as InfraPad Markdown through
+// the registered content types: the latest live (progressing and
+// published) blocks in chronological order, with host-selected groups
+// rendered as stored. Deleted blocks are omitted. Read-only; rendering
+// failures fail the whole export.
+func (c *Controller) ExportDocumentMarkdown(ctx context.Context, uid model.DocumentUID) (string, error) {
+	doc, err := c.GetDocument(ctx, uid)
+	if err != nil {
+		return "", err
+	}
+	return markdown.RenderDocument(doc)
 }
 
 // ListDocuments returns all documents (without blocks).
@@ -412,7 +426,7 @@ func (c *Controller) GetBlock(ctx context.Context, documentUID model.DocumentUID
 	return blk, nil
 }
 
-// ListBlocks returns the latest revision of every block in the document.
+// ListBlocks returns the latest revision of every live block in the document.
 func (c *Controller) ListBlocks(ctx context.Context, documentUID model.DocumentUID) ([]model.Block, error) {
 	tx, err := c.store.BeginReadOnly(ctx)
 	if err != nil {

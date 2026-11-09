@@ -95,12 +95,26 @@ blocks.
 
 ### Fetching Current State of a Document
 
+Document loads and latest-block lists include only live blocks. Select the
+latest revision **before** filtering by status, so deletion does not expose
+an older live revision:
+
 ```sql
-SELECT DISTINCT ON (block_number) *
-FROM blocks
-WHERE document_uid = $1
-ORDER BY block_number, revision_number DESC;
+SELECT *
+FROM (
+    SELECT DISTINCT ON (block_number) *
+    FROM blocks
+    WHERE document_uid = $1
+    ORDER BY block_number, revision_number DESC
+) AS latest
+WHERE status <> 'deleted'
+ORDER BY block_number;
 ```
+
+`Blocks.ListLatest` enforces this visibility in the store, before record
+decoding. `List` and `ListRevisions` retain all revisions, including deletion
+revisions. Individual revision lookups (`Get`, including revision 0 for the
+latest) also retain deletion revisions for lifecycle checks and restoration.
 
 ### Inserting a New Block {#inserting}
 

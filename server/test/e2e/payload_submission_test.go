@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -122,6 +123,8 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 		expectItems(t, rev, "Slack/Conversation", 1, 2)
 	}
 
+	expectMarkdownExport(t, client, docName, threadNumber, conv1, agent, conv2)
+
 	// A failed refresh must leave the previously cached document readable,
 	// with its content and revisions unchanged.
 	unchanged := func(label string) {
@@ -155,6 +158,82 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 		t.Fatalf("HTTP submission returned %d blocks, want %d", len(httpResp.Document.Blocks), len(revisions))
 	}
 	unchanged("identical HTTP submission")
+
+	// The HTTP export route returns JSON containing the same Markdown.
+	exported, err := client.ExportDocumentMarkdown(ctx, &pb.ExportDocumentMarkdownRequest{Name: docName})
+	if err != nil {
+		t.Fatalf("ExportDocumentMarkdown: %v", err)
+	}
+	var httpExport struct {
+		Markdown string `json:"markdown"`
+	}
+	httpDo(t, "GET", fmt.Sprintf("%s/v1/%s/markdown", httpBaseURL(), docName), nil, &httpExport)
+	if httpExport.Markdown != exported.GetMarkdown() {
+		t.Fatalf("HTTP export differs from gRPC export:\n%s\nvs\n%s", httpExport.Markdown, exported.GetMarkdown())
+	}
+}
+
+// expectMarkdownExport checks the server-rendered Markdown of the Slack
+// lifecycle document: chronological generated output with provenance and
+// event times, structured headers for the thread and agent message, and
+// conversation bodies without YAML.
+func expectMarkdownExport(t *testing.T, client pb.InfrapadServiceClient, docName string, threadNumber int32, conv1, agent, conv2 *pb.Block) {
+	t.Helper()
+	resp, err := client.ExportDocumentMarkdown(context.Background(), &pb.ExportDocumentMarkdownRequest{Name: docName})
+	if err != nil {
+		t.Fatalf("ExportDocumentMarkdown: %v", err)
+	}
+	md := resp.GetMarkdown()
+	if !strings.HasPrefix(md, "---\ndocument: "+strings.TrimPrefix(docName, "documents/")+"\ntitle: payload submission\n") {
+		t.Fatalf("unexpected frontmatter:\n%s", md)
+	}
+	// Sections in document order, keyed by the directive's block number.
+	sections := map[int32]string{}
+	var order []int32
+	for _, section := range strings.Split(md, "::infrapad_block{")[1:] {
+		var number int32
+		if _, err := fmt.Sscanf(section, "block=%d ", &number); err != nil {
+			t.Fatalf("unexpected directive %q: %v", section, err)
+		}
+		sections[number] = section
+		order = append(order, number)
+	}
+	if len(order) != 5 {
+		t.Fatalf("expected 5 exported blocks, got %v:\n%s", order, md)
+	}
+	index := func(n int32) int {
+		for i, o := range order {
+			if o == n {
+				return i
+			}
+		}
+		return -1
+	}
+	if !(index(conv1.GetBlockNumber()) < index(agent.GetBlockNumber()) && index(agent.GetBlockNumber()) < index(conv2.GetBlockNumber())) {
+		t.Fatalf("generated blocks not in chronological order: %v", order)
+	}
+	at := func(minute int) string {
+		return slackOrigin.Add(time.Duration(minute) * time.Minute).Format(time.RFC3339Nano)
+	}
+	header := "}\n```yaml infrapad\ncontent:\n"
+	expectSection := func(n int32, parts ...string) {
+		t.Helper()
+		for _, part := range parts {
+			if !strings.Contains(sections[n], part) {
+				t.Fatalf("block %d: expected %q in:\n%s", n, part, sections[n])
+			}
+		}
+	}
+	threadURL := "https://slack.example/archives/C1/p" + slackID(0)
+	expectSection(threadNumber, header+"  url: "+threadURL+"\n```\n[Slack thread]("+threadURL+")\n")
+	parent := fmt.Sprintf(" parent=%d timestamp=", threadNumber)
+	expectSection(agent.GetBlockNumber(), "type=AIAgent/Message"+parent+at(3)+header,
+		"  agent: investigation-agent\n", "  url: ", "```\nagent analysis\n")
+	expectSection(conv1.GetBlockNumber(), "rev=2 type=Slack/Conversation"+parent+at(1)+"}\n- **Alice**", "second (edited)")
+	expectSection(conv2.GetBlockNumber(), "type=Slack/Conversation"+parent+at(4)+"}\n- **Alice**", "fifth")
+	if strings.Contains(sections[conv1.GetBlockNumber()], "```yaml") || strings.Contains(md, "status=") {
+		t.Fatalf("unexpected conversation YAML or block status:\n%s", md)
+	}
 }
 
 // generatedBlocks returns the live direct children of parent in document

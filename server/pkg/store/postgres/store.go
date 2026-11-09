@@ -241,10 +241,14 @@ func (b *pgBlocks) ListRevisions(ctx context.Context, documentUid model.Document
 
 func (b *pgBlocks) ListLatest(ctx context.Context, documentUid model.DocumentUID) ([]model.Block, error) {
 	rows, err := b.tx.QueryContext(ctx,
-		`SELECT DISTINCT ON (block_number)
-		        block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number
-		 FROM blocks WHERE document_uid = $1
-		 ORDER BY block_number, revision_number DESC`,
+		`SELECT block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number
+		 FROM (
+		     SELECT DISTINCT ON (block_number) *
+		     FROM blocks WHERE document_uid = $1
+		     ORDER BY block_number, revision_number DESC
+		 ) AS latest
+		 WHERE status <> 'deleted'
+		 ORDER BY block_number`,
 		documentUid)
 	if err != nil {
 		return nil, err

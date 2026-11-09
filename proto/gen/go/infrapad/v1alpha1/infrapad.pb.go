@@ -444,6 +444,95 @@ func (x *GetDocumentResponse) GetDocument() *Document {
 	return nil
 }
 
+type ExportDocumentMarkdownRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportDocumentMarkdownRequest) Reset() {
+	*x = ExportDocumentMarkdownRequest{}
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportDocumentMarkdownRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportDocumentMarkdownRequest) ProtoMessage() {}
+
+func (x *ExportDocumentMarkdownRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportDocumentMarkdownRequest.ProtoReflect.Descriptor instead.
+func (*ExportDocumentMarkdownRequest) Descriptor() ([]byte, []int) {
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ExportDocumentMarkdownRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type ExportDocumentMarkdownResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The rendered InfraPad Markdown document.
+	Markdown      string `protobuf:"bytes,1,opt,name=markdown,proto3" json:"markdown,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportDocumentMarkdownResponse) Reset() {
+	*x = ExportDocumentMarkdownResponse{}
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportDocumentMarkdownResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportDocumentMarkdownResponse) ProtoMessage() {}
+
+func (x *ExportDocumentMarkdownResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportDocumentMarkdownResponse.ProtoReflect.Descriptor instead.
+func (*ExportDocumentMarkdownResponse) Descriptor() ([]byte, []int) {
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ExportDocumentMarkdownResponse) GetMarkdown() string {
+	if x != nil {
+		return x.Markdown
+	}
+	return ""
+}
+
 type ListDocumentsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -452,7 +541,7 @@ type ListDocumentsRequest struct {
 
 func (x *ListDocumentsRequest) Reset() {
 	*x = ListDocumentsRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -464,7 +553,7 @@ func (x *ListDocumentsRequest) String() string {
 func (*ListDocumentsRequest) ProtoMessage() {}
 
 func (x *ListDocumentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[6]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -477,7 +566,7 @@ func (x *ListDocumentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocumentsRequest.ProtoReflect.Descriptor instead.
 func (*ListDocumentsRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{6}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{8}
 }
 
 type ListDocumentsResponse struct {
@@ -489,7 +578,7 @@ type ListDocumentsResponse struct {
 
 func (x *ListDocumentsResponse) Reset() {
 	*x = ListDocumentsResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -501,7 +590,7 @@ func (x *ListDocumentsResponse) String() string {
 func (*ListDocumentsResponse) ProtoMessage() {}
 
 func (x *ListDocumentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[7]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -514,7 +603,7 @@ func (x *ListDocumentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDocumentsResponse.ProtoReflect.Descriptor instead.
 func (*ListDocumentsResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{7}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListDocumentsResponse) GetDocuments() []*Document {
@@ -534,7 +623,7 @@ type AddBlockRequest struct {
 
 func (x *AddBlockRequest) Reset() {
 	*x = AddBlockRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -546,7 +635,7 @@ func (x *AddBlockRequest) String() string {
 func (*AddBlockRequest) ProtoMessage() {}
 
 func (x *AddBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[8]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +648,7 @@ func (x *AddBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBlockRequest.ProtoReflect.Descriptor instead.
 func (*AddBlockRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{8}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AddBlockRequest) GetParent() string {
@@ -585,7 +674,7 @@ type AddBlockResponse struct {
 
 func (x *AddBlockResponse) Reset() {
 	*x = AddBlockResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -597,7 +686,7 @@ func (x *AddBlockResponse) String() string {
 func (*AddBlockResponse) ProtoMessage() {}
 
 func (x *AddBlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[9]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -610,7 +699,7 @@ func (x *AddBlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddBlockResponse.ProtoReflect.Descriptor instead.
 func (*AddBlockResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{9}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AddBlockResponse) GetBlock() *Block {
@@ -631,7 +720,7 @@ type UpdateBlockRequest struct {
 
 func (x *UpdateBlockRequest) Reset() {
 	*x = UpdateBlockRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -643,7 +732,7 @@ func (x *UpdateBlockRequest) String() string {
 func (*UpdateBlockRequest) ProtoMessage() {}
 
 func (x *UpdateBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[10]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -656,7 +745,7 @@ func (x *UpdateBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBlockRequest.ProtoReflect.Descriptor instead.
 func (*UpdateBlockRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{10}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UpdateBlockRequest) GetParent() string {
@@ -689,7 +778,7 @@ type UpdateBlockResponse struct {
 
 func (x *UpdateBlockResponse) Reset() {
 	*x = UpdateBlockResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -701,7 +790,7 @@ func (x *UpdateBlockResponse) String() string {
 func (*UpdateBlockResponse) ProtoMessage() {}
 
 func (x *UpdateBlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[11]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -714,7 +803,7 @@ func (x *UpdateBlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateBlockResponse.ProtoReflect.Descriptor instead.
 func (*UpdateBlockResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{11}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UpdateBlockResponse) GetBlock() *Block {
@@ -736,7 +825,7 @@ type GetBlockRequest struct {
 
 func (x *GetBlockRequest) Reset() {
 	*x = GetBlockRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -748,7 +837,7 @@ func (x *GetBlockRequest) String() string {
 func (*GetBlockRequest) ProtoMessage() {}
 
 func (x *GetBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[12]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -761,7 +850,7 @@ func (x *GetBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBlockRequest.ProtoReflect.Descriptor instead.
 func (*GetBlockRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{12}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetBlockRequest) GetParent() string {
@@ -794,7 +883,7 @@ type GetBlockResponse struct {
 
 func (x *GetBlockResponse) Reset() {
 	*x = GetBlockResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -806,7 +895,7 @@ func (x *GetBlockResponse) String() string {
 func (*GetBlockResponse) ProtoMessage() {}
 
 func (x *GetBlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[13]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -819,7 +908,7 @@ func (x *GetBlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBlockResponse.ProtoReflect.Descriptor instead.
 func (*GetBlockResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{13}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetBlockResponse) GetBlock() *Block {
@@ -838,7 +927,7 @@ type ListBlocksRequest struct {
 
 func (x *ListBlocksRequest) Reset() {
 	*x = ListBlocksRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -850,7 +939,7 @@ func (x *ListBlocksRequest) String() string {
 func (*ListBlocksRequest) ProtoMessage() {}
 
 func (x *ListBlocksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[14]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -863,7 +952,7 @@ func (x *ListBlocksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlocksRequest.ProtoReflect.Descriptor instead.
 func (*ListBlocksRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{14}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListBlocksRequest) GetParent() string {
@@ -882,7 +971,7 @@ type ListBlocksResponse struct {
 
 func (x *ListBlocksResponse) Reset() {
 	*x = ListBlocksResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -894,7 +983,7 @@ func (x *ListBlocksResponse) String() string {
 func (*ListBlocksResponse) ProtoMessage() {}
 
 func (x *ListBlocksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[15]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -907,7 +996,7 @@ func (x *ListBlocksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlocksResponse.ProtoReflect.Descriptor instead.
 func (*ListBlocksResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{15}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ListBlocksResponse) GetBlocks() []*Block {
@@ -927,7 +1016,7 @@ type ListBlockHistoryRequest struct {
 
 func (x *ListBlockHistoryRequest) Reset() {
 	*x = ListBlockHistoryRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -939,7 +1028,7 @@ func (x *ListBlockHistoryRequest) String() string {
 func (*ListBlockHistoryRequest) ProtoMessage() {}
 
 func (x *ListBlockHistoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[16]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -952,7 +1041,7 @@ func (x *ListBlockHistoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlockHistoryRequest.ProtoReflect.Descriptor instead.
 func (*ListBlockHistoryRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{16}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListBlockHistoryRequest) GetParent() string {
@@ -978,7 +1067,7 @@ type ListBlockHistoryResponse struct {
 
 func (x *ListBlockHistoryResponse) Reset() {
 	*x = ListBlockHistoryResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -990,7 +1079,7 @@ func (x *ListBlockHistoryResponse) String() string {
 func (*ListBlockHistoryResponse) ProtoMessage() {}
 
 func (x *ListBlockHistoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[17]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1003,7 +1092,7 @@ func (x *ListBlockHistoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListBlockHistoryResponse.ProtoReflect.Descriptor instead.
 func (*ListBlockHistoryResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{17}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ListBlockHistoryResponse) GetBlocks() []*Block {
@@ -1027,7 +1116,7 @@ type SubmitBlockPayloadRequest struct {
 
 func (x *SubmitBlockPayloadRequest) Reset() {
 	*x = SubmitBlockPayloadRequest{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[18]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1039,7 +1128,7 @@ func (x *SubmitBlockPayloadRequest) String() string {
 func (*SubmitBlockPayloadRequest) ProtoMessage() {}
 
 func (x *SubmitBlockPayloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[18]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1052,7 +1141,7 @@ func (x *SubmitBlockPayloadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitBlockPayloadRequest.ProtoReflect.Descriptor instead.
 func (*SubmitBlockPayloadRequest) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{18}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SubmitBlockPayloadRequest) GetParent() string {
@@ -1087,7 +1176,7 @@ type SubmitBlockPayloadResponse struct {
 
 func (x *SubmitBlockPayloadResponse) Reset() {
 	*x = SubmitBlockPayloadResponse{}
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[19]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1099,7 +1188,7 @@ func (x *SubmitBlockPayloadResponse) String() string {
 func (*SubmitBlockPayloadResponse) ProtoMessage() {}
 
 func (x *SubmitBlockPayloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[19]
+	mi := &file_infrapad_v1alpha1_infrapad_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1112,7 +1201,7 @@ func (x *SubmitBlockPayloadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitBlockPayloadResponse.ProtoReflect.Descriptor instead.
 func (*SubmitBlockPayloadResponse) Descriptor() ([]byte, []int) {
-	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{19}
+	return file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SubmitBlockPayloadResponse) GetDocument() *Document {
@@ -1159,7 +1248,12 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
 	"\x14infrapad.io/DocumentR\x04name\"H\n" +
 	"\x13GetDocumentResponse\x121\n" +
-	"\bdocument\x18\x01 \x01(\v2\x15.infrapad.v1.DocumentR\bdocument\"\x16\n" +
+	"\bdocument\x18\x01 \x01(\v2\x15.infrapad.v1.DocumentR\bdocument\"Q\n" +
+	"\x1dExportDocumentMarkdownRequest\x120\n" +
+	"\x04name\x18\x01 \x01(\tB\x1c\xe0A\x02\xfaA\x16\n" +
+	"\x14infrapad.io/DocumentR\x04name\"<\n" +
+	"\x1eExportDocumentMarkdownResponse\x12\x1a\n" +
+	"\bmarkdown\x18\x01 \x01(\tR\bmarkdown\"\x16\n" +
 	"\x14ListDocumentsRequest\"L\n" +
 	"\x15ListDocumentsResponse\x123\n" +
 	"\tdocuments\x18\x01 \x03(\v2\x15.infrapad.v1.DocumentR\tdocuments\"v\n" +
@@ -1200,11 +1294,13 @@ const file_infrapad_v1alpha1_infrapad_proto_rawDesc = "" +
 	"\fblock_number\x18\x02 \x01(\x05B\x03\xe0A\x02R\vblockNumber\x126\n" +
 	"\apayload\x18\x03 \x01(\v2\x17.google.protobuf.StructB\x03\xe0A\x02R\apayload\"O\n" +
 	"\x1aSubmitBlockPayloadResponse\x121\n" +
-	"\bdocument\x18\x01 \x01(\v2\x15.infrapad.v1.DocumentR\bdocument2\xb6\t\n" +
+	"\bdocument\x18\x01 \x01(\v2\x15.infrapad.v1.DocumentR\bdocument2\xd3\n" +
+	"\n" +
 	"\x0fInfrapadService\x12s\n" +
 	"\x0eCreateDocument\x12\".infrapad.v1.CreateDocumentRequest\x1a#.infrapad.v1.CreateDocumentResponse\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/v1/documents\x12p\n" +
 	"\vGetDocument\x12\x1f.infrapad.v1.GetDocumentRequest\x1a .infrapad.v1.GetDocumentResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/v1/{name=documents/*}\x12m\n" +
-	"\rListDocuments\x12!.infrapad.v1.ListDocumentsRequest\x1a\".infrapad.v1.ListDocumentsResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/documents\x12s\n" +
+	"\rListDocuments\x12!.infrapad.v1.ListDocumentsRequest\x1a\".infrapad.v1.ListDocumentsResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/v1/documents\x12\x9a\x01\n" +
+	"\x16ExportDocumentMarkdown\x12*.infrapad.v1.ExportDocumentMarkdownRequest\x1a+.infrapad.v1.ExportDocumentMarkdownResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/v1/{name=documents/*}/markdown\x12s\n" +
 	"\bAddBlock\x12\x1c.infrapad.v1.AddBlockRequest\x1a\x1d.infrapad.v1.AddBlockResponse\"*\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/v1/{parent=documents/*}/blocks\x12\x8b\x01\n" +
 	"\vUpdateBlock\x12\x1f.infrapad.v1.UpdateBlockRequest\x1a .infrapad.v1.UpdateBlockResponse\"9\x82\xd3\xe4\x93\x023:\x01*\x1a./v1/{parent=documents/*}/blocks/{block_number}\x12\x7f\n" +
 	"\bGetBlock\x12\x1c.infrapad.v1.GetBlockRequest\x1a\x1d.infrapad.v1.GetBlockResponse\"6\x82\xd3\xe4\x93\x020\x12./v1/{parent=documents/*}/blocks/{block_number}\x12v\n" +
@@ -1225,36 +1321,38 @@ func file_infrapad_v1alpha1_infrapad_proto_rawDescGZIP() []byte {
 	return file_infrapad_v1alpha1_infrapad_proto_rawDescData
 }
 
-var file_infrapad_v1alpha1_infrapad_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_infrapad_v1alpha1_infrapad_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_infrapad_v1alpha1_infrapad_proto_goTypes = []any{
-	(*Document)(nil),                   // 0: infrapad.v1.Document
-	(*Block)(nil),                      // 1: infrapad.v1.Block
-	(*CreateDocumentRequest)(nil),      // 2: infrapad.v1.CreateDocumentRequest
-	(*CreateDocumentResponse)(nil),     // 3: infrapad.v1.CreateDocumentResponse
-	(*GetDocumentRequest)(nil),         // 4: infrapad.v1.GetDocumentRequest
-	(*GetDocumentResponse)(nil),        // 5: infrapad.v1.GetDocumentResponse
-	(*ListDocumentsRequest)(nil),       // 6: infrapad.v1.ListDocumentsRequest
-	(*ListDocumentsResponse)(nil),      // 7: infrapad.v1.ListDocumentsResponse
-	(*AddBlockRequest)(nil),            // 8: infrapad.v1.AddBlockRequest
-	(*AddBlockResponse)(nil),           // 9: infrapad.v1.AddBlockResponse
-	(*UpdateBlockRequest)(nil),         // 10: infrapad.v1.UpdateBlockRequest
-	(*UpdateBlockResponse)(nil),        // 11: infrapad.v1.UpdateBlockResponse
-	(*GetBlockRequest)(nil),            // 12: infrapad.v1.GetBlockRequest
-	(*GetBlockResponse)(nil),           // 13: infrapad.v1.GetBlockResponse
-	(*ListBlocksRequest)(nil),          // 14: infrapad.v1.ListBlocksRequest
-	(*ListBlocksResponse)(nil),         // 15: infrapad.v1.ListBlocksResponse
-	(*ListBlockHistoryRequest)(nil),    // 16: infrapad.v1.ListBlockHistoryRequest
-	(*ListBlockHistoryResponse)(nil),   // 17: infrapad.v1.ListBlockHistoryResponse
-	(*SubmitBlockPayloadRequest)(nil),  // 18: infrapad.v1.SubmitBlockPayloadRequest
-	(*SubmitBlockPayloadResponse)(nil), // 19: infrapad.v1.SubmitBlockPayloadResponse
-	(*timestamppb.Timestamp)(nil),      // 20: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),            // 21: google.protobuf.Struct
+	(*Document)(nil),                       // 0: infrapad.v1.Document
+	(*Block)(nil),                          // 1: infrapad.v1.Block
+	(*CreateDocumentRequest)(nil),          // 2: infrapad.v1.CreateDocumentRequest
+	(*CreateDocumentResponse)(nil),         // 3: infrapad.v1.CreateDocumentResponse
+	(*GetDocumentRequest)(nil),             // 4: infrapad.v1.GetDocumentRequest
+	(*GetDocumentResponse)(nil),            // 5: infrapad.v1.GetDocumentResponse
+	(*ExportDocumentMarkdownRequest)(nil),  // 6: infrapad.v1.ExportDocumentMarkdownRequest
+	(*ExportDocumentMarkdownResponse)(nil), // 7: infrapad.v1.ExportDocumentMarkdownResponse
+	(*ListDocumentsRequest)(nil),           // 8: infrapad.v1.ListDocumentsRequest
+	(*ListDocumentsResponse)(nil),          // 9: infrapad.v1.ListDocumentsResponse
+	(*AddBlockRequest)(nil),                // 10: infrapad.v1.AddBlockRequest
+	(*AddBlockResponse)(nil),               // 11: infrapad.v1.AddBlockResponse
+	(*UpdateBlockRequest)(nil),             // 12: infrapad.v1.UpdateBlockRequest
+	(*UpdateBlockResponse)(nil),            // 13: infrapad.v1.UpdateBlockResponse
+	(*GetBlockRequest)(nil),                // 14: infrapad.v1.GetBlockRequest
+	(*GetBlockResponse)(nil),               // 15: infrapad.v1.GetBlockResponse
+	(*ListBlocksRequest)(nil),              // 16: infrapad.v1.ListBlocksRequest
+	(*ListBlocksResponse)(nil),             // 17: infrapad.v1.ListBlocksResponse
+	(*ListBlockHistoryRequest)(nil),        // 18: infrapad.v1.ListBlockHistoryRequest
+	(*ListBlockHistoryResponse)(nil),       // 19: infrapad.v1.ListBlockHistoryResponse
+	(*SubmitBlockPayloadRequest)(nil),      // 20: infrapad.v1.SubmitBlockPayloadRequest
+	(*SubmitBlockPayloadResponse)(nil),     // 21: infrapad.v1.SubmitBlockPayloadResponse
+	(*timestamppb.Timestamp)(nil),          // 22: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),                // 23: google.protobuf.Struct
 }
 var file_infrapad_v1alpha1_infrapad_proto_depIdxs = []int32{
-	20, // 0: infrapad.v1.Document.created_at:type_name -> google.protobuf.Timestamp
+	22, // 0: infrapad.v1.Document.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 1: infrapad.v1.Document.blocks:type_name -> infrapad.v1.Block
-	20, // 2: infrapad.v1.Block.created_at:type_name -> google.protobuf.Timestamp
-	21, // 3: infrapad.v1.Block.record:type_name -> google.protobuf.Struct
+	22, // 2: infrapad.v1.Block.created_at:type_name -> google.protobuf.Timestamp
+	23, // 3: infrapad.v1.Block.record:type_name -> google.protobuf.Struct
 	1,  // 4: infrapad.v1.CreateDocumentRequest.blocks:type_name -> infrapad.v1.Block
 	0,  // 5: infrapad.v1.CreateDocumentResponse.document:type_name -> infrapad.v1.Document
 	0,  // 6: infrapad.v1.GetDocumentResponse.document:type_name -> infrapad.v1.Document
@@ -1266,28 +1364,30 @@ var file_infrapad_v1alpha1_infrapad_proto_depIdxs = []int32{
 	1,  // 12: infrapad.v1.GetBlockResponse.block:type_name -> infrapad.v1.Block
 	1,  // 13: infrapad.v1.ListBlocksResponse.blocks:type_name -> infrapad.v1.Block
 	1,  // 14: infrapad.v1.ListBlockHistoryResponse.blocks:type_name -> infrapad.v1.Block
-	21, // 15: infrapad.v1.SubmitBlockPayloadRequest.payload:type_name -> google.protobuf.Struct
+	23, // 15: infrapad.v1.SubmitBlockPayloadRequest.payload:type_name -> google.protobuf.Struct
 	0,  // 16: infrapad.v1.SubmitBlockPayloadResponse.document:type_name -> infrapad.v1.Document
 	2,  // 17: infrapad.v1.InfrapadService.CreateDocument:input_type -> infrapad.v1.CreateDocumentRequest
 	4,  // 18: infrapad.v1.InfrapadService.GetDocument:input_type -> infrapad.v1.GetDocumentRequest
-	6,  // 19: infrapad.v1.InfrapadService.ListDocuments:input_type -> infrapad.v1.ListDocumentsRequest
-	8,  // 20: infrapad.v1.InfrapadService.AddBlock:input_type -> infrapad.v1.AddBlockRequest
-	10, // 21: infrapad.v1.InfrapadService.UpdateBlock:input_type -> infrapad.v1.UpdateBlockRequest
-	12, // 22: infrapad.v1.InfrapadService.GetBlock:input_type -> infrapad.v1.GetBlockRequest
-	14, // 23: infrapad.v1.InfrapadService.ListBlocks:input_type -> infrapad.v1.ListBlocksRequest
-	18, // 24: infrapad.v1.InfrapadService.SubmitBlockPayload:input_type -> infrapad.v1.SubmitBlockPayloadRequest
-	16, // 25: infrapad.v1.InfrapadService.ListBlockHistory:input_type -> infrapad.v1.ListBlockHistoryRequest
-	3,  // 26: infrapad.v1.InfrapadService.CreateDocument:output_type -> infrapad.v1.CreateDocumentResponse
-	5,  // 27: infrapad.v1.InfrapadService.GetDocument:output_type -> infrapad.v1.GetDocumentResponse
-	7,  // 28: infrapad.v1.InfrapadService.ListDocuments:output_type -> infrapad.v1.ListDocumentsResponse
-	9,  // 29: infrapad.v1.InfrapadService.AddBlock:output_type -> infrapad.v1.AddBlockResponse
-	11, // 30: infrapad.v1.InfrapadService.UpdateBlock:output_type -> infrapad.v1.UpdateBlockResponse
-	13, // 31: infrapad.v1.InfrapadService.GetBlock:output_type -> infrapad.v1.GetBlockResponse
-	15, // 32: infrapad.v1.InfrapadService.ListBlocks:output_type -> infrapad.v1.ListBlocksResponse
-	19, // 33: infrapad.v1.InfrapadService.SubmitBlockPayload:output_type -> infrapad.v1.SubmitBlockPayloadResponse
-	17, // 34: infrapad.v1.InfrapadService.ListBlockHistory:output_type -> infrapad.v1.ListBlockHistoryResponse
-	26, // [26:35] is the sub-list for method output_type
-	17, // [17:26] is the sub-list for method input_type
+	8,  // 19: infrapad.v1.InfrapadService.ListDocuments:input_type -> infrapad.v1.ListDocumentsRequest
+	6,  // 20: infrapad.v1.InfrapadService.ExportDocumentMarkdown:input_type -> infrapad.v1.ExportDocumentMarkdownRequest
+	10, // 21: infrapad.v1.InfrapadService.AddBlock:input_type -> infrapad.v1.AddBlockRequest
+	12, // 22: infrapad.v1.InfrapadService.UpdateBlock:input_type -> infrapad.v1.UpdateBlockRequest
+	14, // 23: infrapad.v1.InfrapadService.GetBlock:input_type -> infrapad.v1.GetBlockRequest
+	16, // 24: infrapad.v1.InfrapadService.ListBlocks:input_type -> infrapad.v1.ListBlocksRequest
+	20, // 25: infrapad.v1.InfrapadService.SubmitBlockPayload:input_type -> infrapad.v1.SubmitBlockPayloadRequest
+	18, // 26: infrapad.v1.InfrapadService.ListBlockHistory:input_type -> infrapad.v1.ListBlockHistoryRequest
+	3,  // 27: infrapad.v1.InfrapadService.CreateDocument:output_type -> infrapad.v1.CreateDocumentResponse
+	5,  // 28: infrapad.v1.InfrapadService.GetDocument:output_type -> infrapad.v1.GetDocumentResponse
+	9,  // 29: infrapad.v1.InfrapadService.ListDocuments:output_type -> infrapad.v1.ListDocumentsResponse
+	7,  // 30: infrapad.v1.InfrapadService.ExportDocumentMarkdown:output_type -> infrapad.v1.ExportDocumentMarkdownResponse
+	11, // 31: infrapad.v1.InfrapadService.AddBlock:output_type -> infrapad.v1.AddBlockResponse
+	13, // 32: infrapad.v1.InfrapadService.UpdateBlock:output_type -> infrapad.v1.UpdateBlockResponse
+	15, // 33: infrapad.v1.InfrapadService.GetBlock:output_type -> infrapad.v1.GetBlockResponse
+	17, // 34: infrapad.v1.InfrapadService.ListBlocks:output_type -> infrapad.v1.ListBlocksResponse
+	21, // 35: infrapad.v1.InfrapadService.SubmitBlockPayload:output_type -> infrapad.v1.SubmitBlockPayloadResponse
+	19, // 36: infrapad.v1.InfrapadService.ListBlockHistory:output_type -> infrapad.v1.ListBlockHistoryResponse
+	27, // [27:37] is the sub-list for method output_type
+	17, // [17:27] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name
 	17, // [17:17] is the sub-list for extension extendee
 	0,  // [0:17] is the sub-list for field type_name
@@ -1305,7 +1405,7 @@ func file_infrapad_v1alpha1_infrapad_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_infrapad_v1alpha1_infrapad_proto_rawDesc), len(file_infrapad_v1alpha1_infrapad_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

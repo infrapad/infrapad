@@ -13,7 +13,7 @@ type Document struct {
 	Title     string
 	Namespace string
 	CreatedAt time.Time
-	// Blocks contain the latest revision of all blocks that belong to the document.
+	// Blocks contain the latest revision of each live block in the document.
 	Blocks []Block
 }
 

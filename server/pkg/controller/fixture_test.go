@@ -198,7 +198,10 @@ func (b *fakeBlocks) ListLatest(ctx context.Context, documentUid model.DocumentU
 	}
 	var out []model.Block
 	for n := 1; n <= len(latest); n++ {
-		out = append(out, latest[model.BlockNumber(n)])
+		blk := latest[model.BlockNumber(n)]
+		if blk.Status != model.DeletedBlock {
+			out = append(out, blk)
+		}
 	}
 	return out, nil
 }

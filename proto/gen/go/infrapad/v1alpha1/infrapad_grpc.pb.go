@@ -19,15 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InfrapadService_CreateDocument_FullMethodName     = "/infrapad.v1.InfrapadService/CreateDocument"
-	InfrapadService_GetDocument_FullMethodName        = "/infrapad.v1.InfrapadService/GetDocument"
-	InfrapadService_ListDocuments_FullMethodName      = "/infrapad.v1.InfrapadService/ListDocuments"
-	InfrapadService_AddBlock_FullMethodName           = "/infrapad.v1.InfrapadService/AddBlock"
-	InfrapadService_UpdateBlock_FullMethodName        = "/infrapad.v1.InfrapadService/UpdateBlock"
-	InfrapadService_GetBlock_FullMethodName           = "/infrapad.v1.InfrapadService/GetBlock"
-	InfrapadService_ListBlocks_FullMethodName         = "/infrapad.v1.InfrapadService/ListBlocks"
-	InfrapadService_SubmitBlockPayload_FullMethodName = "/infrapad.v1.InfrapadService/SubmitBlockPayload"
-	InfrapadService_ListBlockHistory_FullMethodName   = "/infrapad.v1.InfrapadService/ListBlockHistory"
+	InfrapadService_CreateDocument_FullMethodName         = "/infrapad.v1.InfrapadService/CreateDocument"
+	InfrapadService_GetDocument_FullMethodName            = "/infrapad.v1.InfrapadService/GetDocument"
+	InfrapadService_ListDocuments_FullMethodName          = "/infrapad.v1.InfrapadService/ListDocuments"
+	InfrapadService_ExportDocumentMarkdown_FullMethodName = "/infrapad.v1.InfrapadService/ExportDocumentMarkdown"
+	InfrapadService_AddBlock_FullMethodName               = "/infrapad.v1.InfrapadService/AddBlock"
+	InfrapadService_UpdateBlock_FullMethodName            = "/infrapad.v1.InfrapadService/UpdateBlock"
+	InfrapadService_GetBlock_FullMethodName               = "/infrapad.v1.InfrapadService/GetBlock"
+	InfrapadService_ListBlocks_FullMethodName             = "/infrapad.v1.InfrapadService/ListBlocks"
+	InfrapadService_SubmitBlockPayload_FullMethodName     = "/infrapad.v1.InfrapadService/SubmitBlockPayload"
+	InfrapadService_ListBlockHistory_FullMethodName       = "/infrapad.v1.InfrapadService/ListBlockHistory"
 )
 
 // InfrapadServiceClient is the client API for InfrapadService service.
@@ -38,6 +39,13 @@ type InfrapadServiceClient interface {
 	CreateDocument(ctx context.Context, in *CreateDocumentRequest, opts ...grpc.CallOption) (*CreateDocumentResponse, error)
 	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*GetDocumentResponse, error)
 	ListDocuments(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*ListDocumentsResponse, error)
+	// Renders the complete document as InfraPad Markdown through the
+	// registered content types: YAML frontmatter, one
+	// ::infrapad_block directive per latest live block (deleted blocks are
+	// omitted) in chronological order, optional `yaml infrapad` structured
+	// headers, and extension-rendered bodies. Read-only; the response is
+	// JSON containing the Markdown string, not raw text/markdown.
+	ExportDocumentMarkdown(ctx context.Context, in *ExportDocumentMarkdownRequest, opts ...grpc.CallOption) (*ExportDocumentMarkdownResponse, error)
 	// ----- Block operations -----
 	AddBlock(ctx context.Context, in *AddBlockRequest, opts ...grpc.CallOption) (*AddBlockResponse, error)
 	UpdateBlock(ctx context.Context, in *UpdateBlockRequest, opts ...grpc.CallOption) (*UpdateBlockResponse, error)
@@ -91,6 +99,16 @@ func (c *infrapadServiceClient) ListDocuments(ctx context.Context, in *ListDocum
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListDocumentsResponse)
 	err := c.cc.Invoke(ctx, InfrapadService_ListDocuments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infrapadServiceClient) ExportDocumentMarkdown(ctx context.Context, in *ExportDocumentMarkdownRequest, opts ...grpc.CallOption) (*ExportDocumentMarkdownResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExportDocumentMarkdownResponse)
+	err := c.cc.Invoke(ctx, InfrapadService_ExportDocumentMarkdown_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +183,13 @@ type InfrapadServiceServer interface {
 	CreateDocument(context.Context, *CreateDocumentRequest) (*CreateDocumentResponse, error)
 	GetDocument(context.Context, *GetDocumentRequest) (*GetDocumentResponse, error)
 	ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error)
+	// Renders the complete document as InfraPad Markdown through the
+	// registered content types: YAML frontmatter, one
+	// ::infrapad_block directive per latest live block (deleted blocks are
+	// omitted) in chronological order, optional `yaml infrapad` structured
+	// headers, and extension-rendered bodies. Read-only; the response is
+	// JSON containing the Markdown string, not raw text/markdown.
+	ExportDocumentMarkdown(context.Context, *ExportDocumentMarkdownRequest) (*ExportDocumentMarkdownResponse, error)
 	// ----- Block operations -----
 	AddBlock(context.Context, *AddBlockRequest) (*AddBlockResponse, error)
 	UpdateBlock(context.Context, *UpdateBlockRequest) (*UpdateBlockResponse, error)
@@ -202,6 +227,9 @@ func (UnimplementedInfrapadServiceServer) GetDocument(context.Context, *GetDocum
 }
 func (UnimplementedInfrapadServiceServer) ListDocuments(context.Context, *ListDocumentsRequest) (*ListDocumentsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListDocuments not implemented")
+}
+func (UnimplementedInfrapadServiceServer) ExportDocumentMarkdown(context.Context, *ExportDocumentMarkdownRequest) (*ExportDocumentMarkdownResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExportDocumentMarkdown not implemented")
 }
 func (UnimplementedInfrapadServiceServer) AddBlock(context.Context, *AddBlockRequest) (*AddBlockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddBlock not implemented")
@@ -292,6 +320,24 @@ func _InfrapadService_ListDocuments_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InfrapadServiceServer).ListDocuments(ctx, req.(*ListDocumentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfrapadService_ExportDocumentMarkdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportDocumentMarkdownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfrapadServiceServer).ExportDocumentMarkdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfrapadService_ExportDocumentMarkdown_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfrapadServiceServer).ExportDocumentMarkdown(ctx, req.(*ExportDocumentMarkdownRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -422,6 +468,10 @@ var InfrapadService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListDocuments",
 			Handler:    _InfrapadService_ListDocuments_Handler,
+		},
+		{
+			MethodName: "ExportDocumentMarkdown",
+			Handler:    _InfrapadService_ExportDocumentMarkdown_Handler,
 		},
 		{
 			MethodName: "AddBlock",

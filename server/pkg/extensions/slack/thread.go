@@ -14,6 +14,8 @@ import (
 // ThreadType implements Slack/Thread, an expandable standalone reference.
 type ThreadType struct {
 	content.TypedMarkdownRenderer[content.Item[ThreadReference]]
+	// The header exposes the thread URL; the readable link body stays.
+	content.TypedMarkdownHeader[ThreadReference, ThreadReference]
 	conversationType *ConversationType
 	agentType        *aiagent.MessageType
 }
@@ -21,8 +23,12 @@ type ThreadType struct {
 func NewThreadType(conversationType *ConversationType, agentType *aiagent.MessageType) *ThreadType {
 	return &ThreadType{
 		TypedMarkdownRenderer: content.ItemMarkdown(renderThread),
-		conversationType:      conversationType,
-		agentType:             agentType,
+		TypedMarkdownHeader: content.ItemMarkdownHeader(
+			func(r ThreadReference) ThreadReference { return r },
+			func(_ ThreadReference, h ThreadReference) ThreadReference { return h },
+		),
+		conversationType: conversationType,
+		agentType:        agentType,
 	}
 }
 

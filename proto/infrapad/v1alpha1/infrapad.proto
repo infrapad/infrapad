@@ -121,6 +121,18 @@ service InfrapadService {
             get: "/v1/documents"
         };
     }
+    // Renders the complete document as InfraPad Markdown through the
+    // registered content types: YAML frontmatter, one
+    // ::infrapad_block directive per latest live block (deleted blocks are
+    // omitted) in chronological order, optional `yaml infrapad` structured
+    // headers, and extension-rendered bodies. Read-only; the response is
+    // JSON containing the Markdown string, not raw text/markdown.
+    rpc ExportDocumentMarkdown(ExportDocumentMarkdownRequest)
+        returns (ExportDocumentMarkdownResponse) {
+        option (google.api.http) = {
+            get: "/v1/{name=documents/*}/markdown"
+        };
+    }
 
     // ----- Block operations -----
     rpc AddBlock(AddBlockRequest) returns (AddBlockResponse) {
@@ -191,6 +203,18 @@ message GetDocumentRequest {
 }
 
 message GetDocumentResponse { Document document = 1; }
+
+message ExportDocumentMarkdownRequest {
+    string name = 1 [
+        (google.api.field_behavior) = REQUIRED,
+        (google.api.resource_reference).type = "infrapad.io/Document"
+    ];
+}
+
+message ExportDocumentMarkdownResponse {
+    // The rendered InfraPad Markdown document.
+    string markdown = 1;
+}
 
 message ListDocumentsRequest {}
 

@@ -308,13 +308,13 @@ func TestProvenanceRejection(t *testing.T) {
 	if latest.Status != model.DeletedBlock {
 		t.Fatalf("child not deleted by cascade: %q", latest.Status)
 	}
-	// The document still holds exactly the two blocks; the rejected host
-	// transaction added nothing (root and child carry one creation and one
-	// deletion revision each).
+	// No live blocks remain; history still holds the two blocks with one
+	// creation and one deletion revision each. The rejected host
+	// transaction added nothing.
 	blocks, err = ctrl.ListBlocks(ctx, doc.Uid)
 	testutil.NoErr(t, err)
-	if len(blocks) != 2 {
-		t.Fatalf("expected 2 blocks after rejections, got %d", len(blocks))
+	if len(blocks) != 0 {
+		t.Fatalf("expected no live blocks after deletion, got %d", len(blocks))
 	}
 	if got := len(f.store.blocks[doc.Uid]); got != 4 {
 		t.Fatalf("expected 4 stored revisions, got %d", got)

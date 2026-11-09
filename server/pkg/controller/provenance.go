@@ -184,7 +184,7 @@ func (c *Controller) RestoreBlockTx(ctx context.Context, tx store.Tx, documentUI
 // Host-path helpers
 // ---------------------------------------------------------------------------
 
-// latestBlocks loads the latest revision of every block in the document,
+// latestBlocks loads the latest revision of every live block in the document,
 // keyed by block number.
 func (c *Controller) latestBlocks(ctx context.Context, tx store.Tx, documentUID model.DocumentUID) (map[model.BlockNumber]model.Block, error) {
 	blocks, err := tx.Blocks().ListLatest(ctx, documentUID)
@@ -198,10 +198,9 @@ func (c *Controller) latestBlocks(ctx context.Context, tx store.Tx, documentUID 
 	return latest, nil
 }
 
-// childBlocks returns the latest revision of every block whose immediate
-// parent is parentBlockNumber, in block-number order, with records
-// deserialized. Children of every status are included (deleted children
-// keep their content and parent); callers apply their own filtering.
+// childBlocks returns the latest revision of every live block whose
+// immediate parent is parentBlockNumber, in block-number order, with
+// records deserialized.
 func (c *Controller) childBlocks(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, parentBlockNumber model.BlockNumber) ([]model.Block, error) {
 	latest, err := c.latestBlocks(ctx, tx, documentUID)
 	if err != nil {

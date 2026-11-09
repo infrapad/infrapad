@@ -37,12 +37,29 @@ type Message struct {
 // MessageType implements AIAgent/Message.
 type MessageType struct {
 	content.TypedMarkdownRenderer[content.Item[Message]]
+	content.TypedMarkdownHeader[Message, messageHeader]
+}
+
+// messageHeader is the structured Markdown header of AIAgent/Message:
+// attribution, source link, and extras; the text is the body.
+type messageHeader struct {
+	Agent  string         `json:"agent"`
+	URL    string         `json:"url,omitempty"`
+	Extras map[string]any `json:"extras,omitempty"`
 }
 
 // NewMessageType constructs the AIAgent/Message implementation. Other
 // extensions emitting agent messages must use the registered instance.
 func NewMessageType() *MessageType {
-	return &MessageType{TypedMarkdownRenderer: content.ItemMarkdown(renderMessage)}
+	return &MessageType{
+		TypedMarkdownRenderer: content.ItemMarkdown(renderMessage),
+		TypedMarkdownHeader: content.ItemMarkdownHeader(
+			func(m Message) messageHeader { return messageHeader{Agent: m.Agent, URL: m.URL, Extras: m.Extras} },
+			func(m Message, h messageHeader) Message {
+				return Message{Agent: h.Agent, Text: m.Text, URL: h.URL, Extras: h.Extras}
+			},
+		),
+	}
 }
 
 func (*MessageType) Name() string { return MessageTypeName }

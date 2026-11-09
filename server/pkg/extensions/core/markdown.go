@@ -30,11 +30,24 @@ type Markdown struct {
 // MarkdownType implements Core/Markdown.
 type MarkdownType struct {
 	content.TypedMarkdownRenderer[content.Item[Markdown]]
+	content.TypedMarkdownHeader[Markdown, markdownHeader]
+}
+
+// markdownHeader is the structured Markdown header of Core/Markdown:
+// only extras; the text is the body.
+type markdownHeader struct {
+	Extras map[string]any `json:"extras,omitempty"`
 }
 
 // NewMarkdownType constructs the Core/Markdown implementation.
 func NewMarkdownType() *MarkdownType {
-	return &MarkdownType{TypedMarkdownRenderer: content.ItemMarkdown(renderMarkdown)}
+	return &MarkdownType{
+		TypedMarkdownRenderer: content.ItemMarkdown(renderMarkdown),
+		TypedMarkdownHeader: content.ItemMarkdownHeader(
+			func(m Markdown) markdownHeader { return markdownHeader{Extras: m.Extras} },
+			func(m Markdown, h markdownHeader) Markdown { return Markdown{Text: m.Text, Extras: h.Extras} },
+		),
+	}
 }
 
 func (*MarkdownType) Name() string { return MarkdownTypeName }

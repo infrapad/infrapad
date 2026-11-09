@@ -103,6 +103,16 @@ func (s *Server) GetDocument(ctx context.Context, req *pb.GetDocumentRequest) (*
 	return &pb.GetDocumentResponse{Document: out}, nil
 }
 
+// ExportDocumentMarkdown returns the server-rendered Markdown of a
+// document.
+func (s *Server) ExportDocumentMarkdown(ctx context.Context, req *pb.ExportDocumentMarkdownRequest) (*pb.ExportDocumentMarkdownResponse, error) {
+	md, err := s.ctrl.ExportDocumentMarkdown(ctx, documentUIDFromName(req.GetName()))
+	if err != nil {
+		return nil, rpcError("export document markdown", err)
+	}
+	return &pb.ExportDocumentMarkdownResponse{Markdown: md}, nil
+}
+
 func (s *Server) ListDocuments(ctx context.Context, req *pb.ListDocumentsRequest) (*pb.ListDocumentsResponse, error) {
 	documents, err := s.ctrl.ListDocuments(ctx)
 	if err != nil {
