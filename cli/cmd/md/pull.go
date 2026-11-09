@@ -1,6 +1,7 @@
 package md
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,27 +15,24 @@ func newPullCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pull",
 		Short: "Pull a document from the server and write it as infrapad-flavoured markdown",
+		Long: "Pull a document from the server and write it as infrapad-flavoured markdown.\n\n" +
+			"The Markdown is rendered by the server and written unchanged. With --file only,\n" +
+			"the document ID is read from the existing file's frontmatter and the file is refreshed.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			docName, _ := cmd.Flags().GetString("document")
 			filePath, _ := cmd.Flags().GetString("file")
 
-			// If --document is not provided, try to extract the document ID from an existing file.
+			// An explicit --document takes precedence; otherwise discover the
+			// document ID from the existing file's frontmatter.
 			if docName == "" {
 				if filePath == "" {
 					return fmt.Errorf("either --document or --file (pointing to a previously pulled file) is required")
 				}
-				data, err := os.ReadFile(filePath)
+				id, err := documentIDFromFile(filePath)
 				if err != nil {
-					return fmt.Errorf("read file to extract document ID: %w", err)
+					return err
 				}
-				doc, err := markdown.Parse(data)
-				if err != nil {
-					return fmt.Errorf("parse file to extract document ID: %w", err)
-				}
-				if doc.Meta.DocumentID == "" {
-					return fmt.Errorf("file %s has no document ID in frontmatter; use --document to specify", filePath)
-				}
-				docName = doc.Meta.DocumentID
+				docName = id
 			}
 
 			c, err := cliutil.NewClient()
@@ -43,19 +41,11 @@ func newPullCmd() *cobra.Command {
 			}
 			defer c.Close()
 
-			doc, err := c.GetDocument(cmd.Context(), docName)
+			// Export completes before touching the destination, so failures
+			// leave an existing file unchanged.
+			out, err := c.ExportDocumentMarkdown(cmd.Context(), docName)
 			if err != nil {
-				return fmt.Errorf("get document: %w", err)
-			}
-
-			blocks, err := c.ListBlocks(cmd.Context(), docName)
-			if err != nil {
-				return fmt.Errorf("list blocks: %w", err)
-			}
-
-			out, err := markdown.Render(doc, blocks)
-			if err != nil {
-				return fmt.Errorf("render: %w", err)
+				return err
 			}
 
 			if filePath == "" {
@@ -80,4 +70,21 @@ func newPullCmd() *cobra.Command {
 	cmd.Flags().String("file", "", "Output file path (writes to stdout if omitted)")
 
 	return cmd
+}
+
+// documentIDFromFile reads the document ID from the frontmatter of a
+// previously pulled file without interpreting its blocks.
+func documentIDFromFile(filePath string) (string, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("read file to extract document ID: %w", err)
+	}
+	meta, err := markdown.ReadFrontmatter(data)
+	if errors.Is(err, markdown.ErrMissingDocumentID) {
+		return "", fmt.Errorf("file %s has no document ID in frontmatter; use --document to specify", filePath)
+	}
+	if err != nil {
+		return "", fmt.Errorf("read frontmatter of %s: %w", filePath, err)
+	}
+	return meta.DocumentID, nil
 }

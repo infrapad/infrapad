@@ -44,6 +44,7 @@ tasks:
       - '{{if .TEST}}./test/e2e/{{.TEST}}_test.sh{{end}}'
       - '{{if not .TEST}}./test/e2e/incident_investigation_test.sh{{end}}'
       - '{{if not .TEST}}./test/e2e/markdown_test.sh{{end}}'
+      - '{{if not .TEST}}./test/e2e/markdown_pull_test.sh{{end}}'
     env:
       INFRAPAD_CLI: ./{{.BINARY}}
       INFRAPAD_API_URL: "{{.INFRAPAD_API_URL}}"

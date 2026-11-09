@@ -126,6 +126,34 @@ func TestAddBlockProtoJSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestExportDocumentMarkdownReturnsOpaqueMarkdown(t *testing.T) {
+	t.Parallel()
+
+	const markdown = "---\ndocument: abc\n---\n::infrapad_block{block=1}\n  body \n\n"
+	paths := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths <- r.Method + " " + r.URL.Path
+		payload, _ := protojson.Marshal(&pb.ExportDocumentMarkdownResponse{Markdown: markdown})
+		_, _ = w.Write(payload)
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := client.ExportDocumentMarkdown(context.Background(), "documents/abc")
+	if err != nil {
+		t.Fatalf("ExportDocumentMarkdown() error = %v", err)
+	}
+	if path := <-paths; path != "GET /v1/documents/abc/markdown" {
+		t.Fatalf("request = %q", path)
+	}
+	if got != markdown {
+		t.Fatalf("markdown = %q, want %q", got, markdown)
+	}
+}
+
 func TestDocumentNameNormalization(t *testing.T) {
 	t.Parallel()
 

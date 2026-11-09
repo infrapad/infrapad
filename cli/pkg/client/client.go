@@ -107,6 +107,22 @@ func (c *Client) GetDocument(ctx context.Context, name string) (*pb.Document, er
 	return response.GetDocument(), nil
 }
 
+// ExportDocumentMarkdown returns the server-rendered InfraPad Markdown of a
+// document. The returned string is opaque and must be preserved as-is.
+func (c *Client) ExportDocumentMarkdown(ctx context.Context, name string) (string, error) {
+	id, err := documentID(name)
+	if err != nil {
+		return "", fmt.Errorf("export document markdown: %w", err)
+	}
+
+	response := &pb.ExportDocumentMarkdownResponse{}
+	route := []string{"v1", "documents", id, "markdown"}
+	if err := c.do(ctx, "export document markdown", http.MethodGet, route, nil, response); err != nil {
+		return "", err
+	}
+	return response.GetMarkdown(), nil
+}
+
 // ListDocuments lists all documents.
 func (c *Client) ListDocuments(ctx context.Context) ([]*pb.Document, error) {
 	response := &pb.ListDocumentsResponse{}
