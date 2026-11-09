@@ -183,9 +183,8 @@ infrapad md pull --file incident.md
 infrapad md push --file incident.md
 ```
 
-The command automatically detects which blocks have been modified locally
-(by comparing with the current server state) and pushes only the changed
-blocks. New blocks (with `block=new` in the directive) are always pushed.
+The command applies changes to locally modified blocks to the server.
+New blocks (with `block=new` in the directive) are always pushed.
 
 | Flag | Required | Description |
 |------|----------|-------------|
@@ -218,7 +217,7 @@ infrapad md pull --document <id> --file incident.md
 
 # 3. Push changes back to the server
 infrapad md push --file incident.md
-#    Only modified and new blocks are pushed.
+#    The server applies only modified and new blocks.
 ```
 
 ### Adding multiple new blocks at once

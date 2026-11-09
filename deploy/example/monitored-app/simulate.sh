@@ -295,15 +295,21 @@ cmd_incident_resolve() {
   # Pull latest to get current state.
   ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
 
-  # Read the Since value from the current file.
-  local since
-  since=$(grep -oP 'since:\s*"?\K[^"\n]+' "$INCIDENT_FILE" | head -1 | tr -d '[:space:]')
-  since=${since:-0001-01-01T00:00:00Z}
+  # Set the Until in the first structured (```yaml infrapad) header. The
+  # server omits an unset (zero) until, so replace any existing value and
+  # otherwise add it next to since.
+  awk -v until="$until" '
+    !done && /^```yaml infrapad/ { inhdr = 1; print; next }
+    inhdr && /^[[:space:]]*until:/ { next }
+    inhdr && /^```/ {
+      print indent "until: \"" until "\""
+      inhdr = 0; done = 1; print; next
+    }
+    inhdr && match($0, /^[[:space:]]*since:/) { indent = substr($0, 1, RLENGTH - 6) }
+    { print }
+  ' "$INCIDENT_FILE" > "${INCIDENT_FILE}.tmp" && mv "${INCIDENT_FILE}.tmp" "$INCIDENT_FILE"
 
-  # Update the Until in the markdown file.
-  sed -i 's|until:\s*"\?0001-01-01T00:00:00Z"\?|until: "'"${until}"'"|' "$INCIDENT_FILE"
-
-  # Push the updated block 1.
+  # Push the updated block 1; the server applies only the changed header.
   ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE"
   log "  alerts_matcher block updated."
 

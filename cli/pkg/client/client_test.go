@@ -154,6 +154,57 @@ func TestExportDocumentMarkdownReturnsOpaqueMarkdown(t *testing.T) {
 	}
 }
 
+func TestPushDocumentMarkdown(t *testing.T) {
+	t.Parallel()
+
+	const submitted = "---\ndocument: abc\n---\n::infrapad_block{block=1}\n  edited \n\n"
+	const refreshed = "---\ndocument: abc\n---\nrefreshed\n"
+	type captured struct {
+		request string
+		body    *pb.PushDocumentMarkdownRequest
+	}
+	requests := make(chan captured, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		body := &pb.PushDocumentMarkdownRequest{}
+		_ = protojson.Unmarshal(data, body)
+		requests <- captured{request: r.Method + " " + r.URL.Path, body: body}
+		payload, _ := protojson.Marshal(&pb.PushDocumentMarkdownResponse{
+			Markdown: refreshed,
+			Changes: []*pb.MarkdownChange{
+				{BlockNumber: 1, Action: "updated"},
+				{BlockNumber: 2, Action: "added"},
+			},
+		})
+		_, _ = w.Write(payload)
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := client.PushDocumentMarkdown(context.Background(), "documents/abc", submitted)
+	if err != nil {
+		t.Fatalf("PushDocumentMarkdown() error = %v", err)
+	}
+	req := <-requests
+	if req.request != "POST /v1/documents/abc/markdown" {
+		t.Fatalf("request = %q", req.request)
+	}
+	if req.body.GetMarkdown() != submitted {
+		t.Fatalf("submitted markdown = %q, want %q", req.body.GetMarkdown(), submitted)
+	}
+	if got.GetMarkdown() != refreshed {
+		t.Fatalf("markdown = %q, want %q", got.GetMarkdown(), refreshed)
+	}
+	changes := got.GetChanges()
+	if len(changes) != 2 || changes[0].GetBlockNumber() != 1 || changes[0].GetAction() != "updated" ||
+		changes[1].GetBlockNumber() != 2 || changes[1].GetAction() != "added" {
+		t.Fatalf("changes = %v", changes)
+	}
+}
+
 func TestDocumentNameNormalization(t *testing.T) {
 	t.Parallel()
 

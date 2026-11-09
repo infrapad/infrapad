@@ -123,6 +123,27 @@ func (c *Client) ExportDocumentMarkdown(ctx context.Context, name string) (strin
 	return response.GetMarkdown(), nil
 }
 
+// PushDocumentMarkdown submits an edited InfraPad Markdown document unchanged.
+// The server interprets, validates, and applies the changes atomically and
+// returns the refreshed Markdown together with the persisted changes.
+func (c *Client) PushDocumentMarkdown(ctx context.Context, name, markdown string) (*pb.PushDocumentMarkdownResponse, error) {
+	id, err := documentID(name)
+	if err != nil {
+		return nil, fmt.Errorf("push document markdown: %w", err)
+	}
+
+	request := &pb.PushDocumentMarkdownRequest{
+		Name:     "documents/" + id,
+		Markdown: markdown,
+	}
+	response := &pb.PushDocumentMarkdownResponse{}
+	route := []string{"v1", "documents", id, "markdown"}
+	if err := c.do(ctx, "push document markdown", http.MethodPost, route, request, response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // ListDocuments lists all documents.
 func (c *Client) ListDocuments(ctx context.Context) ([]*pb.Document, error) {
 	response := &pb.ListDocumentsResponse{}

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 #
-# E2E test for the markdown pull/parse round-trip via the infrapad CLI.
+# E2E test for the Markdown pull/parse/edit/push round-trip via the infrapad CLI.
+# Pull and refreshed push output must match the server export byte-for-byte.
 #
 # Prerequisites:
 #   - InfraPad and the dummy auth proxy running (default http://localhost:8089)
 #   - infrapad CLI binary built (set INFRAPAD_CLI or it uses ../../../cli/infrapad)
+#   - curl, jq, cmp
 #
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/_lib.sh"
@@ -12,315 +14,256 @@ source "${SCRIPT_DIR}/_lib.sh"
 TMPDIR_E2E=$(mktemp -d)
 trap 'rm -rf "$TMPDIR_E2E"' EXIT
 
-echo "=== Markdown Pull/Parse E2E Test ==="
+# Compare files including trailing newlines (unlike command substitution).
+assert_same_file() {
+  local label="$1" actual="$2" expected="$3"
+  if cmp -s "$actual" "$expected"; then
+    echo "  ✓ $label"
+    pass=$((pass + 1))
+  else
+    echo "  ✗ $label: files differ"
+    diff "$expected" "$actual" | head -20 || true
+    fail=$((fail + 1))
+  fi
+}
+
+# Write the decoded server export without adding or removing newlines.
+export_markdown() {
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer ${INFRAPAD_TOKEN}" \
+    "${API_URL%/}/v1/documents/$1/markdown" | jq -j '.markdown' > "$2"
+}
+
+echo "=== Markdown Round-trip E2E Test ==="
 echo ""
 
 # -----------------------------------------------------------------------
-# 1. Set up test document with blocks
+# 1. Create a document and pull to a nested file and stdout
 # -----------------------------------------------------------------------
-echo "Step 1: Create test document with blocks"
+echo "Step 1: Create a document and pull to a nested file and stdout"
 create_test_doc
 echo "  doc: $DOC_ID"
-echo ""
+MD_FILE="${TMPDIR_E2E}/nested/dir/${DOC_ID}.md"
+EXPECTED="${TMPDIR_E2E}/expected.md"
+export_markdown "$DOC_ID" "$EXPECTED"
+assert_equals "export ends with a newline" "$(tail -c1 "$EXPECTED" | od -An -c | tr -d ' ')" '\n'
 
-# -----------------------------------------------------------------------
-# 2. Pull the document as markdown
-# -----------------------------------------------------------------------
-echo "Step 2: Pull document as markdown"
-MD_FILE="${TMPDIR_E2E}/${DOC_ID}.md"
 PULL_OUT=$($CLI md pull --document "$DOC_ID" --file "$MD_FILE" 2>&1)
-assert_contains "pull reports output file" "$PULL_OUT" "Written to"
+assert_contains "pull reports output file" "$PULL_OUT" "Written to $MD_FILE"
+assert_same_file "pulled file matches export" "$MD_FILE" "$EXPECTED"
+$CLI md pull --document "documents/$DOC_ID" > "${TMPDIR_E2E}/stdout.md"
+assert_same_file "stdout matches export" "${TMPDIR_E2E}/stdout.md" "$EXPECTED"
 
 MD_CONTENT=$(cat "$MD_FILE")
-echo "$MD_CONTENT"
-echo ""
-
-# -----------------------------------------------------------------------
-# 3. Verify frontmatter
-# -----------------------------------------------------------------------
-echo "Step 3: Verify frontmatter"
 assert_contains "frontmatter has doc id" "$MD_CONTENT" "document: $DOC_ID"
 assert_contains "frontmatter has title" "$MD_CONTENT" "title: Payment service crash loop"
 assert_contains "frontmatter has namespace" "$MD_CONTENT" "namespace: payments"
 assert_contains "frontmatter has status" "$MD_CONTENT" "status: active"
-echo ""
-
-# -----------------------------------------------------------------------
-# 4. Verify block directives and content
-# -----------------------------------------------------------------------
-echo "Step 4: Verify block directives and content"
-assert_contains "has alerts_matcher directive" "$MD_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
+assert_contains "has alerts directive" "$MD_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
 assert_contains "has markdown directive" "$MD_CONTENT" "::infrapad_block{block=2 rev=2 type=Core/Markdown"
+assert_contains "alerts have structured header" "$MD_CONTENT" '```yaml infrapad'
 assert_contains "alerts content has CrashLoopBackOff" "$MD_CONTENT" "CrashLoopBackOff"
 assert_contains "alerts content has KubeNodeNotReady" "$MD_CONTENT" "KubeNodeNotReady"
-assert_contains "alerts wrapped in yaml fence" "$MD_CONTENT" '```yaml'
 assert_contains "markdown text present" "$MD_CONTENT" "updated investigation writeup"
 assert_contains "markdown multiline present" "$MD_CONTENT" "root cause identified"
 echo ""
 
 # -----------------------------------------------------------------------
-# 5. Parse the pulled markdown and verify round-trip
+# 2. Parse the pulled Markdown offline
 # -----------------------------------------------------------------------
-echo "Step 5: Parse the pulled markdown (round-trip)"
-PARSE_OUT=$($CLI md parse --file "$MD_FILE")
-echo "$PARSE_OUT"
-
+echo "Step 2: Parse the pulled Markdown offline"
+# An invalid API URL proves that parse neither validates nor contacts the API.
+PARSE_OUT=$(${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url 'not a URL' md parse --file "$MD_FILE")
 assert_contains "parsed doc id" "$PARSE_OUT" "document:  $DOC_ID"
 assert_contains "parsed title" "$PARSE_OUT" "title:     Payment service crash loop"
 assert_contains "parsed namespace" "$PARSE_OUT" "namespace: payments"
 assert_contains "parsed status" "$PARSE_OUT" "status:    active"
 assert_contains "parsed block count" "$PARSE_OUT" "Blocks (2):"
-assert_contains "parsed alerts_matcher type" "$PARSE_OUT" "type:   Prometheus/AlertsMatcher"
+assert_contains "parsed alerts type" "$PARSE_OUT" "type:   Prometheus/AlertsMatcher"
 assert_contains "parsed markdown type" "$PARSE_OUT" "type:   Core/Markdown"
 assert_contains "parsed alerts block number" "$PARSE_OUT" "block:  1"
 assert_contains "parsed markdown block number" "$PARSE_OUT" "block:  2"
-
-# Local parsing must not validate or contact the configured API endpoint.
-LOCAL_PARSE_OUT=$(${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url 'not a URL' md parse --file "$MD_FILE")
-assert_contains "parse ignores invalid API URL" "$LOCAL_PARSE_OUT" "Blocks (2):"
 echo ""
 
 # -----------------------------------------------------------------------
-# 6. Pull to stdout (no --file flag)
+# 3. Refresh using frontmatter only, and override with --document
 # -----------------------------------------------------------------------
-echo "Step 6: Pull to stdout"
-STDOUT_OUT=$($CLI md pull --document "$DOC_ID")
-assert_equals "stdout matches file content" "$STDOUT_OUT" "$MD_CONTENT"
+echo "Step 3: Refresh using frontmatter only, and override with --document"
+# Keep valid frontmatter; break everything after it. Pull must not parse blocks.
+awk 'n < 2 { print; if ($0 == "---") n++; next } { print "::infrapad_block{block=oops type=Unknown/Type"; exit }' \
+  "$EXPECTED" > "$MD_FILE"
+PULL_OUT=$($CLI md pull --file "$MD_FILE" 2>&1)
+assert_contains "file-only pull reports output file" "$PULL_OUT" "Written to"
+assert_same_file "file-only pull repairs damaged body" "$MD_FILE" "$EXPECTED"
+
+# A second (empty) document suffices to check explicit document precedence.
+OTHER_DOC=$($CLI document create --title "Other document" --namespace payments -o json | jq -r '.name')
+export_markdown "${OTHER_DOC#documents/}" "${TMPDIR_E2E}/other.md"
+$CLI md pull --document "$OTHER_DOC" --file "$MD_FILE" 2> /dev/null
+assert_same_file "explicit document overrides destination metadata" "$MD_FILE" "${TMPDIR_E2E}/other.md"
+$CLI md pull --document "$DOC_ID" --file "$MD_FILE" 2> /dev/null
 echo ""
 
 # -----------------------------------------------------------------------
-# 7. Edit a markdown block locally and push it
+# 4. Edit body and header fields, add a block, and push
 # -----------------------------------------------------------------------
-echo "Step 7: Edit markdown block locally and push"
-# Append new content to block 2 (markdown block).
-sed -i 's/root cause identified/root cause identified\n\nAdditional notes from local edit./' "$MD_FILE"
-
-EDITED_CONTENT=$(cat "$MD_FILE")
-assert_contains "local edit present before push" "$EDITED_CONTENT" "Additional notes from local edit."
-
-PUSH_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
-assert_contains "push reports block updated" "$PUSH_OUT" "Block 2 updated"
-assert_contains "push reports file written" "$PUSH_OUT" "Written to"
-echo ""
-
-# -----------------------------------------------------------------------
-# 8. Verify the file was refreshed from the server after push
-# -----------------------------------------------------------------------
-echo "Step 8: Verify file refreshed after push"
-PUSHED_CONTENT=$(cat "$MD_FILE")
-assert_contains "refreshed file has doc id" "$PUSHED_CONTENT" "document: $DOC_ID"
-assert_contains "refreshed file has block 2 directive" "$PUSHED_CONTENT" "::infrapad_block{block=2"
-assert_contains "refreshed file has pushed content" "$PUSHED_CONTENT" "Additional notes from local edit."
-assert_contains "refreshed file has original content" "$PUSHED_CONTENT" "root cause identified"
-# The rev should have incremented from 2 to 3 after the push.
-assert_contains "refreshed block 2 has new rev" "$PUSHED_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
-echo ""
-
-# -----------------------------------------------------------------------
-# 9. Independently pull and verify the server has the pushed content
-# -----------------------------------------------------------------------
-echo "Step 9: Independent pull to verify server state"
-VERIFY_FILE="${TMPDIR_E2E}/${DOC_ID}_verify.md"
-$CLI md pull --document "$DOC_ID" --file "$VERIFY_FILE" 2>/dev/null
-VERIFY_CONTENT=$(cat "$VERIFY_FILE")
-assert_contains "independent pull has pushed content" "$VERIFY_CONTENT" "Additional notes from local edit."
-assert_contains "independent pull has original content" "$VERIFY_CONTENT" "root cause identified"
-assert_contains "independent pull has updated rev" "$VERIFY_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
-# Block 1 should be unchanged.
-assert_contains "block 1 unchanged after push" "$VERIFY_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
-assert_contains "block 1 content intact" "$VERIFY_CONTENT" "CrashLoopBackOff"
-echo ""
-
-# -----------------------------------------------------------------------
-# 10. Parse the pushed file to verify round-trip integrity
-# -----------------------------------------------------------------------
-echo "Step 10: Parse pushed file for round-trip integrity"
-PARSE_PUSHED=$($CLI md parse --file "$MD_FILE")
-assert_contains "parsed pushed block count" "$PARSE_PUSHED" "Blocks (2):"
-assert_contains "parsed pushed markdown content" "$PARSE_PUSHED" "Additional notes from local edit."
-assert_contains "parsed pushed original content" "$PARSE_PUSHED" "root cause identified"
-assert_contains "parsed pushed alerts_matcher intact" "$PARSE_PUSHED" "type:   Prometheus/AlertsMatcher"
-echo ""
-
-# -----------------------------------------------------------------------
-# 11. Add a new block via md push
-# -----------------------------------------------------------------------
-echo "Step 11: Add a new block locally and push"
-# Append a new block directive and content to the pulled file.
+echo "Step 4: Edit body and header fields, add a block, and push"
+sed -i \
+  -e 's/root cause identified/root cause identified\n\nAdditional notes from local edit./' \
+  -e 's/KubeNodeNotReady/KubePodNotReady/' \
+  -e 's/since: "2026-08-14T09:00:00Z"/since: "2026-08-14T08:00:00Z"/' \
+  "$MD_FILE"
 cat >> "$MD_FILE" <<'EOF'
 
 ::infrapad_block{block=new type=Core/Markdown}
-
 # Additional notes from the investigation
 
 This was a red-herring.
 EOF
+PUSH_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
+assert_contains "header block updated" "$PUSH_OUT" "Block 1 updated"
+assert_contains "body block updated" "$PUSH_OUT" "Block 2 updated"
+assert_contains "new block added" "$PUSH_OUT" "Block added"
+assert_contains "file written" "$PUSH_OUT" "Written to $MD_FILE"
+export_markdown "$DOC_ID" "$EXPECTED"
+assert_same_file "refreshed file matches export" "$MD_FILE" "$EXPECTED"
+REFRESHED=$(cat "$MD_FILE")
+assert_contains "header edit persisted" "$REFRESHED" "KubePodNotReady"
+assert_contains "header since persisted" "$REFRESHED" '2026-08-14T08:00:00Z'
+assert_contains "header revision incremented" "$REFRESHED" "block=1 rev=3 type=Prometheus/AlertsMatcher"
+assert_contains "body revision incremented" "$REFRESHED" "block=2 rev=3 type=Core/Markdown"
+assert_contains "new block numbered" "$REFRESHED" "block=3 rev=1 type=Core/Markdown"
+assert_not_contains "no block=new left" "$REFRESHED" "block=new"
 
-NEW_BLOCK_CONTENT=$(cat "$MD_FILE")
-assert_contains "local file has new block directive" "$NEW_BLOCK_CONTENT" "block=new type=Core/Markdown"
-assert_contains "local file has new block content" "$NEW_BLOCK_CONTENT" "This was a red-herring."
-
-PUSH_NEW_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
-assert_contains "push new reports block added" "$PUSH_NEW_OUT" "Block added"
-assert_contains "push new reports file written" "$PUSH_NEW_OUT" "Written to"
+PARSE_OUT=$($CLI md parse --file "$MD_FILE")
+assert_contains "parsed pushed block count" "$PARSE_OUT" "Blocks (3):"
+assert_contains "parsed pushed alerts type" "$PARSE_OUT" "type:   Prometheus/AlertsMatcher"
+assert_contains "parsed pushed original content" "$PARSE_OUT" "root cause identified"
+assert_contains "parsed pushed edit" "$PARSE_OUT" "Additional notes from local edit."
+assert_contains "parsed new block number" "$PARSE_OUT" "block:  3"
+assert_contains "parsed new block heading" "$PARSE_OUT" "# Additional notes from the investigation"
+assert_contains "parsed new block content" "$PARSE_OUT" "This was a red-herring."
 echo ""
 
 # -----------------------------------------------------------------------
-# 12. Verify the file was refreshed and the new block got a real number
+# 5. Add multiple new blocks in one push
 # -----------------------------------------------------------------------
-echo "Step 12: Verify new block assigned a real block number after push"
-PUSHED_NEW_CONTENT=$(cat "$MD_FILE")
-assert_contains "refreshed file has doc id" "$PUSHED_NEW_CONTENT" "document: $DOC_ID"
-assert_not_contains "refreshed file has no block=new directive" "$PUSHED_NEW_CONTENT" "block=new"
-assert_contains "refreshed file has new block content" "$PUSHED_NEW_CONTENT" "This was a red-herring."
-assert_contains "refreshed file has new block heading" "$PUSHED_NEW_CONTENT" "# Additional notes from the investigation"
-# The new block should be block 3.
-assert_contains "refreshed file has block 3 directive" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=3"
-assert_contains "refreshed file has block 3 as markdown" "$PUSHED_NEW_CONTENT" "block=3 rev=1 type=Core/Markdown"
-# Earlier blocks should be unchanged.
-assert_contains "block 1 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
-assert_contains "block 2 still present" "$PUSHED_NEW_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
-echo ""
-
-# -----------------------------------------------------------------------
-# 13. Independent pull to verify server received the new block
-# -----------------------------------------------------------------------
-echo "Step 13: Independent pull to verify new block on server"
-VERIFY_NEW_FILE="${TMPDIR_E2E}/${DOC_ID}_verify_new.md"
-$CLI md pull --document "$DOC_ID" --file "$VERIFY_NEW_FILE" 2>/dev/null
-VERIFY_NEW_CONTENT=$(cat "$VERIFY_NEW_FILE")
-assert_contains "independent pull has 3 blocks" "$VERIFY_NEW_CONTENT" "::infrapad_block{block=3"
-assert_contains "independent pull has new block content" "$VERIFY_NEW_CONTENT" "This was a red-herring."
-assert_contains "independent pull has new block heading" "$VERIFY_NEW_CONTENT" "# Additional notes from the investigation"
-assert_contains "independent pull block 1 intact" "$VERIFY_NEW_CONTENT" "CrashLoopBackOff"
-assert_contains "independent pull block 2 intact" "$VERIFY_NEW_CONTENT" "root cause identified"
-echo ""
-
-# -----------------------------------------------------------------------
-# 14. Parse the file with the new block to verify round-trip integrity
-# -----------------------------------------------------------------------
-echo "Step 14: Parse file with new block for round-trip integrity"
-PARSE_NEW=$($CLI md parse --file "$MD_FILE")
-assert_contains "parsed new block count" "$PARSE_NEW" "Blocks (3):"
-assert_contains "parsed new block content" "$PARSE_NEW" "This was a red-herring."
-assert_contains "parsed block 3 number" "$PARSE_NEW" "block:  3"
-assert_contains "parsed alerts_matcher still intact" "$PARSE_NEW" "type:   Prometheus/AlertsMatcher"
-echo ""
-
-# -----------------------------------------------------------------------
-# 15. Add two new blocks at once and push
-# -----------------------------------------------------------------------
-echo "Step 15: Add two new blocks at once and push"
-# Simulate the incident-investigate workflow: investigation summary + recommended actions.
+echo "Step 5: Add multiple new blocks in one push"
 cat >> "$MD_FILE" <<'EOF'
 
 ::infrapad_block{type=Core/Markdown block=new}
 # Investigation Summary
 
-**Investigated at**: 2026-08-14T12:00:00Z
-
-## Findings
-
 The payment service pod is in CrashLoopBackOff due to an OOM kill.
-
-## Diagnosis
-
-Memory limit is set too low for the current traffic pattern.
 
 ::infrapad_block{type=Core/Markdown block=new}
 # Recommended Actions
 
 1. Increase memory limit from 256Mi to 512Mi.
 2. Add horizontal pod autoscaler.
-3. Review recent traffic spike with the platform team.
 EOF
+PUSH_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
+assert_equals "push reports two blocks added" "$(echo "$PUSH_OUT" | grep -c 'Block added')" "2"
+assert_not_contains "existing blocks not updated" "$PUSH_OUT" "updated"
+assert_contains "file written" "$PUSH_OUT" "Written to $MD_FILE"
+export_markdown "$DOC_ID" "$EXPECTED"
+assert_same_file "multiple-block push matches export" "$MD_FILE" "$EXPECTED"
+REFRESHED=$(cat "$MD_FILE")
+assert_contains "block 4 numbered" "$REFRESHED" "block=4 rev=1 type=Core/Markdown"
+assert_contains "block 5 numbered" "$REFRESHED" "block=5 rev=1 type=Core/Markdown"
+assert_contains "header block revision unchanged" "$REFRESHED" "block=1 rev=3 type=Prometheus/AlertsMatcher"
+assert_contains "body block revision unchanged" "$REFRESHED" "block=2 rev=3 type=Core/Markdown"
+assert_contains "first added block revision unchanged" "$REFRESHED" "block=3 rev=1 type=Core/Markdown"
+assert_not_contains "no block=new left" "$REFRESHED" "block=new"
 
-TWO_BLOCK_CONTENT=$(cat "$MD_FILE")
-# Verify both new block directives are present locally.
-TWO_NEW_COUNT=$(grep -c 'block=new' "$MD_FILE")
-assert_equals "local file has two block=new directives" "$TWO_NEW_COUNT" "2"
-assert_contains "local file has investigation summary" "$TWO_BLOCK_CONTENT" "# Investigation Summary"
-assert_contains "local file has recommended actions" "$TWO_BLOCK_CONTENT" "# Recommended Actions"
-
-PUSH_TWO_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
-echo "$PUSH_TWO_OUT"
-# Both blocks should be reported as added.
-TWO_ADDED_COUNT=$(echo "$PUSH_TWO_OUT" | grep -c "Block added")
-assert_equals "push reports two blocks added" "$TWO_ADDED_COUNT" "2"
-assert_contains "push two reports file written" "$PUSH_TWO_OUT" "Written to"
+PARSE_OUT=$($CLI md parse --file "$MD_FILE")
+assert_contains "parsed five blocks" "$PARSE_OUT" "Blocks (5):"
+assert_contains "parsed block 4 number" "$PARSE_OUT" "block:  4"
+assert_contains "parsed block 5 number" "$PARSE_OUT" "block:  5"
+assert_contains "parsed investigation heading" "$PARSE_OUT" "Investigation Summary"
+assert_contains "parsed investigation content" "$PARSE_OUT" "OOM kill"
+assert_contains "parsed actions heading" "$PARSE_OUT" "Recommended Actions"
+assert_contains "parsed actions content" "$PARSE_OUT" "Increase memory limit"
 echo ""
 
 # -----------------------------------------------------------------------
-# 16. Verify both new blocks got real block numbers after push
+# 6. Push without changes still refreshes the file
 # -----------------------------------------------------------------------
-echo "Step 16: Verify both new blocks assigned real block numbers"
-PUSHED_TWO_CONTENT=$(cat "$MD_FILE")
-assert_not_contains "refreshed file has no block=new" "$PUSHED_TWO_CONTENT" "block=new"
-assert_contains "refreshed file has investigation summary" "$PUSHED_TWO_CONTENT" "# Investigation Summary"
-assert_contains "refreshed file has recommended actions" "$PUSHED_TWO_CONTENT" "# Recommended Actions"
-assert_contains "refreshed file has OOM diagnosis" "$PUSHED_TWO_CONTENT" "OOM kill"
-assert_contains "refreshed file has memory limit action" "$PUSHED_TWO_CONTENT" "Increase memory limit"
-# The two new blocks should be block 4 and block 5.
-assert_contains "refreshed file has block 4" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=4 rev=1 type=Core/Markdown"
-assert_contains "refreshed file has block 5" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=5 rev=1 type=Core/Markdown"
-# Earlier blocks should be unchanged.
-assert_contains "block 1 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
-assert_contains "block 2 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
-assert_contains "block 3 still present" "$PUSHED_TWO_CONTENT" "::infrapad_block{block=3"
+echo "Step 6: Push without changes still refreshes the file"
+NOOP_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
+assert_contains "no changes reported" "$NOOP_OUT" "No changes detected"
+assert_contains "file written" "$NOOP_OUT" "Written to $MD_FILE"
+assert_same_file "no-op push matches export" "$MD_FILE" "$EXPECTED"
 echo ""
 
 # -----------------------------------------------------------------------
-# 17. Independent pull to verify server received both new blocks
+# 7. Stale but untouched content refreshes to newer server state
 # -----------------------------------------------------------------------
-echo "Step 17: Independent pull to verify both new blocks on server"
-VERIFY_TWO_FILE="${TMPDIR_E2E}/${DOC_ID}_verify_two.md"
-$CLI md pull --document "$DOC_ID" --file "$VERIFY_TWO_FILE" 2>/dev/null
-VERIFY_TWO_CONTENT=$(cat "$VERIFY_TWO_FILE")
-assert_contains "independent pull has block 4" "$VERIFY_TWO_CONTENT" "::infrapad_block{block=4"
-assert_contains "independent pull has block 5" "$VERIFY_TWO_CONTENT" "::infrapad_block{block=5"
-assert_contains "independent pull has investigation summary" "$VERIFY_TWO_CONTENT" "# Investigation Summary"
-assert_contains "independent pull has recommended actions" "$VERIFY_TWO_CONTENT" "# Recommended Actions"
-assert_contains "independent pull has OOM diagnosis" "$VERIFY_TWO_CONTENT" "OOM kill"
-assert_contains "independent pull has memory limit action" "$VERIFY_TWO_CONTENT" "Increase memory limit"
-assert_contains "independent pull block 1 intact" "$VERIFY_TWO_CONTENT" "CrashLoopBackOff"
-assert_contains "independent pull block 2 intact" "$VERIFY_TWO_CONTENT" "root cause identified"
-assert_contains "independent pull block 3 intact" "$VERIFY_TWO_CONTENT" "This was a red-herring."
+echo "Step 7: Stale but untouched content refreshes to newer server state"
+$CLI block update --document "$DOC_ID" --block-number 2 --type Core/Markdown \
+  --content '{"text": "concurrent server-side edit"}' > /dev/null
+STALE_FILE="${TMPDIR_E2E}/stale.md"
+cp "$MD_FILE" "$STALE_FILE"
+NOOP_OUT=$($CLI md push --file "$MD_FILE" 2>&1)
+assert_contains "stale no-op reported" "$NOOP_OUT" "No changes detected"
+assert_contains "stale no-op written" "$NOOP_OUT" "Written to $MD_FILE"
+export_markdown "$DOC_ID" "$EXPECTED"
+assert_same_file "stale file refreshed to export" "$MD_FILE" "$EXPECTED"
+assert_contains "refreshed with concurrent edit" "$(cat "$MD_FILE")" "concurrent server-side edit"
 echo ""
 
 # -----------------------------------------------------------------------
-# 18. Parse the file with five blocks to verify round-trip integrity
+# 8. Editing a stale revision is rejected without changing either side
 # -----------------------------------------------------------------------
-echo "Step 18: Parse file with five blocks for round-trip integrity"
-PARSE_TWO=$($CLI md parse --file "$MD_FILE")
-assert_contains "parsed five block count" "$PARSE_TWO" "Blocks (5):"
-assert_contains "parsed block 4 number" "$PARSE_TWO" "block:  4"
-assert_contains "parsed block 5 number" "$PARSE_TWO" "block:  5"
-assert_contains "parsed investigation content" "$PARSE_TWO" "Investigation Summary"
-assert_contains "parsed recommended actions content" "$PARSE_TWO" "Recommended Actions"
+echo "Step 8: Editing a stale revision is rejected without changing either side"
+cp "$STALE_FILE" "$MD_FILE"
+sed -i 's/Additional notes from local edit./Conflicting local edit./' "$MD_FILE"
+cp "$MD_FILE" "${TMPDIR_E2E}/edited.md"
+if ERR_OUT=$($CLI md push --file "$MD_FILE" 2>&1); then
+  echo "  ✗ stale edit unexpectedly succeeded"
+  fail=$((fail + 1))
+else
+  assert_contains "stale edit reports conflict" "$ERR_OUT" "HTTP 409"
+fi
+assert_same_file "local edits preserved" "$MD_FILE" "${TMPDIR_E2E}/edited.md"
+export_markdown "$DOC_ID" "${TMPDIR_E2E}/server.md"
+assert_same_file "failed push leaves server unchanged" "${TMPDIR_E2E}/server.md" "$EXPECTED"
 echo ""
 
 # -----------------------------------------------------------------------
-# 19. Pull with --file only (no --document) to refresh a previously pulled file
+# 9. Pull failures preserve the destination
 # -----------------------------------------------------------------------
-echo "Step 19: Pull with --file only (no --document)"
-PULL_FILEONLY_OUT=$($CLI md pull --file "$MD_FILE" 2>&1)
-assert_contains "pull --file-only reports output file" "$PULL_FILEONLY_OUT" "Written to"
-FILEONLY_CONTENT=$(cat "$MD_FILE")
-assert_contains "file-only pull has doc id" "$FILEONLY_CONTENT" "document: $DOC_ID"
-assert_contains "file-only pull has block 1" "$FILEONLY_CONTENT" "::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher"
-assert_contains "file-only pull has block 2" "$FILEONLY_CONTENT" "::infrapad_block{block=2 rev=3 type=Core/Markdown"
-assert_contains "file-only pull has block 5" "$FILEONLY_CONTENT" "::infrapad_block{block=5"
-assert_contains "file-only pull has original content" "$FILEONLY_CONTENT" "CrashLoopBackOff"
+echo "Step 9: Pull failures preserve the destination"
+if ERR_OUT=$($CLI md pull --document "does-not-exist-$$" --file "$MD_FILE" 2>&1); then
+  echo "  ✗ pull of a missing document unexpectedly succeeded"
+  fail=$((fail + 1))
+else
+  assert_contains "error reports export failure" "$ERR_OUT" "export document markdown"
+fi
+assert_same_file "failed pull preserves destination" "$MD_FILE" "${TMPDIR_E2E}/edited.md"
+if ERR_OUT=$($CLI md pull --file "${TMPDIR_E2E}/does-not-exist.md" 2>&1); then
+  echo "  ✗ file-only pull of a missing file unexpectedly succeeded"
+  fail=$((fail + 1))
+else
+  assert_contains "missing file reports read error" "$ERR_OUT" "read file to extract document ID"
+fi
 echo ""
 
 # -----------------------------------------------------------------------
-# 20. Pull with neither --document nor --file should fail
+# 10. Missing document IDs are reported before creating a client
 # -----------------------------------------------------------------------
-echo "Step 20: Pull with --file only for non-existing file should fail"
-PULL_NOFILE_OUT=$($CLI md pull --file "${TMPDIR_E2E}/does_not_exist.md" 2>&1) && PULL_NOFILE_RC=0 || PULL_NOFILE_RC=$?
-assert_not_contains "pull non-existing file exits non-zero" "_${PULL_NOFILE_RC}_" "_0_"
-assert_contains "pull non-existing file reports read error" "$PULL_NOFILE_OUT" "read file to extract document ID"
-echo ""
+echo "Step 10: Missing document IDs are reported before creating a client"
+BAD_FILE="${TMPDIR_E2E}/bad.md"
+printf -- '---\ntitle: no id\n---\nbody\n' > "$BAD_FILE"
+for command in pull push; do
+  # An invalid API URL proves the frontmatter is checked first.
+  if ERR_OUT=$(${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url 'not a URL' md "$command" --file "$BAD_FILE" 2>&1); then
+    echo "  ✗ $command without a document ID unexpectedly succeeded"
+    fail=$((fail + 1))
+  else
+    assert_contains "$command reports missing document ID" "$ERR_OUT" "has no document ID"
+  fi
+done
 
 # -----------------------------------------------------------------------
 # Summary

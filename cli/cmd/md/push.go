@@ -1,13 +1,12 @@
 package md
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
-	"github.com/infrapad/infrapad/cli/pkg/content"
 	"github.com/infrapad/infrapad/cli/pkg/markdown"
-	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
 	"github.com/spf13/cobra"
 )
 
@@ -15,96 +14,60 @@ func newPushCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "push",
 		Short: "Push local changes back to the server",
-		Long: `Push detects which blocks have been modified locally by comparing
-with the current server state. Only changed existing blocks and new blocks
-(block=new) are pushed. The file is refreshed from the server afterwards.`,
+		Long: "Push submits the whole Markdown file unchanged to the server, which interprets\n" +
+			"the blocks, detects changed existing blocks and new blocks (block=new), and\n" +
+			"applies them atomically. Omitted blocks are left untouched.\n\n" +
+			"The file is refreshed with the Markdown returned by the server afterwards,\n" +
+			"also when no changes were detected.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filePath, _ := cmd.Flags().GetString("file")
 
-			// 1. Parse the local file.
 			data, err := os.ReadFile(filePath)
 			if err != nil {
 				return fmt.Errorf("read file: %w", err)
 			}
 
-			doc, err := markdown.Parse(data)
+			// Only the frontmatter is inspected locally; block interpretation
+			// is owned by the server.
+			meta, err := markdown.ReadFrontmatter(data)
+			if errors.Is(err, markdown.ErrMissingDocumentID) {
+				return fmt.Errorf("file %s has no document ID in frontmatter", filePath)
+			}
 			if err != nil {
-				return fmt.Errorf("parse: %w", err)
+				return fmt.Errorf("read frontmatter of %s: %w", filePath, err)
 			}
 
-			// 2. Connect to the server and fetch current blocks for diffing.
 			c, err := cliutil.NewClient()
 			if err != nil {
 				return err
 			}
 			defer c.Close()
 
-			docName := doc.Meta.DocumentID
-
-			serverBlocks, err := c.ListBlocks(cmd.Context(), docName)
-			if err != nil {
-				return fmt.Errorf("list server blocks: %w", err)
-			}
-
-			remote := markdown.NewRemoteDocument(docName, serverBlocks)
-
-			// 3. Detect changed and new blocks.
-			actions, err := markdown.DiffBlocks(doc, remote)
+			resp, err := c.PushDocumentMarkdown(cmd.Context(), meta.DocumentID, string(data))
 			if err != nil {
 				return err
 			}
 
-			if len(actions) == 0 {
+			changes := resp.GetChanges()
+			if len(changes) == 0 {
 				fmt.Fprintf(cmd.OutOrStderr(), "No changes detected\n")
-				return nil
 			}
 
-			// 4. Push changed/new blocks.
-			for _, a := range actions {
-				record, err := content.FromContent(a.Block.Content)
-				if err != nil {
-					return err
-				}
-
-				block := &pb.Block{
-					Type:   a.Block.Meta.Type,
-					Record: record,
-				}
-
-				if a.IsNew {
-					_, err = c.AddBlock(cmd.Context(), docName, block)
-					if err != nil {
-						return fmt.Errorf("add block: %w", err)
-					}
+			for _, change := range changes {
+				switch change.GetAction() {
+				case "added":
 					fmt.Fprintf(cmd.OutOrStderr(), "Block added\n")
-				} else {
-					bn := int32(a.Block.Meta.BlockNumber)
-					_, err = c.UpdateBlock(cmd.Context(), docName, bn, block)
-					if err != nil {
-						return fmt.Errorf("update block: %w", err)
-					}
-					fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", a.Block.Meta.BlockNumber)
+				case "updated":
+					fmt.Fprintf(cmd.OutOrStderr(), "Block %d updated\n", change.GetBlockNumber())
+				default:
+					fmt.Fprintf(cmd.OutOrStderr(), "Block %d %s\n", change.GetBlockNumber(), change.GetAction())
 				}
 			}
 
-			// 5. Pull to get the latest version of the file after save.
-			serverDoc, err := c.GetDocument(cmd.Context(), docName)
-			if err != nil {
-				return fmt.Errorf("get document after update: %w", err)
-			}
-
-			blocks, err := c.ListBlocks(cmd.Context(), docName)
-			if err != nil {
-				return fmt.Errorf("list blocks after update: %w", err)
-			}
-
-			out, err := markdown.Render(serverDoc, blocks)
-			if err != nil {
-				return fmt.Errorf("render: %w", err)
-			}
-
-			if err := os.WriteFile(filePath, []byte(out), 0o644); err != nil {
-				return fmt.Errorf("write file: %w", err)
+			// Server changes are already committed; a write failure here
+			// cannot undo them and is reported without retrying.
+			if err := os.WriteFile(filePath, []byte(resp.GetMarkdown()), 0o644); err != nil {
+				return fmt.Errorf("write file (server changes were applied): %w", err)
 			}
 
 			fmt.Fprintf(cmd.OutOrStderr(), "Written to %s\n", filePath)
