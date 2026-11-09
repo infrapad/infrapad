@@ -133,6 +133,28 @@ service InfrapadService {
             get: "/v1/{name=documents/*}/markdown"
         };
     }
+    // Applies an edited InfraPad Markdown document (as exported by
+    // ExportDocumentMarkdown) atomically. The server parses the document,
+    // compares each existing block with the revision referenced by its
+    // directive, and applies only actual structured-header/body edits
+    // through the registered content types; `block=new` directives create
+    // new standalone blocks. Omitted blocks are left untouched (no
+    // deletion). Untouched stale or generated blocks are skipped; edits of
+    // generated blocks are rejected (PermissionDenied) and edits of stale
+    // revisions conflict (Aborted / HTTP 409). Host metadata (type,
+    // author, parent, timestamp) cannot be edited; frontmatter title,
+    // namespace, and status are informational.
+    //
+    // Failures use standard gRPC error details (google.rpc.ErrorInfo with
+    // a stable reason plus block/line metadata, google.rpc.BadRequest
+    // field violations where available) and leave the document unchanged.
+    rpc PushDocumentMarkdown(PushDocumentMarkdownRequest)
+        returns (PushDocumentMarkdownResponse) {
+        option (google.api.http) = {
+            post: "/v1/{name=documents/*}/markdown"
+            body: "*"
+        };
+    }
 
     // ----- Block operations -----
     rpc AddBlock(AddBlockRequest) returns (AddBlockResponse) {
@@ -214,6 +236,30 @@ message ExportDocumentMarkdownRequest {
 message ExportDocumentMarkdownResponse {
     // The rendered InfraPad Markdown document.
     string markdown = 1;
+}
+
+message PushDocumentMarkdownRequest {
+    string name = 1 [
+        (google.api.field_behavior) = REQUIRED,
+        (google.api.resource_reference).type = "infrapad.io/Document"
+    ];
+    // The edited InfraPad Markdown document.
+    string markdown = 2 [ (google.api.field_behavior) = REQUIRED ];
+}
+
+// One block actually persisted by a Markdown push.
+message MarkdownChange {
+    int32 block_number = 1;
+    // "added" | "updated"
+    string action = 2;
+}
+
+message PushDocumentMarkdownResponse {
+    // The complete refreshed Markdown, rendered within the push
+    // transaction.
+    string markdown = 1;
+    // Persisted changes in submitted order; empty for a no-op push.
+    repeated MarkdownChange changes = 2;
 }
 
 message ListDocumentsRequest {}

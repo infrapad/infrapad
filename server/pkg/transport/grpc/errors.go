@@ -31,6 +31,10 @@ func rpcError(op string, err error) error {
 	if errors.As(err, &submission) {
 		return submissionError(op, submission)
 	}
+	var push *controller.MarkdownPushError
+	if errors.As(err, &push) {
+		return markdownPushError(op, push)
+	}
 	if controller.IsForbiddenEdit(err) {
 		return status.Errorf(codes.PermissionDenied, "%s: %v", op, err)
 	}
@@ -100,6 +104,58 @@ func submissionError(op string, e *controller.SubmissionError) error {
 			prefix = "payload"
 		}
 		details = append(details, badRequest(validation, prefix))
+	}
+	details = append([]protoadapt.MessageV1{&errdetails.ErrorInfo{
+		Reason:   string(e.Reason),
+		Domain:   errorDomain,
+		Metadata: metadata,
+	}}, details...)
+	return withDetails(status.New(code, fmt.Sprintf("%s: %v", op, e)), details...)
+}
+
+// markdownPushCodes maps Markdown push rejection reasons to gRPC codes.
+// Unmapped reasons are treated as internal failures.
+var markdownPushCodes = map[controller.MarkdownPushReason]codes.Code{
+	controller.PushInvalidMarkdown:     codes.InvalidArgument,
+	controller.PushDocumentMismatch:    codes.InvalidArgument,
+	controller.PushDocumentNotFound:    codes.NotFound,
+	controller.PushBlockNotFound:       codes.NotFound,
+	controller.PushHostMetadataChanged: codes.InvalidArgument,
+	controller.PushInvalidContent:      codes.InvalidArgument,
+	controller.PushUnsupportedEdit:     codes.InvalidArgument,
+	controller.PushGeneratedBlock:      codes.PermissionDenied,
+	controller.PushStaleRevision:       codes.Aborted,
+	controller.PushDeletedBlock:        codes.FailedPrecondition,
+	controller.PushInvalidOutput:       codes.Internal,
+	controller.PushRenderFailed:        codes.Internal,
+}
+
+// markdownPushError builds the status of a rejected Markdown push:
+// google.rpc.ErrorInfo with the stable reason and block/line context, plus
+// google.rpc.BadRequest field violations (rooted at the block section's
+// content) from a wrapped validation error.
+func markdownPushError(op string, e *controller.MarkdownPushError) error {
+	code, ok := markdownPushCodes[e.Reason]
+	if !ok {
+		code = codes.Internal
+	}
+	metadata := map[string]string{"document": "documents/" + string(e.DocumentUID)}
+	if e.BlockNumber > 0 {
+		metadata["block_number"] = strconv.Itoa(int(e.BlockNumber))
+	}
+	if e.BlockIndex > 0 {
+		metadata["block_index"] = strconv.Itoa(e.BlockIndex)
+	}
+	if e.Line > 0 {
+		metadata["line"] = strconv.Itoa(e.Line)
+	}
+	if e.ContentType != "" {
+		metadata["content_type"] = e.ContentType
+	}
+	var details []protoadapt.MessageV1
+	if validation := e.Validation(); validation != nil {
+		metadata["validation_stage"] = string(validation.Stage)
+		details = append(details, badRequest(validation, fmt.Sprintf("markdown.blocks.%d.content", e.BlockIndex)))
 	}
 	details = append([]protoadapt.MessageV1{&errdetails.ErrorInfo{
 		Reason:   string(e.Reason),

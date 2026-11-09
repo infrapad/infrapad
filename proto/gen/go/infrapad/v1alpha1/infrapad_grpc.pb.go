@@ -23,6 +23,7 @@ const (
 	InfrapadService_GetDocument_FullMethodName            = "/infrapad.v1.InfrapadService/GetDocument"
 	InfrapadService_ListDocuments_FullMethodName          = "/infrapad.v1.InfrapadService/ListDocuments"
 	InfrapadService_ExportDocumentMarkdown_FullMethodName = "/infrapad.v1.InfrapadService/ExportDocumentMarkdown"
+	InfrapadService_PushDocumentMarkdown_FullMethodName   = "/infrapad.v1.InfrapadService/PushDocumentMarkdown"
 	InfrapadService_AddBlock_FullMethodName               = "/infrapad.v1.InfrapadService/AddBlock"
 	InfrapadService_UpdateBlock_FullMethodName            = "/infrapad.v1.InfrapadService/UpdateBlock"
 	InfrapadService_GetBlock_FullMethodName               = "/infrapad.v1.InfrapadService/GetBlock"
@@ -46,6 +47,22 @@ type InfrapadServiceClient interface {
 	// headers, and extension-rendered bodies. Read-only; the response is
 	// JSON containing the Markdown string, not raw text/markdown.
 	ExportDocumentMarkdown(ctx context.Context, in *ExportDocumentMarkdownRequest, opts ...grpc.CallOption) (*ExportDocumentMarkdownResponse, error)
+	// Applies an edited InfraPad Markdown document (as exported by
+	// ExportDocumentMarkdown) atomically. The server parses the document,
+	// compares each existing block with the revision referenced by its
+	// directive, and applies only actual structured-header/body edits
+	// through the registered content types; `block=new` directives create
+	// new standalone blocks. Omitted blocks are left untouched (no
+	// deletion). Untouched stale or generated blocks are skipped; edits of
+	// generated blocks are rejected (PermissionDenied) and edits of stale
+	// revisions conflict (Aborted / HTTP 409). Host metadata (type,
+	// author, parent, timestamp) cannot be edited; frontmatter title,
+	// namespace, and status are informational.
+	//
+	// Failures use standard gRPC error details (google.rpc.ErrorInfo with
+	// a stable reason plus block/line metadata, google.rpc.BadRequest
+	// field violations where available) and leave the document unchanged.
+	PushDocumentMarkdown(ctx context.Context, in *PushDocumentMarkdownRequest, opts ...grpc.CallOption) (*PushDocumentMarkdownResponse, error)
 	// ----- Block operations -----
 	AddBlock(ctx context.Context, in *AddBlockRequest, opts ...grpc.CallOption) (*AddBlockResponse, error)
 	UpdateBlock(ctx context.Context, in *UpdateBlockRequest, opts ...grpc.CallOption) (*UpdateBlockResponse, error)
@@ -109,6 +126,16 @@ func (c *infrapadServiceClient) ExportDocumentMarkdown(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ExportDocumentMarkdownResponse)
 	err := c.cc.Invoke(ctx, InfrapadService_ExportDocumentMarkdown_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infrapadServiceClient) PushDocumentMarkdown(ctx context.Context, in *PushDocumentMarkdownRequest, opts ...grpc.CallOption) (*PushDocumentMarkdownResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PushDocumentMarkdownResponse)
+	err := c.cc.Invoke(ctx, InfrapadService_PushDocumentMarkdown_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +217,22 @@ type InfrapadServiceServer interface {
 	// headers, and extension-rendered bodies. Read-only; the response is
 	// JSON containing the Markdown string, not raw text/markdown.
 	ExportDocumentMarkdown(context.Context, *ExportDocumentMarkdownRequest) (*ExportDocumentMarkdownResponse, error)
+	// Applies an edited InfraPad Markdown document (as exported by
+	// ExportDocumentMarkdown) atomically. The server parses the document,
+	// compares each existing block with the revision referenced by its
+	// directive, and applies only actual structured-header/body edits
+	// through the registered content types; `block=new` directives create
+	// new standalone blocks. Omitted blocks are left untouched (no
+	// deletion). Untouched stale or generated blocks are skipped; edits of
+	// generated blocks are rejected (PermissionDenied) and edits of stale
+	// revisions conflict (Aborted / HTTP 409). Host metadata (type,
+	// author, parent, timestamp) cannot be edited; frontmatter title,
+	// namespace, and status are informational.
+	//
+	// Failures use standard gRPC error details (google.rpc.ErrorInfo with
+	// a stable reason plus block/line metadata, google.rpc.BadRequest
+	// field violations where available) and leave the document unchanged.
+	PushDocumentMarkdown(context.Context, *PushDocumentMarkdownRequest) (*PushDocumentMarkdownResponse, error)
 	// ----- Block operations -----
 	AddBlock(context.Context, *AddBlockRequest) (*AddBlockResponse, error)
 	UpdateBlock(context.Context, *UpdateBlockRequest) (*UpdateBlockResponse, error)
@@ -230,6 +273,9 @@ func (UnimplementedInfrapadServiceServer) ListDocuments(context.Context, *ListDo
 }
 func (UnimplementedInfrapadServiceServer) ExportDocumentMarkdown(context.Context, *ExportDocumentMarkdownRequest) (*ExportDocumentMarkdownResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExportDocumentMarkdown not implemented")
+}
+func (UnimplementedInfrapadServiceServer) PushDocumentMarkdown(context.Context, *PushDocumentMarkdownRequest) (*PushDocumentMarkdownResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PushDocumentMarkdown not implemented")
 }
 func (UnimplementedInfrapadServiceServer) AddBlock(context.Context, *AddBlockRequest) (*AddBlockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddBlock not implemented")
@@ -338,6 +384,24 @@ func _InfrapadService_ExportDocumentMarkdown_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InfrapadServiceServer).ExportDocumentMarkdown(ctx, req.(*ExportDocumentMarkdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfrapadService_PushDocumentMarkdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushDocumentMarkdownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfrapadServiceServer).PushDocumentMarkdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfrapadService_PushDocumentMarkdown_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfrapadServiceServer).PushDocumentMarkdown(ctx, req.(*PushDocumentMarkdownRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -472,6 +536,10 @@ var InfrapadService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExportDocumentMarkdown",
 			Handler:    _InfrapadService_ExportDocumentMarkdown_Handler,
+		},
+		{
+			MethodName: "PushDocumentMarkdown",
+			Handler:    _InfrapadService_PushDocumentMarkdown_Handler,
 		},
 		{
 			MethodName: "AddBlock",

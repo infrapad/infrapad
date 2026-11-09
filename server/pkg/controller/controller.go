@@ -507,18 +507,8 @@ func checkPublicBlockCreation(blk *model.Block) error {
 // timestamp may only be exactly echoed — the stored values are preserved
 // on the new revision.
 func checkPublicBlockUpdate(documentUID model.DocumentUID, submitted, latest *model.Block) error {
-	// Ownership follows stored provenance: every block with a parent
-	// (including nested descendants) is extension-managed, regardless of
-	// content type; roots keep their existing editing behavior. Decided
-	// from the stored block alone, before the submitted change is
-	// interpreted, so omitted or forged submitted provenance cannot
-	// bypass it. This is the future delegated-authorization seam.
-	if parent := latest.ParentBlockNumber; parent != nil {
-		return &ForbiddenEditError{
-			DocumentUID:       documentUID,
-			BlockNumber:       latest.BlockNumber,
-			ParentBlockNumber: *parent,
-		}
+	if err := checkPublicEditOwnership(documentUID, latest); err != nil {
+		return err
 	}
 	// Only then is the submitted record envelope interpreted, so even an
 	// exact echo of a generated record (keys, membership) is forbidden
@@ -537,6 +527,25 @@ func checkPublicBlockUpdate(documentUID model.DocumentUID, submitted, latest *mo
 	if ts := submitted.Timestamp; ts != nil && !ts.Equal(latest.Record.Timestamp()) {
 		return invalidInput("event timestamp %s cannot be changed to %s through public input",
 			latest.Record.Timestamp().Format(time.RFC3339), ts.Format(time.RFC3339))
+	}
+	return nil
+}
+
+// checkPublicEditOwnership is the generated-block ownership policy of
+// public mutations (block updates, Markdown push). Ownership follows
+// stored provenance: every block with a parent (including nested
+// descendants) is extension-managed, regardless of content type; roots
+// keep their existing editing behavior. Decided from the stored block
+// alone, before the submitted change is interpreted, so omitted or forged
+// submitted provenance cannot bypass it. This is the future
+// delegated-authorization seam.
+func checkPublicEditOwnership(documentUID model.DocumentUID, stored *model.Block) error {
+	if parent := stored.ParentBlockNumber; parent != nil {
+		return &ForbiddenEditError{
+			DocumentUID:       documentUID,
+			BlockNumber:       stored.BlockNumber,
+			ParentBlockNumber: *parent,
+		}
 	}
 	return nil
 }

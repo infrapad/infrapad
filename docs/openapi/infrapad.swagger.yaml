@@ -90,6 +90,46 @@ paths:
           pattern: documents/[^/]+
       tags:
         - InfrapadService
+    post:
+      summary: |-
+        Applies an edited InfraPad Markdown document (as exported by
+        ExportDocumentMarkdown) atomically. The server parses the document,
+        compares each existing block with the revision referenced by its
+        directive, and applies only actual structured-header/body edits
+        through the registered content types; `block=new` directives create
+        new standalone blocks. Omitted blocks are left untouched (no
+        deletion). Untouched stale or generated blocks are skipped; edits of
+        generated blocks are rejected (PermissionDenied) and edits of stale
+        revisions conflict (Aborted / HTTP 409). Host metadata (type,
+        author, parent, timestamp) cannot be edited; frontmatter title,
+        namespace, and status are informational.
+      description: |-
+        Failures use standard gRPC error details (google.rpc.ErrorInfo with
+        a stable reason plus block/line metadata, google.rpc.BadRequest
+        field violations where available) and leave the document unchanged.
+      operationId: InfrapadService_PushDocumentMarkdown
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/v1PushDocumentMarkdownResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: name
+          in: path
+          required: true
+          type: string
+          pattern: documents/[^/]+
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/InfrapadServicePushDocumentMarkdownBody'
+      tags:
+        - InfrapadService
   /v1/{parent}/blocks:
     get:
       operationId: InfrapadService_ListBlocks
@@ -272,6 +312,14 @@ definitions:
         $ref: '#/definitions/v1Block'
     required:
       - block
+  InfrapadServicePushDocumentMarkdownBody:
+    type: object
+    properties:
+      markdown:
+        type: string
+        description: The edited InfraPad Markdown document.
+    required:
+      - markdown
   InfrapadServiceSubmitBlockPayloadBody:
     type: object
     properties:
@@ -486,6 +534,30 @@ definitions:
         items:
           type: object
           $ref: '#/definitions/v1Document'
+  v1MarkdownChange:
+    type: object
+    properties:
+      blockNumber:
+        type: integer
+        format: int32
+      action:
+        type: string
+        title: '"added" | "updated"'
+    description: One block actually persisted by a Markdown push.
+  v1PushDocumentMarkdownResponse:
+    type: object
+    properties:
+      markdown:
+        type: string
+        description: |-
+          The complete refreshed Markdown, rendered within the push
+          transaction.
+      changes:
+        type: array
+        items:
+          type: object
+          $ref: '#/definitions/v1MarkdownChange'
+        description: Persisted changes in submitted order; empty for a no-op push.
   v1SubmitBlockPayloadResponse:
     type: object
     properties:

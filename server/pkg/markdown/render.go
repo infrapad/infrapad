@@ -24,6 +24,9 @@
 //
 // Only a `yaml infrapad` fence immediately following the directive is a
 // header; ordinary YAML fences are part of the body.
+//
+// RenderDocument exports documents; Parse is its structural counterpart
+// for pushed Markdown, where new blocks use `block=new type=…` directives.
 package markdown
 
 import (

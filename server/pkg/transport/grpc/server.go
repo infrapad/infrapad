@@ -113,6 +113,23 @@ func (s *Server) ExportDocumentMarkdown(ctx context.Context, req *pb.ExportDocum
 	return &pb.ExportDocumentMarkdownResponse{Markdown: md}, nil
 }
 
+// PushDocumentMarkdown applies an edited Markdown document and returns the
+// refreshed Markdown with the persisted changes.
+func (s *Server) PushDocumentMarkdown(ctx context.Context, req *pb.PushDocumentMarkdownRequest) (*pb.PushDocumentMarkdownResponse, error) {
+	result, err := s.ctrl.PushDocumentMarkdown(ctx, documentUIDFromName(req.GetName()), req.GetMarkdown(), "")
+	if err != nil {
+		return nil, rpcError("push document markdown", err)
+	}
+	resp := &pb.PushDocumentMarkdownResponse{Markdown: result.Markdown, Changes: []*pb.MarkdownChange{}}
+	for _, change := range result.Changes {
+		resp.Changes = append(resp.Changes, &pb.MarkdownChange{
+			BlockNumber: int32(change.BlockNumber),
+			Action:      string(change.Action),
+		})
+	}
+	return resp, nil
+}
+
 func (s *Server) ListDocuments(ctx context.Context, req *pb.ListDocumentsRequest) (*pb.ListDocumentsResponse, error) {
 	documents, err := s.ctrl.ListDocuments(ctx)
 	if err != nil {

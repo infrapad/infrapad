@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
@@ -170,6 +171,62 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	httpDo(t, "GET", fmt.Sprintf("%s/v1/%s/markdown", httpBaseURL(), docName), nil, &httpExport)
 	if httpExport.Markdown != exported.GetMarkdown() {
 		t.Fatalf("HTTP export differs from gRPC export:\n%s\nvs\n%s", httpExport.Markdown, exported.GetMarkdown())
+	}
+
+	expectMarkdownPush(t, client, docName, threadNumber, exported.GetMarkdown())
+}
+
+// expectMarkdownPush round-trips the exported Markdown through the push
+// API: a no-op push over HTTP, then an ordinary body edit, a header-only
+// edit of the Slack thread reference, and a new AI-agent message block.
+func expectMarkdownPush(t *testing.T, client pb.InfrapadServiceClient, docName string, threadNumber int32, exported string) {
+	t.Helper()
+	url := fmt.Sprintf("%s/v1/%s/markdown", httpBaseURL(), docName)
+	var noop struct {
+		Markdown string `json:"markdown"`
+		Changes  []any  `json:"changes"`
+	}
+	httpDo(t, "POST", url, map[string]any{"markdown": exported}, &noop)
+	if noop.Markdown != exported || len(noop.Changes) != 0 {
+		t.Fatalf("expected a no-op push, got changes %v:\n%s", noop.Changes, noop.Markdown)
+	}
+
+	oldURL := "https://slack.example/archives/C1/p" + slackID(0)
+	newURL := "https://slack.example/archives/C1/p" + slackID(9)
+	edited := strings.Replace(exported, "}\nnotes\n", "}\nnotes (edited)\n", 1)
+	edited = strings.Replace(edited, "  url: "+oldURL+"\n", "  url: "+newURL+"\n", 1)
+	edited += "::infrapad_block{block=new type=AIAgent/Message}\n```yaml infrapad\ncontent:\n  agent: reviewer\n```\nLooks good.\n"
+	resp, err := client.PushDocumentMarkdown(context.Background(), &pb.PushDocumentMarkdownRequest{Name: docName, Markdown: edited})
+	if err != nil {
+		t.Fatalf("PushDocumentMarkdown: %v", err)
+	}
+	var changes []string
+	var added int32
+	for _, change := range resp.GetChanges() {
+		changes = append(changes, fmt.Sprintf("%d:%s", change.GetBlockNumber(), change.GetAction()))
+		if change.GetAction() == "added" {
+			added = change.GetBlockNumber()
+		}
+	}
+	if want := fmt.Sprintf("1:updated,%d:updated,%d:added", threadNumber, added); strings.Join(changes, ",") != want {
+		t.Fatalf("unexpected changes %v, want %s", changes, want)
+	}
+	md := resp.GetMarkdown()
+	for _, want := range []string{
+		"block=1 rev=2 type=Core/Markdown", "}\nnotes (edited)\n",
+		// Header-only edit: the body is regenerated from the new URL.
+		fmt.Sprintf("block=%d rev=2 type=Slack/Thread", threadNumber), "[Slack thread](" + newURL + ")",
+		fmt.Sprintf("block=%d rev=1 type=AIAgent/Message timestamp=", added), "  agent: reviewer\n", "Looks good.\n",
+	} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("expected %q in refreshed Markdown:\n%s", want, md)
+		}
+	}
+	// Editing generated content is forbidden.
+	forbidden := strings.Replace(md, "agent analysis", "agent analysis (edited)", 1)
+	_, err = client.PushDocumentMarkdown(context.Background(), &pb.PushDocumentMarkdownRequest{Name: docName, Markdown: forbidden})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("expected PermissionDenied for a generated edit, got %v", err)
 	}
 }
 
