@@ -1,4 +1,4 @@
-package markdown_test
+package controller
 
 // Focused format checks for the host-owned framing: YAML quoting, header
 // projection vs. ordinary YAML body fences, directive quoting, and
@@ -8,6 +8,7 @@ package markdown_test
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -16,8 +17,8 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
 	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
-	"github.com/infrapad/infrapad/server/pkg/markdown"
 	"github.com/infrapad/infrapad/server/pkg/model"
+	"github.com/infrapad/infrapad/shared/markdown"
 )
 
 func TestRenderDocumentFormat(t *testing.T) {
@@ -45,9 +46,9 @@ func TestRenderDocumentFormat(t *testing.T) {
 				Record: content.NewItem(markdownType, ts, core.Markdown{Text: "plain\n"})},
 		},
 	}
-	got, err := markdown.RenderDocument(doc)
+	got, err := renderDocumentMarkdown(doc)
 	if err != nil {
-		t.Fatalf("RenderDocument: %v", err)
+		t.Fatalf("renderDocumentMarkdown: %v", err)
 	}
 	want := utils.Dedent(`
 		---
@@ -84,9 +85,34 @@ func TestRenderDocumentFormat(t *testing.T) {
 	// A body rendering failure fails the whole export with block context.
 	doc.Blocks = append(doc.Blocks, model.Block{BlockNumber: 4, RevisionNumber: 1, Type: "Test/Broken",
 		Record: content.NewItem[any](brokenType{}, ts, nil)})
-	if out, err := markdown.RenderDocument(doc); err == nil || out != "" ||
+	if out, err := renderDocumentMarkdown(doc); err == nil || out != "" ||
 		!strings.Contains(err.Error(), "block 4 (Test/Broken)") || !errors.Is(err, errBroken) {
 		t.Fatalf("expected a block 4 rendering failure without output, got %q, %v", out, err)
+	}
+}
+
+// TestParseRenderedDocument checks that rendered output parses back into
+// the same directive values, headers, and bodies. The grammar itself is
+// covered in shared/markdown.
+func TestParseRenderedDocument(t *testing.T) {
+	ts := time.Date(2026, 10, 25, 15, 40, 7, 0, time.UTC)
+	markdownType := core.NewMarkdownType()
+	rendered, err := renderDocumentMarkdown(model.Document{
+		Uid: "doc-1", Title: "t", Status: model.ActiveDocument,
+		Blocks: []model.Block{{BlockNumber: 4, RevisionNumber: 1, Type: core.MarkdownTypeName, AuthorID: "a b\n\"c\"",
+			Record: content.NewItem(markdownType, ts, core.Markdown{Text: "x", Extras: map[string]any{"k": "v"}})}},
+	})
+	if err != nil {
+		t.Fatalf("renderDocumentMarkdown: %v", err)
+	}
+	doc, err := markdown.Parse(rendered)
+	if err != nil {
+		t.Fatalf("Parse: %v\n%s", err, rendered)
+	}
+	blk := doc.Blocks[0]
+	if blk.Directive.Author != "a b\n\"c\"" || !blk.Directive.Timestamp.Equal(ts) ||
+		!reflect.DeepEqual(blk.Header, map[string]any{"extras": map[string]any{"k": "v"}}) || blk.Body != "x\n" {
+		t.Fatalf("unexpected round trip: %+v", blk)
 	}
 }
 

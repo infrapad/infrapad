@@ -12,7 +12,6 @@ cli/
 │   ├── client/              # gRPC client wrapper around InfrapadService
 │   ├── cliutil/             # Shared state (global flags) and helpers
 │   ├── output/              # Output formatting (table, JSON) and column definitions
-│   └── markdown/            # Goldmark-based parser/renderer for infrapad-flavoured markdown
 └── test/
     └── e2e/                 # End-to-end shell tests (require a running server)
 ```
@@ -73,11 +72,16 @@ against live InfraPad and proxy services and use the assertion helpers from
 
 ```bash
 task test:unit                                      # run all
-task test:unit PKG=./pkg/markdown/...                # single package
-task test:unit PKG=./pkg/markdown/ -- -run TestX     # single test function
+task test:unit PKG=./pkg/client/...                  # single package
+task test:unit PKG=./pkg/client/ -- -run TestX       # single test function
 ```
 
-Unit tests live next to the code they test (e.g. `pkg/markdown/parse_test.go`).
+Unit tests live next to the code they test (e.g. `pkg/client/client_test.go`).
+
+The structural Markdown format (parser, frontmatter reader, framing constants)
+is shared with the server in `../shared/markdown` (module
+`github.com/infrapad/infrapad/shared`); test it there with `go test ./...`
+from `shared/`. Keep that module free of server dependencies.
 
 ### Other code depending on the cli
 

@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	cuelang.org/go v0.17.1
+	github.com/infrapad/infrapad/shared v0.0.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pressly/goose/v3 v3.27.3
 	go.yaml.in/yaml/v3 v3.0.5
@@ -46,3 +47,5 @@ require (
 )
 
 tool cuelang.org/go/cmd/cue
+
+replace github.com/infrapad/infrapad/shared => ../shared

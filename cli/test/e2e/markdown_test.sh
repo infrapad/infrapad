@@ -79,10 +79,95 @@ assert_contains "parsed title" "$PARSE_OUT" "title:     Payment service crash lo
 assert_contains "parsed namespace" "$PARSE_OUT" "namespace: payments"
 assert_contains "parsed status" "$PARSE_OUT" "status:    active"
 assert_contains "parsed block count" "$PARSE_OUT" "Blocks (2):"
-assert_contains "parsed alerts type" "$PARSE_OUT" "type:   Prometheus/AlertsMatcher"
-assert_contains "parsed markdown type" "$PARSE_OUT" "type:   Core/Markdown"
-assert_contains "parsed alerts block number" "$PARSE_OUT" "block:  1"
-assert_contains "parsed markdown block number" "$PARSE_OUT" "block:  2"
+assert_contains "parsed alerts type" "$PARSE_OUT" "type:      Prometheus/AlertsMatcher"
+assert_contains "parsed markdown type" "$PARSE_OUT" "type:      Core/Markdown"
+assert_contains "parsed alerts block number" "$PARSE_OUT" "block:     1"
+assert_contains "parsed markdown block number" "$PARSE_OUT" "block:     2"
+assert_equals "parsed alerts header shown separately" \
+  "$(echo "$PARSE_OUT" | grep -A1 '^  header:$' | sed -n 2p)" "    labels_matchers:"
+assert_equals "parsed markdown body" \
+  "$(echo "$PARSE_OUT" | grep -A1 '^  body:$' | tail -n1)" "    updated investigation writeup"
+echo ""
+
+# -----------------------------------------------------------------------
+# 2b. Inspect a hand-written file offline, without content-type knowledge
+# -----------------------------------------------------------------------
+echo "Step 2b: Inspect a hand-written file offline"
+OFFLINE_FILE="${TMPDIR_E2E}/offline.md"
+cat > "$OFFLINE_FILE" <<'EOF'
+---
+document: offline-doc
+title: Offline inspection
+namespace: payments
+status: active
+---
+::infrapad_block{block=7 rev=2 type=Example/Unknown author="Jane \"J\" Doe\\ops" parent=3 timestamp=2026-10-25T15:40:07.088889Z}
+```yaml infrapad
+content:
+  severity: high
+```
+Body before an example:
+```markdown
+::infrapad_block{block=9 rev=1 type=Core/Markdown}
+```
+```yaml
+plain: yaml
+```
+
+::infrapad_block{block=8 rev=1 type=Example/Unknown}
+```yaml infrapad
+content: {}
+```
+
+::infrapad_block{block=new type=Example/Unknown}
+New block text
+EOF
+PARSE_OUT=$(${INFRAPAD_CLI:-${SCRIPT_DIR}/../../infrapad} --api-url 'not a URL' md parse --file "$OFFLINE_FILE")
+# Exact output: unknown type, escaped attributes, parent/timestamp, header vs.
+# body (fenced directive and plain YAML stay body text), empty vs. absent
+# header, and block=new.
+EXPECTED_PARSE=$(cat <<'EOF'
+Document:
+  document:  offline-doc
+  title:     Offline inspection
+  namespace: payments
+  status:    active
+
+Blocks (3):
+  --- block #1 (line 7) ---
+  type:      Example/Unknown
+  block:     7
+  rev:       2
+  author:    Jane "J" Doe\ops
+  parent:    3
+  timestamp: 2026-10-25T15:40:07.088889Z
+  header:
+    severity: high
+  body:
+    Body before an example:
+    ```markdown
+    ::infrapad_block{block=9 rev=1 type=Core/Markdown}
+    ```
+    ```yaml
+    plain: yaml
+    ```
+
+  --- block #2 (line 20) ---
+  type:      Example/Unknown
+  block:     8
+  rev:       1
+  header:    {}
+  body:
+
+  --- block #3 (line 25) ---
+  type:      Example/Unknown
+  block:     new
+  header:    none
+  body:
+    New block text
+EOF
+)
+assert_equals "offline structural inspection" "$PARSE_OUT" "$EXPECTED_PARSE"
 echo ""
 
 # -----------------------------------------------------------------------
@@ -137,10 +222,10 @@ assert_not_contains "no block=new left" "$REFRESHED" "block=new"
 
 PARSE_OUT=$($CLI md parse --file "$MD_FILE")
 assert_contains "parsed pushed block count" "$PARSE_OUT" "Blocks (3):"
-assert_contains "parsed pushed alerts type" "$PARSE_OUT" "type:   Prometheus/AlertsMatcher"
+assert_contains "parsed pushed alerts type" "$PARSE_OUT" "type:      Prometheus/AlertsMatcher"
 assert_contains "parsed pushed original content" "$PARSE_OUT" "root cause identified"
 assert_contains "parsed pushed edit" "$PARSE_OUT" "Additional notes from local edit."
-assert_contains "parsed new block number" "$PARSE_OUT" "block:  3"
+assert_contains "parsed new block number" "$PARSE_OUT" "block:     3"
 assert_contains "parsed new block heading" "$PARSE_OUT" "# Additional notes from the investigation"
 assert_contains "parsed new block content" "$PARSE_OUT" "This was a red-herring."
 echo ""
@@ -178,8 +263,8 @@ assert_not_contains "no block=new left" "$REFRESHED" "block=new"
 
 PARSE_OUT=$($CLI md parse --file "$MD_FILE")
 assert_contains "parsed five blocks" "$PARSE_OUT" "Blocks (5):"
-assert_contains "parsed block 4 number" "$PARSE_OUT" "block:  4"
-assert_contains "parsed block 5 number" "$PARSE_OUT" "block:  5"
+assert_contains "parsed block 4 number" "$PARSE_OUT" "block:     4"
+assert_contains "parsed block 5 number" "$PARSE_OUT" "block:     5"
 assert_contains "parsed investigation heading" "$PARSE_OUT" "Investigation Summary"
 assert_contains "parsed investigation content" "$PARSE_OUT" "OOM kill"
 assert_contains "parsed actions heading" "$PARSE_OUT" "Recommended Actions"

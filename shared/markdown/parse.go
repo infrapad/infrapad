@@ -1,90 +1,16 @@
 package markdown
 
-// Structural parsing of pushed InfraPad Markdown. Parsing is purely
-// structural: it separates the frontmatter, directive attributes, optional
-// structured header fields, and raw body text without interpreting any
-// extension-specific content. Host semantics (baselines, ownership,
-// capabilities) belong to the caller.
-
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
 
 	"go.yaml.in/yaml/v3"
-
-	"github.com/infrapad/infrapad/server/pkg/content"
 )
-
-// NewBlockValue is the `block` directive value of a block to be created.
-const NewBlockValue = "new"
-
-// Document is a structurally parsed InfraPad Markdown document.
-type Document struct {
-	Frontmatter Frontmatter
-	Blocks      []Block
-}
-
-// Frontmatter is the parsed document-level YAML header.
-type Frontmatter struct {
-	Document  string `yaml:"document"`
-	Title     string `yaml:"title"`
-	Namespace string `yaml:"namespace"`
-	Status    string `yaml:"status"`
-}
-
-// Block is one parsed ::infrapad_block section.
-type Block struct {
-	// Index is the 1-based position of the block in the document.
-	Index int
-	// Line is the 1-based line number of the directive.
-	Line      int
-	Directive Directive
-	// HasHeader reports whether a `yaml infrapad` header fence follows
-	// the directive (possibly with empty fields).
-	HasHeader bool
-	// Header is the mapping nested under `content:`, normalized to the
-	// JSON-compatible data model; nil when absent or empty.
-	Header content.MarkdownFields
-	// Body is the raw body text up to the next directive (or the end of
-	// the document), including its line breaks.
-	Body string
-}
-
-// Directive holds the parsed attributes of a block directive. Existing
-// blocks carry BlockNumber and Revision; new blocks (`block=new`) carry
-// only Type.
-type Directive struct {
-	New         bool
-	BlockNumber int
-	Revision    int
-	Type        string
-	Author      string
-	Parent      *int
-	Timestamp   *time.Time
-}
-
-// ParseError is a structural parsing failure with its source line (0 when
-// not attributable to a line) and block position (0 outside blocks).
-type ParseError struct {
-	Line       int
-	BlockIndex int
-	Err        error
-}
-
-func (e *ParseError) Error() string {
-	if e.Line > 0 {
-		return fmt.Sprintf("line %d: %v", e.Line, e.Err)
-	}
-	return e.Err.Error()
-}
-
-func (e *ParseError) Unwrap() error { return e.Err }
 
 // Parse structurally parses an InfraPad Markdown document. It rejects
 // malformed framing, non-blank content outside blocks, duplicate existing
@@ -95,8 +21,9 @@ func (e *ParseError) Unwrap() error { return e.Err }
 func Parse(source string) (Document, error) {
 	lines := splitLines(source)
 	var doc Document
-	n, err := parseFrontmatter(lines, &doc.Frontmatter)
-	if err != nil {
+	var n int
+	var err error
+	if doc.Frontmatter, n, err = parseFrontmatter(lines); err != nil {
 		return Document{}, err
 	}
 
@@ -160,38 +87,6 @@ func Parse(source string) (Document, error) {
 	}
 	flush()
 	return doc, nil
-}
-
-// splitLines splits source into lines retaining their "\n" terminators.
-func splitLines(source string) []string {
-	source = strings.ReplaceAll(source, "\r\n", "\n")
-	lines := strings.SplitAfter(source, "\n")
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
-}
-
-func parseFrontmatter(lines []string, into *Frontmatter) (int, error) {
-	if len(lines) == 0 || strings.TrimRight(lines[0], "\n") != "---" {
-		return 0, &ParseError{Line: 1, Err: errors.New("document must start with a `---` YAML frontmatter")}
-	}
-	for n := 1; n < len(lines); n++ {
-		if strings.TrimRight(lines[n], "\n") != "---" {
-			continue
-		}
-		data := strings.Join(lines[1:n], "")
-		decoder := yaml.NewDecoder(strings.NewReader(data))
-		decoder.KnownFields(true)
-		if err := decoder.Decode(into); err != nil && !errors.Is(err, io.EOF) {
-			return 0, &ParseError{Line: 2, Err: fmt.Errorf("frontmatter: %w", err)}
-		}
-		if into.Document == "" {
-			return 0, &ParseError{Line: 1, Err: errors.New("frontmatter: missing document")}
-		}
-		return n + 1, nil
-	}
-	return 0, &ParseError{Line: 1, Err: errors.New("unterminated frontmatter")}
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +290,7 @@ func closesFence(line string, open fenceMarker) bool {
 // parseHeader parses the structured header fence opened at lines[start],
 // returning the index after its closing fence and the fields nested under
 // `content:`.
-func parseHeader(lines []string, start int, open fenceMarker) (int, content.MarkdownFields, error) {
+func parseHeader(lines []string, start int, open fenceMarker) (int, map[string]any, error) {
 	for n := start + 1; n < len(lines); n++ {
 		if !closesFence(lines[n], open) {
 			continue
@@ -411,7 +306,7 @@ func parseHeader(lines []string, start int, open fenceMarker) (int, content.Mark
 
 // decodeHeader decodes the header envelope (only a `content` mapping is
 // allowed) and normalizes the fields to the JSON-compatible data model.
-func decodeHeader(data string) (content.MarkdownFields, error) {
+func decodeHeader(data string) (map[string]any, error) {
 	var envelope map[string]any
 	if err := yaml.Unmarshal([]byte(data), &envelope); err != nil {
 		return nil, fmt.Errorf("structured header: %w", err)
@@ -433,7 +328,7 @@ func decodeHeader(data string) (content.MarkdownFields, error) {
 		return nil, fmt.Errorf("structured header: %w", err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
-	var fields content.MarkdownFields
+	var fields map[string]any
 	if err := decoder.Decode(&fields); err != nil {
 		return nil, fmt.Errorf("structured header: %w", err)
 	}

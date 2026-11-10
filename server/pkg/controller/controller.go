@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
-	"github.com/infrapad/infrapad/server/pkg/markdown"
 	"github.com/infrapad/infrapad/server/pkg/model"
 	"github.com/infrapad/infrapad/server/pkg/store"
 )
@@ -290,7 +289,7 @@ func (c *Controller) ExportDocumentMarkdown(ctx context.Context, uid model.Docum
 	if err != nil {
 		return "", err
 	}
-	return markdown.RenderDocument(doc)
+	return renderDocumentMarkdown(doc)
 }
 
 // ListDocuments returns all documents (without blocks).

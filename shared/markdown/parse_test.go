@@ -2,23 +2,20 @@ package markdown_test
 
 // Focused structural parsing checks: escaped directive attributes,
 // directive examples inside body fences, header vs. ordinary YAML fences,
-// render/parse symmetry, and framing rejections.
+// framing rejections, and tolerant frontmatter-only reading.
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/infrapad/infrapad/server/internal/utils"
-	"github.com/infrapad/infrapad/server/pkg/content"
-	"github.com/infrapad/infrapad/server/pkg/extensions/core"
-	"github.com/infrapad/infrapad/server/pkg/markdown"
-	"github.com/infrapad/infrapad/server/pkg/model"
+	"github.com/infrapad/infrapad/shared/markdown"
 )
 
 func TestParseStructure(t *testing.T) {
-	source := utils.Dedent(`
+	source := dedent(`
 		---
 		document: doc-1
 		title: t
@@ -47,7 +44,7 @@ func TestParseStructure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if doc.Frontmatter.Document != "doc-1" || len(doc.Blocks) != 2 {
+	if doc.Frontmatter.DocumentID != "doc-1" || len(doc.Blocks) != 2 {
 		t.Fatalf("unexpected document: %+v", doc)
 	}
 	first, second := doc.Blocks[0], doc.Blocks[1]
@@ -56,7 +53,7 @@ func TestParseStructure(t *testing.T) {
 		d.Timestamp == nil || !d.Timestamp.Equal(time.Date(2026, 10, 25, 15, 40, 7, 88889000, time.UTC)) {
 		t.Fatalf("unexpected directive: %+v", d)
 	}
-	wantHeader := content.MarkdownFields{"extras": map[string]any{"count": float64(2), "since": "2026-10-25T10:00:00Z"}}
+	wantHeader := map[string]any{"extras": map[string]any{"count": float64(2), "since": "2026-10-25T10:00:00Z"}}
 	if !first.HasHeader || !reflect.DeepEqual(first.Header, wantHeader) {
 		t.Fatalf("unexpected header: %#v", first.Header)
 	}
@@ -66,30 +63,6 @@ func TestParseStructure(t *testing.T) {
 	}
 	if !second.Directive.New || second.Directive.Type != "Core/Markdown" || second.HasHeader || strings.TrimSpace(second.Body) != "New text" || second.Index != 2 {
 		t.Fatalf("unexpected new block: %+v", second)
-	}
-}
-
-// TestParseRenderedDocument checks that rendered output parses back into
-// the same directive values, headers, and bodies.
-func TestParseRenderedDocument(t *testing.T) {
-	ts := time.Date(2026, 10, 25, 15, 40, 7, 0, time.UTC)
-	markdownType := core.NewMarkdownType()
-	rendered, err := markdown.RenderDocument(model.Document{
-		Uid: "doc-1", Title: "t", Status: model.ActiveDocument,
-		Blocks: []model.Block{{BlockNumber: 4, RevisionNumber: 1, Type: core.MarkdownTypeName, AuthorID: "a b\n\"c\"",
-			Record: content.NewItem(markdownType, ts, core.Markdown{Text: "x", Extras: map[string]any{"k": "v"}})}},
-	})
-	if err != nil {
-		t.Fatalf("RenderDocument: %v", err)
-	}
-	doc, err := markdown.Parse(rendered)
-	if err != nil {
-		t.Fatalf("Parse: %v\n%s", err, rendered)
-	}
-	blk := doc.Blocks[0]
-	if blk.Directive.Author != "a b\n\"c\"" || !blk.Directive.Timestamp.Equal(ts) ||
-		!reflect.DeepEqual(blk.Header, content.MarkdownFields{"extras": map[string]any{"k": "v"}}) || blk.Body != "x\n" {
-		t.Fatalf("unexpected round trip: %+v", blk)
 	}
 }
 
@@ -115,4 +88,53 @@ func TestParseRejections(t *testing.T) {
 			t.Errorf("%s: expected line context, got %v", name, err)
 		}
 	}
+}
+
+func TestReadFrontmatter(t *testing.T) {
+	valid := "\ufeff---\ndocument: doc-1\ntitle: Crash\nnamespace: payments\nstatus: active\nextra: ignored\n--- \r\n" +
+		"::infrapad_block{block=1 rev=1 type=Unknown/Thing}\n```yaml infrapad\ncontent: [unterminated\n" +
+		"::infrapad_block{block=oops\n"
+	fm, err := markdown.ReadFrontmatter([]byte(valid))
+	if err != nil {
+		t.Fatalf("valid frontmatter: %v", err)
+	}
+	want := markdown.Frontmatter{DocumentID: "doc-1", Title: "Crash", Namespace: "payments", Status: "active"}
+	if fm != want {
+		t.Fatalf("frontmatter = %+v, want %+v", fm, want)
+	}
+
+	if _, err := markdown.ReadFrontmatter([]byte("---\ntitle: Crash\n---\nbody\n")); !errors.Is(err, markdown.ErrMissingDocumentID) {
+		t.Fatalf("missing document ID: err = %v", err)
+	}
+
+	for name, src := range map[string]string{
+		"malformed YAML": "---\ndocument: [doc-1\n---\n",
+		"no frontmatter": "# Title\n",
+		"unterminated":   "---\ndocument: doc-1\n",
+	} {
+		if _, err := markdown.ReadFrontmatter([]byte(src)); err == nil || errors.Is(err, markdown.ErrMissingDocumentID) {
+			t.Errorf("%s: err = %v, want a frontmatter error", name, err)
+		}
+	}
+}
+
+// dedent removes the common leading tabs of a raw multi-line string and
+// its first empty line.
+func dedent(s string) string {
+	s = strings.TrimPrefix(s, "\n")
+	lines := strings.Split(s, "\n")
+	prefix := ""
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		indent := line[:len(line)-len(strings.TrimLeft(line, "\t"))]
+		if prefix == "" || len(indent) < len(prefix) {
+			prefix = indent
+		}
+	}
+	for i, line := range lines {
+		lines[i] = strings.TrimPrefix(line, prefix)
+	}
+	return strings.Join(lines, "\n")
 }

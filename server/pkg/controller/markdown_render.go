@@ -1,4 +1,6 @@
-// Package markdown implements the server-owned InfraPad Markdown format.
+package controller
+
+// Server-side rendering of InfraPad Markdown.
 //
 // The host owns the document frontmatter, the ::infrapad_block directives
 // (block identity, revision, type, provenance, and event time), the
@@ -7,27 +9,10 @@
 // fields (content.MarkdownHeader) and the Markdown body
 // (ContentType.RenderMarkdown).
 //
-// Format:
-//
-//	---
-//	document: <id>
-//	title: <title>
-//	namespace: <namespace>
-//	status: <document status>
-//	---
-//	::infrapad_block{block=8 rev=2 type=AIAgent/Message parent=6 timestamp=2026-10-25T15:40:07.088889Z}
-//	```yaml infrapad
-//	content:
-//	  agent: chai-bot
-//	```
-//	The investigation found a blocked drain.
-//
-// Only a `yaml infrapad` fence immediately following the directive is a
-// header; ordinary YAML fences are part of the body.
-//
-// RenderDocument exports documents; Parse is its structural counterpart
-// for pushed Markdown, where new blocks use `block=new type=…` directives.
-package markdown
+// The structural format (constants, framing types, and the strict parser
+// used for pushed Markdown) lives in the shared
+// github.com/infrapad/infrapad/shared/markdown package; the controller keeps
+// the server-only rendering through registered content types.
 
 import (
 	"fmt"
@@ -39,22 +24,14 @@ import (
 
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/model"
+	"github.com/infrapad/infrapad/shared/markdown"
 )
 
-const (
-	// DirectiveName is the leaf directive introducing each block.
-	DirectiveName = "infrapad_block"
-	// HeaderInfo is the info string of the structured header fence.
-	HeaderInfo = "yaml infrapad"
-	// HeaderContentKey wraps the extension-projected header fields.
-	HeaderContentKey = "content"
-)
-
-// RenderDocument renders doc and its blocks (in the given order) as InfraPad
+// renderDocumentMarkdown renders doc and its blocks (in the given order) as InfraPad
 // Markdown. Callers select the blocks: export passes the latest live blocks
 // in chronological order, with decoded records. Any failure fails the whole
 // rendering with block/type context; no partial output is returned.
-func RenderDocument(doc model.Document) (string, error) {
+func renderDocumentMarkdown(doc model.Document) (string, error) {
 	var out strings.Builder
 	if err := writeFrontmatter(&out, doc); err != nil {
 		return "", err
@@ -67,20 +44,12 @@ func RenderDocument(doc model.Document) (string, error) {
 	return out.String(), nil
 }
 
-// frontmatter is the document-level YAML header, in output field order.
-type frontmatter struct {
-	Document  string `yaml:"document"`
-	Title     string `yaml:"title"`
-	Namespace string `yaml:"namespace"`
-	Status    string `yaml:"status"`
-}
-
 func writeFrontmatter(out *strings.Builder, doc model.Document) error {
-	data, err := encodeYAML(frontmatter{
-		Document:  string(doc.Uid),
-		Title:     doc.Title,
-		Namespace: doc.Namespace,
-		Status:    string(doc.Status),
+	data, err := encodeYAML(markdown.Frontmatter{
+		DocumentID: string(doc.Uid),
+		Title:      doc.Title,
+		Namespace:  doc.Namespace,
+		Status:     string(doc.Status),
 	})
 	if err != nil {
 		return fmt.Errorf("render frontmatter: %w", err)
@@ -129,7 +98,7 @@ func renderDirective(blk model.Block) string {
 		attrs = append(attrs, "parent="+strconv.Itoa(int(*blk.ParentBlockNumber)))
 	}
 	attrs = append(attrs, "timestamp="+blk.Record.Timestamp().UTC().Format(time.RFC3339Nano))
-	return "::" + DirectiveName + "{" + strings.Join(attrs, " ") + "}\n"
+	return "::" + markdown.DirectiveName + "{" + strings.Join(attrs, " ") + "}\n"
 }
 
 // directiveValue returns value unquoted when it is a plain token, otherwise
@@ -157,12 +126,12 @@ func renderHeader(record content.Record) (string, error) {
 	if len(fields) == 0 {
 		return "", nil
 	}
-	data, err := encodeYAML(map[string]any{HeaderContentKey: map[string]any(fields)})
+	data, err := encodeYAML(map[string]any{markdown.HeaderContentKey: map[string]any(fields)})
 	if err != nil {
 		return "", fmt.Errorf("render header: %w", err)
 	}
 	fence := strings.Repeat("`", max(3, longestBacktickRun(data)+1))
-	return fence + HeaderInfo + "\n" + data + fence + "\n", nil
+	return fence + markdown.HeaderInfo + "\n" + data + fence + "\n", nil
 }
 
 func encodeYAML(value any) (string, error) {

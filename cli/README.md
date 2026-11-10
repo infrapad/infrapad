@@ -141,23 +141,27 @@ directives.
     namespace: monitored-app
     status: active
     ---
-    ::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher}
-    ```yaml
-    labels_matchers:
-      - alertname: [MonitoredAppEndpointDown]
-        endpoint: [endpoint1]
-    since: "2026-08-20T15:15:03Z"
-    until: "2026-08-20T15:19:08Z"
+    ::infrapad_block{block=1 rev=2 type=Prometheus/AlertsMatcher author=jane timestamp=2026-08-20T15:15:03Z}
+    ```yaml infrapad
+    content:
+      labels_matchers:
+        - alertname: [MonitoredAppEndpointDown]
+          endpoint: [endpoint1]
+      since: "2026-08-20T15:15:03Z"
+      until: "2026-08-20T15:19:08Z"
     ```
-    ::infrapad_block{block=2 rev=1 type=Core/Markdown}
+    ::infrapad_block{block=2 rev=1 type=Core/Markdown author=jane timestamp=2026-08-20T15:16:00Z}
     # Investigation Summary
 
     Both endpoints are returning HTTP 500.
 
 - **Front matter** contains the document metadata (`document`, `title`, `namespace`, `status`).
-- **Block directives** (`::infrapad_block{block=N rev=R type=T}`) mark the start of each block.
-- **Structured blocks** (e.g. `Prometheus/AlertsMatcher`) wrap their content in a `` ```yaml `` fence.
-- **Markdown blocks** contain free-form markdown text.
+- **Block directives** (`::infrapad_block{block=N rev=R type=T ...}`) mark the start of each block.
+  Optional `author`, `parent`, and `timestamp` attributes are server-managed metadata;
+  quoted values use backslash escapes (`\\`, `\"`, `\n`). New blocks use `block=new type=T`.
+- **Structured headers**: a `` ```yaml infrapad `` fence directly after the directive
+  holds the type's structured fields under `content:`. Other fences are body text.
+- **Bodies** contain free-form markdown text, interpreted by the server per content type.
 
 #### Pull: download a document as markdown
 
@@ -199,8 +203,15 @@ the latest state (updated revision numbers, assigned block numbers for new block
 infrapad md parse --file incident.md
 ```
 
-Prints the parsed structure of the file (document metadata, block types, content)
-without contacting the server. Useful for verifying edits before pushing.
+Prints the structure of the file without contacting the server: document
+metadata and, per block, its directive metadata (type, block number or `new`,
+revision, author, parent, timestamp), the structured header (generic YAML;
+`{}` when empty, `none` when absent), and the raw body text.
+
+Inspection is purely structural and works for any content type: it checks
+the framing (frontmatter, directives, header fences) but does not interpret
+content types or validate schemas. Schema validation, permissions, and stale
+revisions are checked by the server on `md push`.
 
 ## Typical Workflow
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/infrapad/infrapad/cli/pkg/cliutil"
-	"github.com/infrapad/infrapad/cli/pkg/markdown"
+	"github.com/infrapad/infrapad/shared/markdown"
 	"github.com/spf13/cobra"
 )
 

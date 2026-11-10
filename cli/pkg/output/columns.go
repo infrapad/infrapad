@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
 	"google.golang.org/protobuf/proto"
-	"gopkg.in/yaml.v3"
 
 	"github.com/infrapad/infrapad/cli/pkg/content"
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"

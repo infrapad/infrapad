@@ -1,7 +1,7 @@
 package controller
 
 // Markdown push: server-side interpretation of an edited InfraPad Markdown
-// document (see server/pkg/markdown for the host framing).
+// document (see shared/markdown for the host framing).
 //
 // PushDocumentMarkdown parses the document structurally, compares every
 // existing block with the revision it references (its historical
@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
-	"github.com/infrapad/infrapad/server/pkg/markdown"
 	"github.com/infrapad/infrapad/server/pkg/model"
 	"github.com/infrapad/infrapad/server/pkg/store"
+	"github.com/infrapad/infrapad/shared/markdown"
 )
 
 // MarkdownChangeAction is the kind of a persisted Markdown push change.
@@ -76,7 +76,7 @@ func (c *Controller) PushDocumentMarkdown(ctx context.Context, uid model.Documen
 		}
 		return MarkdownPushResult{}, pushErr
 	}
-	if got := model.DocumentUID(parsed.Frontmatter.Document); got != uid {
+	if got := model.DocumentUID(parsed.Frontmatter.DocumentID); got != uid {
 		return MarkdownPushResult{}, &MarkdownPushError{
 			Reason: PushDocumentMismatch, DocumentUID: uid, Line: 1,
 			Err: fmt.Errorf("frontmatter document %q does not match the target document", got),
@@ -114,7 +114,7 @@ func (c *Controller) PushDocumentMarkdown(ctx context.Context, uid model.Documen
 	if err != nil {
 		return MarkdownPushResult{}, err
 	}
-	rendered, err := markdown.RenderDocument(doc)
+	rendered, err := renderDocumentMarkdown(doc)
 	if err != nil {
 		return MarkdownPushResult{}, &MarkdownPushError{Reason: PushRenderFailed, DocumentUID: uid, Err: err}
 	}
