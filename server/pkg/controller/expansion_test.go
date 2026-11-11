@@ -61,7 +61,7 @@ func TestCascadingExpansionLifecycle(t *testing.T) {
 		t.Fatalf("reference a1 unexpectedly enriched: %q", note)
 	}
 
-	// An identical snapshot creates zero revisions throughout the tree.
+	// An identical payload creates zero revisions throughout the tree.
 	before := revisions()
 	testutil.NoErr(t, submit(nested))
 	if got := revisions(); got != before {

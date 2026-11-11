@@ -15,7 +15,7 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
 )
 
-// threadURL is a Slack permalink of the snapshot's parent message
+// threadURL is a Slack permalink of the payload's parent message
 // (ts 1788873542.372739), with anonymized workspace and channel.
 const threadURL = "https://workspace.example.test/archives/C0EXAMPLE/p1788873542372739"
 
@@ -54,14 +54,14 @@ var fallbackPreview = slack.AttachmentPreview{
 	Text:        "Fallback only preview",
 }
 
-// threadSnapshot is the typed thread snapshot a producer submits: human
+// threadPayload is the typed thread payload a producer submits: human
 // and mapped-agent messages with microsecond timestamps, multiline text
 // with a link and an inline code fence, and Work Object/plain/fallback
 // attachment previews.
-func threadSnapshot() slack.Snapshot {
+func threadPayload() slack.Payload {
 	const multiline = "Hi <@U2>, see <https://example.com/doc|the doc> and run" + fence + "ps aux" + fence + "now"
 	const readable = "Hi @Example Member, see <https://example.com/doc|the doc> and run" + fence + "ps aux" + fence + "now"
-	return slack.Snapshot{
+	return slack.Payload{
 		Agents: map[string]string{"U3": "investigation-agent"},
 		Messages: []slack.SourceMessage{
 			{Ts: "1788873542.372739", User: "U1", Text: multiline, UserName: "Example Author", ReadableText: readable,
@@ -74,12 +74,12 @@ func threadSnapshot() slack.Snapshot {
 	}
 }
 
-// TestThreadSnapshotScenario exercises the Slack integration end to end
-// through the registry: typed snapshot payload validation, expansion with
+// TestThreadPayloadScenario exercises the Slack integration end to end
+// through the registry: typed payload validation, expansion with
 // an interleaved agent message, output validation, grouping (a minimal
 // stand-in for the host's grouping engine), record round-trips, rendering,
 // and presentation.
-func TestThreadSnapshotScenario(t *testing.T) {
+func TestThreadPayloadScenario(t *testing.T) {
 	agent := aiagent.NewMessageType()
 	registry, err := content.NewRegistry([]content.ContentType{agent}, slack.ContentTypes(agent))
 	testutil.NoErr(t, err)
@@ -92,9 +92,9 @@ func TestThreadSnapshotScenario(t *testing.T) {
 		t.Fatalf("root metadata not restored: %#v", reloadedRoot)
 	}
 
-	// The typed snapshot (with the per-snapshot agent mapping) is the
-	// producer's payload; expansion validates it strictly.
-	payload, err := json.Marshal(threadSnapshot())
+	// The typed input includes the per-payload agent mapping;
+	// expansion validates it strictly.
+	payload, err := json.Marshal(threadPayload())
 	testutil.NoErr(t, err)
 	members, err := expand(registry, reloadedRoot, payload)
 	testutil.NoErr(t, err)
@@ -198,11 +198,11 @@ func TestThreadSnapshotScenario(t *testing.T) {
 	}
 }
 
-// TestThreadSnapshotEdges covers the focused rejection and fallback cases:
+// TestThreadPayloadEdges covers the focused rejection and fallback cases:
 // malformed and duplicate timestamps, invalid thread references, explicit
-// empty snapshots, missing message arrays, unreadable-message fallback,
+// empty payloads, missing message arrays, unreadable-message fallback,
 // and invalid agent mappings.
-func TestThreadSnapshotEdges(t *testing.T) {
+func TestThreadPayloadEdges(t *testing.T) {
 	agent := aiagent.NewMessageType()
 	registry, err := content.NewRegistry([]content.ContentType{agent}, slack.ContentTypes(agent))
 	testutil.NoErr(t, err)
@@ -210,20 +210,20 @@ func TestThreadSnapshotEdges(t *testing.T) {
 	testutil.NoErr(t, err)
 	threadType := slack.ContentTypes(agent)[0].(*slack.ThreadType)
 	root := content.NewItem(thread, at("10:00"), slack.ThreadReference{URL: threadURL})
-	snapshotPayload := func(messages ...slack.SourceMessage) json.RawMessage {
-		payload, err := json.Marshal(slack.Snapshot{Messages: messages})
+	makePayload := func(messages ...slack.SourceMessage) json.RawMessage {
+		payload, err := json.Marshal(slack.Payload{Messages: messages})
 		testutil.NoErr(t, err)
 		return payload
 	}
 
-	// An explicit empty snapshot is valid and means no desired children.
+	// An explicit empty payload is valid and means no desired children.
 	members, err := expand(registry, root, json.RawMessage(`{"messages":[]}`))
 	testutil.NoErr(t, err)
 	if len(members) != 0 {
 		t.Fatalf("expected no members, got %d", len(members))
 	}
 
-	// Missing and null message arrays are errors, not empty snapshots.
+	// Missing and null message arrays are errors, not empty payloads.
 	for _, payload := range []json.RawMessage{json.RawMessage(`{}`), json.RawMessage(`{"messages":null}`)} {
 		_, err = expand(registry, root, payload)
 		expectField(t, err, content.StagePayload, "messages")
@@ -231,9 +231,9 @@ func TestThreadSnapshotEdges(t *testing.T) {
 
 	// Malformed and duplicate timestamps are rejected with the offending
 	// message location.
-	_, err = expand(registry, root, snapshotPayload(slack.SourceMessage{Ts: "yesterday"}))
+	_, err = expand(registry, root, makePayload(slack.SourceMessage{Ts: "yesterday"}))
 	expectField(t, err, content.StagePayload, "messages.0.ts")
-	_, err = expand(registry, root, snapshotPayload(
+	_, err = expand(registry, root, makePayload(
 		slack.SourceMessage{Ts: "1788873542.000000"},
 		slack.SourceMessage{Ts: "1788873542.000000"},
 	))
@@ -246,12 +246,12 @@ func TestThreadSnapshotEdges(t *testing.T) {
 	expectField(t, err, content.StageContent, "url")
 	_, err = threadType.Expand(context.Background(),
 		content.NewItem(thread, at("10:00"), slack.ThreadReference{URL: "https://workspace.example.test/x"}),
-		snapshotPayload())
+		makePayload())
 	expectField(t, err, content.StageContent, "url")
 
 	// An entirely unreadable message keeps its identity with a visible
-	// placeholder instead of failing the snapshot.
-	members, err = expand(registry, root, snapshotPayload(slack.SourceMessage{Ts: "1788873542.000000"}))
+	// placeholder instead of failing the payload.
+	members, err = expand(registry, root, makePayload(slack.SourceMessage{Ts: "1788873542.000000"}))
 	testutil.NoErr(t, err)
 	if len(members) != 1 {
 		t.Fatalf("expected 1 member, got %d", len(members))

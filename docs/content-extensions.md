@@ -10,6 +10,7 @@ built-in extensions as examples:
 | `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher` | Structured, header-only block with an empty body. |
 | `server/pkg/extensions/aiagent` | `AIAgent/Message` | Shared type emitted by other extensions, presentation, companion schema constraints. |
 | `server/pkg/extensions/slack` | `Slack/Thread`, `Slack/Conversation` | Expandable primary with a transient payload, a groupable type, and output of another extension's type. |
+| `server/pkg/extensions/pagerduty` | `PagerDuty/Incident`, `PagerDuty/Timeline` | Read-only generated Markdown `text` body, header reference locked after enrichment, open JSON inside a strict payload. |
 
 This guide is for changing the InfraPad server itself. If you're writing an external
 producer that submits content to a running server through its
@@ -23,7 +24,7 @@ An extension owns:
 - **Inner content**: a plain Go struct per type (e.g. `aiagent.Message`),
   encoded with ordinary JSON tags. It has no keys, timestamps, or block
   metadata.
-- **Transient payload types** for expandable types (e.g. `slack.Snapshot`).
+- **Transient payload types** for expandable types (e.g. `slack.Payload`).
   Payloads are validated, passed to the extension, and then discarded. They
   are never stored.
 - **Schemas** generated from those Go types, plus optional handwritten
@@ -105,6 +106,26 @@ checks for them with type assertions.
 - Having these capabilities never makes generated blocks editable. The
   host's ownership policy rejects direct edits of any block with a parent.
 
+#### The `text` field, Markdown bodies, and editing
+
+- By convention, a type whose content has a Markdown body stores it in a
+  `text` field (`Core/Markdown`, `AIAgent/Message`, `Slack/Conversation`,
+  `PagerDuty/Incident`). The host doesn't interpret `text`; it's an
+  ordinary content field.
+- Keep body text out of the structured header: the header projects only
+  structured fields (e.g. PagerDuty's `id`/`url`), the body carries `text`.
+- Rendering still belongs to the extension: `RenderMarkdown` decides what
+  the body is. Storing `text` doesn't make it editable by itself.
+- Editing authority comes only from the capabilities above and the host
+  ownership rules. `Core/Markdown` implements `MarkdownUpdater`;
+  `PagerDuty/Incident` deliberately doesn't, because its `text` is a
+  summary generated from the last payload and is replaced on refresh.
+- A header updater may reject edits based on the current state. PagerDuty
+  allows changing the `id`/`url` reference only while `text` is absent
+  (before the first successful payload submission); afterward it accepts
+  only an unchanged header, so Markdown round-trips still work. It implements
+  `UpdateMarkdownHeader` itself, around `content.ItemMarkdownHeader`.
+
 ### Presentation
 
 `Present` returns a `content.Presentation` with fixed cards. The UI
@@ -118,12 +139,12 @@ body.
 
 Some content types are **references** to external content, such as a
 `Slack/Thread` pointing at a Slack permalink. Their blocks store only the
-reference. When a producer submits a transient payload snapshot for the
-reference (a complete Slack thread), the server asks the type's `Expander` to
+reference. When a producer submits a transient payload for the reference
+(a complete Slack thread), the server asks the type's `Expander` to
 compute the **generated child blocks** that should exist for it: the
 conversation and agent messages. This computation is *expansion*. Its output
 is owned by the reference block and can't be edited directly. Refresh is achieved
-by resubmitting a new snapshot. Expansion can cascade: if the output itself
+by resubmitting a new payload. Expansion can cascade: if the output itself
 contains another expandable reference, the host expands that too, using a
 transient payload supplied with it. The host persists only the final records,
 never the payloads.
@@ -177,6 +198,16 @@ the compiled CUE definitions, including output emitted by other
 extensions. Unknown fields are rejected everywhere except inside an `extras`
 field (`map[string]any`), which accepts arbitrary metadata. Host record
 metadata is checked separately.
+
+A `json.RawMessage` field generates CUE's `_` constraint, meaning “any
+value”: an object, array, string, number, boolean, or null. Schema validation
+still requires valid JSON, but imposes no structure on that field or its
+nested values. PagerDuty uses this for transient alert `details`, whose
+shape varies by integration. For example, `"details": {"custom": [1, "x"]}`
+is allowed, but an unknown field alongside `details` in the alert is still
+rejected. This exception applies only inside `details`; the surrounding
+objects remain strict. Matcher code validates recognized detail formats
+separately.
 
 Schemas are generated from Go types (see [server/README.md](../server/README.md#extension-cue-schemas)):
 

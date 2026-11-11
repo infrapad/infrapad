@@ -30,7 +30,7 @@ type Markdown struct {
 // MarkdownType implements Core/Markdown.
 type MarkdownType struct {
 	content.TypedMarkdownRenderer[content.Item[Markdown]]
-	content.TypedMarkdownHeader[Markdown, markdownHeader]
+	content.TypedItemMarkdownHeader[Markdown, markdownHeader]
 }
 
 // markdownHeader is the structured Markdown header of Core/Markdown:
@@ -43,7 +43,7 @@ type markdownHeader struct {
 func NewMarkdownType() *MarkdownType {
 	return &MarkdownType{
 		TypedMarkdownRenderer: content.ItemMarkdown(renderMarkdown),
-		TypedMarkdownHeader: content.ItemMarkdownHeader(
+		TypedItemMarkdownHeader: content.ItemMarkdownHeader(
 			func(m Markdown) markdownHeader { return markdownHeader{Extras: m.Extras} },
 			func(m Markdown, h markdownHeader) Markdown { return Markdown{Text: m.Text, Extras: h.Extras} },
 		),

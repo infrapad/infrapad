@@ -17,3 +17,11 @@ package core
 		...
 	} @go(Extras,map[string]any)
 }
+
+// markdownHeader is the structured Markdown header of Core/Markdown:
+// only extras; the text is the body.
+_#markdownHeader: {
+	extras?: {
+		...
+	} @go(Extras,map[string]any)
+}

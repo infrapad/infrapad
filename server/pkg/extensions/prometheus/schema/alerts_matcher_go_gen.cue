@@ -24,3 +24,13 @@ import "time"
 	// Extras carries additional metadata not anticipated by the schema.
 	extras?: {...} @go(Extras,map[string]any)
 }
+
+// alertsMatcherMdHeader is the structured Markdown header of
+// Prometheus/AlertsMatcher: all content fields (the body is empty). An
+// open-ended interval omits until instead of exposing a zero time.
+_#alertsMatcherMdHeader: {
+	labels_matchers?: [... {[string]: [...string]}] @go(LabelsMatchers,[]map[string][]string)
+	since:  time.Time        @go(Since)
+	until?: null | time.Time @go(Until,*time.Time)
+	extras?: {...} @go(Extras,map[string]any)
+}

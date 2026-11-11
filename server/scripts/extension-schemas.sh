@@ -22,6 +22,7 @@ set -euo pipefail
 INPUTS=(
 	pkg/extensions/aiagent
 	pkg/extensions/core
+	pkg/extensions/pagerduty
 	pkg/extensions/prometheus
 	pkg/extensions/slack
 )

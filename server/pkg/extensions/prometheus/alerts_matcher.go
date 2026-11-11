@@ -41,7 +41,7 @@ type AlertsMatcher struct {
 // editable through Markdown body updates.
 type AlertsMatcherType struct {
 	content.TypedMarkdownRenderer[content.Item[AlertsMatcher]]
-	content.TypedMarkdownHeader[AlertsMatcher, alertsMatcherMdHeader]
+	content.TypedItemMarkdownHeader[AlertsMatcher, alertsMatcherMdHeader]
 }
 
 // alertsMatcherMdHeader is the structured Markdown header of
@@ -74,8 +74,8 @@ func replaceAlertsMatcherMdHeader(_ AlertsMatcher, h alertsMatcherMdHeader) Aler
 // NewAlertsMatcherType constructs the Prometheus/AlertsMatcher implementation.
 func NewAlertsMatcherType() *AlertsMatcherType {
 	return &AlertsMatcherType{
-		TypedMarkdownRenderer: content.ItemMarkdown(renderAlertsMatcher),
-		TypedMarkdownHeader:   content.ItemMarkdownHeader(projectAlertsMatcherMdHeader, replaceAlertsMatcherMdHeader),
+		TypedMarkdownRenderer:   content.ItemMarkdown(renderAlertsMatcher),
+		TypedItemMarkdownHeader: content.ItemMarkdownHeader(projectAlertsMatcherMdHeader, replaceAlertsMatcherMdHeader),
 	}
 }
 

@@ -14,7 +14,7 @@ TMP_DIR="${SCRIPT_DIR}/tmp"
 INCIDENT_FILE="${TMP_DIR}/incident.md"
 DOC_NAME_FILE="${TMP_DIR}/.doc_name"
 SLACK_BLOCK_FILE="${TMP_DIR}/.slack_block"
-SLACK_SNAPSHOT_FILE="${TMP_DIR}/slack-snapshot.json"
+SLACK_PAYLOAD_FILE="${TMP_DIR}/slack-payload.json"
 INFRAPAD_ENV_FILE="${SCRIPT_DIR}/.env"
 
 MONITORED_APP_URL="${MONITORED_APP_URL:-http://localhost:8080}"
@@ -230,7 +230,7 @@ cmd_incident_start() {
 
   # Save doc name for later use by incident-resolve.
   mkdir -p "$TMP_DIR"
-  rm -f "$SLACK_BLOCK_FILE" "$SLACK_SNAPSHOT_FILE"
+  rm -f "$SLACK_BLOCK_FILE" "$SLACK_PAYLOAD_FILE"
   echo "$doc_name" > "$DOC_NAME_FILE"
 
   # Add alerts_matcher block.
@@ -265,7 +265,7 @@ EOF
   ${INFRAPAD_CLI} block add --document "$doc_name" --type Core/Markdown \
     --content "$(jq -n --arg text "$notes" '{text: $text}')"
 
-  # 6. Create a Slack primary and submit two complete snapshots. The second
+  # 6. Create a Slack primary and submit two complete payloads. The second
   # enriches an existing message and adds interleaved human/agent replies.
   # Start Slack after the matcher, notes, and thread reference, rather than
   # backdating its messages to the beginning of the alert query window.
@@ -277,10 +277,10 @@ EOF
   thread_number=$(echo "$thread_output" | jq -er '.blockNumber')
   echo "$thread_number" > "$SLACK_BLOCK_FILE"
   slack_since=$(echo "$thread_output" | jq -er '.record.timestamp')
-  update_slack_snapshot initial "$slack_since"
-  submit_slack_snapshot "$doc_name" "$thread_number"
-  update_slack_snapshot triage "$slack_since"
-  submit_slack_snapshot "$doc_name" "$thread_number"
+  update_slack_payload initial "$slack_since"
+  submit_slack_payload "$doc_name" "$thread_number"
+  update_slack_payload triage "$slack_since"
+  submit_slack_payload "$doc_name" "$thread_number"
   log "  Simulated Slack conversation and AI-agent triage added (including revision history)."
 
   # 7. Pull the complete document to markdown.
@@ -353,13 +353,13 @@ cmd_incident_resolve() {
   ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE"
   log "  alerts_matcher block updated."
 
-  # 4. Refresh the complete Slack snapshot with human/agent recovery replies.
+  # 4. Refresh the complete Slack payload with human/agent recovery replies.
   # Older incidents created before the Slack simulation have no saved state.
-  if [ -f "$SLACK_BLOCK_FILE" ] && [ -f "$SLACK_SNAPSHOT_FILE" ]; then
+  if [ -f "$SLACK_BLOCK_FILE" ] && [ -f "$SLACK_PAYLOAD_FILE" ]; then
     local thread_number
     thread_number=$(<"$SLACK_BLOCK_FILE")
-    update_slack_snapshot resolved "$until"
-    submit_slack_snapshot "$doc_name" "$thread_number"
+    update_slack_payload resolved "$until"
+    submit_slack_payload "$doc_name" "$thread_number"
     # Generated blocks changed; refresh before appending ordinary Markdown.
     ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
     log "  Slack conversation updated with recovery and verification replies."
@@ -387,15 +387,15 @@ EOF
   log "Incident resolved. Document updated at ${INCIDENT_FILE}"
 }
 
-# ─── Slack snapshot producer and transport ──────────────────────────────────
+# ─── Slack payload producer and transport ──────────────────────────────────
 
-update_slack_snapshot() {
+update_slack_payload() {
   local stage="$1" at="$2"
-  python3 "${SCRIPT_DIR}/simulate-slack.py" "$stage" "$SLACK_SNAPSHOT_FILE" \
+  python3 "${SCRIPT_DIR}/simulate-slack.py" "$stage" "$SLACK_PAYLOAD_FILE" \
     --at "$at" --app-url "$MONITORED_APP_URL" --prometheus-url "$PROMETHEUS_URL"
 }
 
-submit_slack_snapshot() {
+submit_slack_payload() {
   local doc_name="$1" block_number="$2"
   local api_url="${INFRAPAD_API_URL:-http://localhost:8089}"
   local response
@@ -408,7 +408,7 @@ submit_slack_snapshot() {
   if ! response=$(curl --fail-with-body --silent --show-error \
     --connect-timeout 5 --max-time 30 \
     "${auth_headers[@]}" -H 'Content-Type: application/json' \
-    --data-binary "@${SLACK_SNAPSHOT_FILE}" \
+    --data-binary "@${SLACK_PAYLOAD_FILE}" \
     "${api_url%/}/v1/${doc_name}/blocks/${block_number}:submitPayload"); then
     fail "Slack payload submission failed: ${response}"
   fi

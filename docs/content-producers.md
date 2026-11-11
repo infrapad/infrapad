@@ -1,4 +1,4 @@
-# Submitting content snapshots to InfraPad
+# Submitting content payloads to InfraPad
 
 This guide is for producers that mirror external content (for example a
 Slack incident thread) into InfraPad: it covers creating an expandable
@@ -12,13 +12,13 @@ types to the server, see [content-extensions.md](content-extensions.md).
 - An expandable content type is a **reference** to external content, such as
   a `Slack/Thread` block holding a Slack permalink. The block itself stores
   only the reference.
-- You refresh it by submitting a **payload snapshot**: the complete external
+- You refresh it by submitting a **payload**: the complete external
   state (the whole thread). The server's extension validates the payload,
   expands it into **generated child blocks** (`Slack/Conversation` messages
   and `AIAgent/Message` replies), and reconciles them with what is already
   stored. Payloads are never persisted.
 - Generated blocks record their generating parent, can't be edited directly,
-  and are refreshed only by resubmitting a snapshot.
+  and are refreshed only by resubmitting a payload.
 - Blocks are ordered by event timestamp, then block number. Generated Slack
   messages use the Slack message time, so they interleave with other content
   in the document.
@@ -58,17 +58,17 @@ echo "$DOC block $THREAD"
 Slack thread permalink (`https://<workspace>/archives/<channel>/p<16 digits>`).
 The server derives message permalinks from it.
 
-### 2. Submit a complete snapshot
+### 2. Submit a complete payload
 
 The request body is `{"payload": ...}`. The payload is the complete thread
-(the parent and all replies) and a per-snapshot map from Slack user ID to
+(the parent and all replies) and a per-payload map from Slack user ID to
 agent name. Messages from mapped users become `AIAgent/Message` blocks. All
 other messages become `Slack/Conversation` items. The server validates the
 payload against the thread type's schema and its semantic rules before
 expanding it (see [Payload validation](#payload-validation)).
 
 ```bash
-cat > snapshot.json <<'EOF'
+cat > payload.json <<'EOF'
 {
   "payload": {
     "agents": {"U_TRIAGE": "triage-bot"},
@@ -86,7 +86,7 @@ cat > snapshot.json <<'EOF'
   }
 }
 EOF
-api -X POST "$API/v1/$DOC/blocks/$THREAD:submitPayload" -d @snapshot.json \
+api -X POST "$API/v1/$DOC/blocks/$THREAD:submitPayload" -d @payload.json \
   | jq -r '.document.blocks[] | "\(.blockNumber) rev=\(.revisionNumber) \(.type) parent=\(.parentBlockNumber // "-")"'
 ```
 
@@ -102,7 +102,7 @@ messages are from January 2026, so they sort before the thread reference,
 whose event time is its creation time. The response contains the complete
 refreshed document, including `presentation` and `markdown` for each block.
 
-### 3. Refresh the snapshot
+### 3. Submit an updated payload
 
 Submitting the same file again changes nothing: all revisions stay at 1.
 Now edit a message and append a reply. The edit keeps the message's `ts`,
@@ -112,8 +112,8 @@ which is its identity:
 jq '.payload.messages[0].text = "Checkout p99 latency is above 2s since 10:00 UTC (EU only)."
     | .payload.messages += [{"ts": "1767261780.000400", "user": "U_ALICE", "user_name": "Alice",
                               "text": "Pool recycled; latency back to normal."}]' \
-  snapshot.json > snapshot-2.json
-api -X POST "$API/v1/$DOC/blocks/$THREAD:submitPayload" -d @snapshot-2.json \
+  payload.json > payload-2.json
+api -X POST "$API/v1/$DOC/blocks/$THREAD:submitPayload" -d @payload-2.json \
   | jq -r '.document.blocks[] | "\(.blockNumber) rev=\(.revisionNumber) \(.type)"'
 ```
 
@@ -130,14 +130,14 @@ revisions; the earlier content is still in
 UI and in exported Markdown; agents editing a document must leave them
 untouched.
 
-## Snapshot semantics
+## Payload semantics
 
 - **Complete replacement.** Every submission describes the entire source
   state. The server compares the output with the stored generated blocks:
   - unchanged blocks keep their revision,
   - changed blocks get a new revision under the same block number,
   - new items are added,
-  - generated output that isn't in the snapshot is deleted (history is
+  - generated output that isn't in the payload is deleted (history is
     kept).
 
   Never send only the new messages.
@@ -145,7 +145,7 @@ untouched.
   unchanged when message text or previews change. Changing the agent mapping
   moves the message between conversation and agent blocks.
 - **Identical submissions** create no revisions. Retrying is safe.
-- **Empty snapshot.** `{"payload": {"messages": []}}` removes all generated
+- **Empty payload.** `{"payload": {"messages": []}}` removes all generated
   output. Missing or `null` `messages` are rejected.
 - **Grouping.** The server chooses the conversation block boundaries. It
   splits around interleaved content and doesn't merge existing blocks just
@@ -169,7 +169,7 @@ untouched.
 
 Every expandable type declares a schema for its payload, validated before
 any expansion runs. For `Slack/Thread` it is generated from the Go
-`slack.Snapshot` type (see the [schema workflow](../server/README.md#extension-cue-schemas)).
+`slack.Payload` type (see the [schema workflow](../server/README.md#extension-cue-schemas)).
 Validation is strict:
 
 - Unknown fields are rejected. The example error above (`messages.0.color:
@@ -180,10 +180,10 @@ schema doesn't define.
 - Only `extras` objects accept arbitrary metadata.
 
 On top of the schema, the extension applies semantic checks that a schema
-can't express. For Slack snapshots:
+can't express. For Slack payloads:
 
 - `ts` must be a well-formed Slack timestamp
-  (`1767261600.000100`) and unique within the snapshot.
+  (`1767261600.000100`) and unique within the payload.
 - `agents` keys and values must be nonblank.
 - `messages` must be an explicit array: missing or `null` is rejected, an
   empty array means "no generated output".
@@ -191,7 +191,7 @@ can't express. For Slack snapshots:
 Failures reject the whole submission with `INVALID_PAYLOAD` and the field
 paths in the `BadRequest` details (for example
 `payload.messages.1.ts`). The extension's generated output is validated
-against the same strict schemas, so an invalid snapshot can never land as
+against the same strict schemas, so an invalid payload can never land as
 partial content.
 
 ## Producer responsibilities
@@ -206,15 +206,15 @@ it doesn't convert raw Slack API responses. The producer:
 - converts raw attachments and unfurls into typed `previews` (`title`,
   `title_link`/`url`, `text`, `fields`, `updated_at`, ...),
 - decides which Slack users are AI agents (`agents`),
-- decides when to refresh (polling, events, or a final snapshot).
+- decides when to refresh (polling, events, or a final payload).
 
-See `slack.Snapshot` in `server/pkg/extensions/slack/slack.go` for the
+See `slack.Payload` in `server/pkg/extensions/slack/slack.go` for the
 complete payload schema.
 
 ## Fuller example
 
 `deploy/example/monitored-app/simulate.sh` runs a complete incident against
-a live Prometheus demo: staged snapshots produced by `simulate-slack.py`
+a live Prometheus demo: staged payloads produced by `simulate-slack.py`
 (initial thread, edited message with agent triage, recovery replies) and
 Markdown editing of ordinary blocks. See its
 [README](../deploy/example/monitored-app/README.md#incident-simulation).

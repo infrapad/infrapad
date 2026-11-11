@@ -1,5 +1,5 @@
 // Package slack implements the Slack integration: Slack/Thread references
-// expanded from transient thread snapshots into Slack/Conversation messages
+// expanded from transient thread payloads into Slack/Conversation messages
 // and shared AIAgent/Message records.
 package slack
 
@@ -42,14 +42,14 @@ type Message struct {
 	Extras map[string]any `json:"extras,omitempty"`
 }
 
-// Snapshot is the transient payload of a Slack/Thread expansion: a complete
-// enriched snapshot of the thread (parent and all replies) plus the
-// per-snapshot Slack user-ID → agent-name mapping. External producers
-// build the typed payload (converting their own enriched Slack responses,
+// Payload is the transient input of a Slack/Thread expansion: the complete
+// enriched thread (parent and all replies) plus the per-payload Slack
+// user-ID → agent-name mapping. External producers build the typed payload
+// (converting their own enriched Slack responses,
 // including raw attachments, on their side); the server only validates it.
 // Raw Slack attachments never appear here, only their typed readable
 // previews.
-type Snapshot struct {
+type Payload struct {
 	// Agents maps the Slack user IDs of AI-agent messages to the agent
 	// names used for attribution. Matching is by exact user ID; unmapped
 	// messages, including other bots, remain ordinary conversation members.
@@ -62,7 +62,7 @@ type Snapshot struct {
 	Messages []SourceMessage `json:"messages"`
 }
 
-// SourceMessage is one enriched Slack message of a Snapshot.
+// SourceMessage is one enriched Slack message of a Payload.
 type SourceMessage struct {
 	// Ts is the Slack message timestamp; it is the stable source identity.
 	Ts string `json:"ts"`

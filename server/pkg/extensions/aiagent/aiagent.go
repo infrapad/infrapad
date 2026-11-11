@@ -37,7 +37,7 @@ type Message struct {
 // MessageType implements AIAgent/Message.
 type MessageType struct {
 	content.TypedMarkdownRenderer[content.Item[Message]]
-	content.TypedMarkdownHeader[Message, messageHeader]
+	content.TypedItemMarkdownHeader[Message, messageHeader]
 }
 
 // messageHeader is the structured Markdown header of AIAgent/Message:
@@ -53,7 +53,7 @@ type messageHeader struct {
 func NewMessageType() *MessageType {
 	return &MessageType{
 		TypedMarkdownRenderer: content.ItemMarkdown(renderMessage),
-		TypedMarkdownHeader: content.ItemMarkdownHeader(
+		TypedItemMarkdownHeader: content.ItemMarkdownHeader(
 			func(m Message) messageHeader { return messageHeader{Agent: m.Agent, URL: m.URL, Extras: m.Extras} },
 			func(m Message, h messageHeader) Message {
 				return Message{Agent: h.Agent, Text: m.Text, URL: h.URL, Extras: h.Extras}

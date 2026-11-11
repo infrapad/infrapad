@@ -1,7 +1,7 @@
 package e2e
 
 // One API lifecycle scenario for producer-driven payload submission with
-// the Slack/AI-agent slice: initial, identical, and changed snapshots with
+// the Slack/AI-agent slice: initial, identical, and changed payloads with
 // grouped records, stable block identities, and revision/no-op behavior,
 // followed by a failed refresh that leaves the cached document unchanged.
 // Generic rejection cases live in invalid_data_test.go.
@@ -54,7 +54,7 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	submit := func(messages ...map[string]any) (*pb.Document, error) {
 		t.Helper()
 		resp, err := client.SubmitBlockPayload(ctx, &pb.SubmitBlockPayloadRequest{
-			Parent: docName, BlockNumber: threadNumber, Payload: slackSnapshot(t, messages...),
+			Parent: docName, BlockNumber: threadNumber, Payload: slackPayload(t, messages...),
 		})
 		return resp.GetDocument(), err
 	}
@@ -63,7 +63,7 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	m3 := slackMessage(3, "U3", "", "agent analysis")
 	m4 := slackMessage(4, "U1", "Alice", "fourth")
 
-	// Initial snapshot: the agent message splits the conversation; the
+	// Initial payload: the agent message splits the conversation; the
 	// response is the complete document in chronological order.
 	doc, err := submit(m1, m2, m3, m4)
 	if err != nil {
@@ -86,16 +86,16 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	expectPresentation(t, doc, threadNumber, conv1, agent)
 	revisions := blockRevisions(doc)
 
-	// An identical snapshot returns the unchanged document.
+	// An identical payload returns the unchanged document.
 	doc, err = submit(m1, m2, m3, m4)
 	if err != nil {
 		t.Fatalf("identical SubmitBlockPayload: %v", err)
 	}
 	if got := blockRevisions(doc); !equalRevisions(got, revisions) {
-		t.Fatalf("identical snapshot changed revisions: %v -> %v", revisions, got)
+		t.Fatalf("identical payload changed revisions: %v -> %v", revisions, got)
 	}
 
-	// A changed snapshot revises only changed groups and keeps identities.
+	// A changed payload revises only changed groups and keeps identities.
 	m2b := slackMessage(2, "U2", "Bob", "second (edited)")
 	m5 := slackMessage(5, "U2", "Bob", "fifth")
 	doc, err = submit(m1, m2b, m3, m4, m5)
@@ -167,7 +167,7 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 			} `json:"blocks"`
 		} `json:"document"`
 	}
-	httpDo(t, "POST", url, map[string]any{"payload": slackSnapshot(t, m1, m2b, m3, m4, m5).AsMap()}, &httpResp)
+	httpDo(t, "POST", url, map[string]any{"payload": slackPayload(t, m1, m2b, m3, m4, m5).AsMap()}, &httpResp)
 	if len(httpResp.Document.Blocks) != len(revisions) {
 		t.Fatalf("HTTP submission returned %d blocks, want %d", len(httpResp.Document.Blocks), len(revisions))
 	}

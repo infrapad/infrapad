@@ -30,12 +30,12 @@ type MarkdownHeader interface {
 	UpdateMarkdownHeader(existing Record, fields MarkdownFields) (Record, error)
 }
 
-// TypedMarkdownHeader adapts a typed header projection H of individual
+// TypedItemMarkdownHeader adapts a typed header projection H of individual
 // records with inner content T to MarkdownHeader. H is an ordinary
 // JSON-encoded Go struct: `omitempty` fields are omitted from the header,
 // and header updates are decoded strictly (unknown fields are rejected).
 // Embed it into a content type implementation.
-type TypedMarkdownHeader[T, H any] struct {
+type TypedItemMarkdownHeader[T, H any] struct {
 	// Project returns the header projection of the content.
 	Project func(T) H
 	// Apply returns the content with the header replaced, preserving
@@ -43,13 +43,13 @@ type TypedMarkdownHeader[T, H any] struct {
 	Apply func(existing T, header H) T
 }
 
-// ItemMarkdownHeader returns a TypedMarkdownHeader for individual records
+// ItemMarkdownHeader returns a TypedItemMarkdownHeader for individual records
 // of T with header projection H.
-func ItemMarkdownHeader[T, H any](project func(T) H, apply func(T, H) T) TypedMarkdownHeader[T, H] {
-	return TypedMarkdownHeader[T, H]{Project: project, Apply: apply}
+func ItemMarkdownHeader[T, H any](project func(T) H, apply func(T, H) T) TypedItemMarkdownHeader[T, H] {
+	return TypedItemMarkdownHeader[T, H]{Project: project, Apply: apply}
 }
 
-func (h TypedMarkdownHeader[T, H]) MarkdownHeader(existing Record) (MarkdownFields, error) {
+func (h TypedItemMarkdownHeader[T, H]) MarkdownHeader(existing Record) (MarkdownFields, error) {
 	item, err := ItemView[T](existing)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (h TypedMarkdownHeader[T, H]) MarkdownHeader(existing Record) (MarkdownFiel
 	return EncodeMarkdownFields(h.Project(item.ContentValue))
 }
 
-func (h TypedMarkdownHeader[T, H]) UpdateMarkdownHeader(existing Record, fields MarkdownFields) (Record, error) {
+func (h TypedItemMarkdownHeader[T, H]) UpdateMarkdownHeader(existing Record, fields MarkdownFields) (Record, error) {
 	item, err := ItemView[T](existing)
 	if err != nil {
 		return nil, err

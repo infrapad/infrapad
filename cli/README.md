@@ -169,7 +169,7 @@ directives.
 
 See [docs/markdown-format.md](../docs/markdown-format.md) for the full format and push
 rules, and [docs/content-producers.md](../docs/content-producers.md) for submitting
-integration payloads (e.g. Slack thread snapshots) through the REST API.
+integration payloads (e.g. Slack thread payloads) through the REST API.
 
 #### Pull: download a document as markdown
 

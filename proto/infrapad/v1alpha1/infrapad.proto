@@ -190,13 +190,13 @@ service InfrapadService {
             get: "/v1/{parent=documents/*}/blocks"
         };
     }
-    // Submits a complete transient payload snapshot for an existing live
+    // Submits a complete transient payload for an existing live
     // root primary block whose type supports expansion (e.g. a
     // "Slack/Thread" reference). The server validates the payload, runs
     // the registered extension selected by the stored block type, and
     // reconciles the generated output atomically. The payload is never
     // persisted. Concurrent submissions serialize per document; the last
-    // successful submission wins. Identical snapshots create no
+    // successful submission wins. Identical payloads create no
     // revisions.
     //
     // Failures use standard gRPC error details (google.rpc.ErrorInfo with
@@ -338,8 +338,8 @@ message SubmitBlockPayloadRequest {
     ];
     // The targeted root primary block.
     int32 block_number = 2 [ (google.api.field_behavior) = REQUIRED ];
-    // The complete payload snapshot; its schema is defined by the
-    // primary block's type (e.g. a Slack thread snapshot).
+    // The complete payload; its schema is defined by the
+    // primary block's type (e.g. a Slack thread payload).
     google.protobuf.Struct payload = 3 [ (google.api.field_behavior) = REQUIRED ];
 }
 

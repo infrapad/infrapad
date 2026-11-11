@@ -128,7 +128,7 @@ func splitInlineFences(line string) string {
 const unknownAuthor = "Unknown author"
 
 // noReadableContent is the visible placeholder body of entirely unreadable
-// messages, preserving their identity instead of failing the snapshot.
+// messages, preserving their identity instead of failing the payload.
 const noReadableContent = "No readable message content"
 
 // previewTimestampFormat is the readable UTC format for preview timestamps.

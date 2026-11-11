@@ -1,6 +1,6 @@
 package e2e
 
-// Shared Slack snapshot fixture builders for lifecycle and rejection scenarios.
+// Shared Slack payload fixture builders for lifecycle and rejection scenarios.
 
 import (
 	"fmt"
@@ -14,9 +14,9 @@ import (
 // slackOrigin is the wall-clock origin of the fixture's Slack messages.
 var slackOrigin = time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
 
-// slackSnapshot builds a Slack thread snapshot with the investigation
+// slackPayload builds a Slack thread payload with the investigation
 // agent mapped to user U3.
-func slackSnapshot(t *testing.T, messages ...map[string]any) *structpb.Struct {
+func slackPayload(t *testing.T, messages ...map[string]any) *structpb.Struct {
 	t.Helper()
 	list := make([]any, len(messages))
 	for n, m := range messages {

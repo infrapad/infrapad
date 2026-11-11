@@ -15,7 +15,7 @@ import (
 type ThreadType struct {
 	content.TypedMarkdownRenderer[content.Item[ThreadReference]]
 	// The header exposes the thread URL; the readable link body stays.
-	content.TypedMarkdownHeader[ThreadReference, ThreadReference]
+	content.TypedItemMarkdownHeader[ThreadReference, ThreadReference]
 	conversationType *ConversationType
 	agentType        *aiagent.MessageType
 }
@@ -23,7 +23,7 @@ type ThreadType struct {
 func NewThreadType(conversationType *ConversationType, agentType *aiagent.MessageType) *ThreadType {
 	return &ThreadType{
 		TypedMarkdownRenderer: content.ItemMarkdown(renderThread),
-		TypedMarkdownHeader: content.ItemMarkdownHeader(
+		TypedItemMarkdownHeader: content.ItemMarkdownHeader(
 			func(r ThreadReference) ThreadReference { return r },
 			func(_ ThreadReference, h ThreadReference) ThreadReference { return h },
 		),
@@ -39,7 +39,7 @@ func (*ThreadType) ContentSchema() content.Schema {
 }
 
 func (*ThreadType) PayloadSchema() content.Schema {
-	return content.Schema{Source: schemaCUE, Definition: "#Snapshot"}
+	return content.Schema{Source: schemaCUE, Definition: "#Payload"}
 }
 
 func (*ThreadType) DecodeJSON(data json.RawMessage) (content.Content, error) {
@@ -65,7 +65,7 @@ func (*ThreadType) Present(record content.Record) (content.Presentation, error) 
 // message, identified by its Slack timestamp.
 func MessageKey(ts string) string { return "slack-message:" + ts }
 
-// Expand emits the complete desired output for a thread snapshot: ordinary
+// Expand emits the complete desired output for a thread payload: ordinary
 // messages as one Slack/Conversation collection and mapped agent messages as
 // standalone AIAgent/Message records. Final conversation splitting around
 // interleaved records is up to the host.  The primary state is unchanged;
@@ -83,26 +83,26 @@ func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payloa
 			Fields:      []content.FieldError{{Path: "url", Message: err.Error()}},
 		}
 	}
-	snapshot, err := content.DecodePayload[Snapshot](payload)
+	input, err := content.DecodePayload[Payload](payload)
 	if err != nil {
 		return content.ExpansionResult{}, err
 	}
 	// An explicit empty array is valid; missing or null arrays are not
 	// (CUE cannot distinguish them from an empty open list).
-	if snapshot.Messages == nil {
+	if input.Messages == nil {
 		return content.ExpansionResult{}, payloadError("messages", "must be an explicit array; missing or null message arrays are invalid")
 	}
-	if err := validateAgentMap(snapshot.Agents); err != nil {
+	if err := validateAgentMap(input.Agents); err != nil {
 		return content.ExpansionResult{}, err
 	}
-	times, err := parseMessages(snapshot.Messages)
+	times, err := parseMessages(input.Messages)
 	if err != nil {
 		return content.ExpansionResult{}, err
 	}
 
 	result := content.ExpansionResult{Record: existing}
 	var conversation []content.KeyedRecord
-	for i, message := range snapshot.Messages {
+	for i, message := range input.Messages {
 		if err := ctx.Err(); err != nil {
 			return content.ExpansionResult{}, err
 		}
@@ -113,7 +113,7 @@ func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payloa
 		if message.User != "" {
 			extras["slack_user_id"] = message.User
 		}
-		if agent, mapped := snapshot.Agents[message.User]; mapped {
+		if agent, mapped := input.Agents[message.User]; mapped {
 			result.Blocks = append(result.Blocks, content.EmittedBlock{
 				Record: content.NewKeyedItem(t.agentType, key, times[i], aiagent.Message{
 					Agent:  agent,
@@ -161,7 +161,7 @@ func validateAgentMap(agents map[string]string) error {
 	return nil
 }
 
-// parseMessages validates and parses the source messages of a snapshot:
+// parseMessages validates and parses the source messages of a payload:
 // Slack timestamps must be well formed and unique within it. It returns the
 // parsed UTC event times aligned with the input.
 func parseMessages(messages []SourceMessage) ([]time.Time, error) {

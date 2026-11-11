@@ -32,7 +32,7 @@ func TestExportDocumentMarkdownLiveBlocks(t *testing.T) {
 		t.Fatalf("expected the generated child in export:\n%s", md)
 	}
 
-	// Removing the child from the snapshot deletes it; refreshed and
+	// Removing the child from the payload deletes it; refreshed and
 	// loaded documents and block lists omit it before Markdown rendering.
 	refreshed, err := f.ctrl.SubmitBlockPayload(ctx, doc.Uid, root.BlockNumber, []byte(`{"children":[]}`), "")
 	testutil.NoErr(t, err)

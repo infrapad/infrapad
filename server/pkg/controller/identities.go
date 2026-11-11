@@ -1,7 +1,7 @@
 package controller
 
 // Generated-block identities: record-preserving internal writes and the
-// pure membership matcher consumed by snapshot reconciliation
+// pure membership matcher consumed by payload reconciliation
 // (reconciliation.go).
 //
 // A generated constituent's identity is its document, its immediate

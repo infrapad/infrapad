@@ -29,7 +29,7 @@ import (
 
 // BeginHostTx starts a read-write transaction and acquires the document
 // mutation lock. Host-side generated-content management (child creation,
-// cascading deletion, restoration, snapshot reconciliation) must run inside
+// cascading deletion, restoration, payload reconciliation) must run inside
 // such a transaction: the lock serializes concurrent block mutations within
 // the document, preventing e.g. a live child from being committed beneath a
 // concurrently deleted parent. The returned Tx is passed to the

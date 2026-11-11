@@ -1,6 +1,6 @@
 package controller
 
-// Snapshot reconciliation: applying a desired output tree to the document.
+// Payload reconciliation: applying a desired output tree to the document.
 //
 // Each parent in the tree replaces its previous live direct output with
 // its complete desired output. The whole document is re-planned from
@@ -263,7 +263,7 @@ func planReconciliation(live map[model.BlockNumber]model.Block, root model.Block
 	// without reserving provisional block numbers during planning.
 	sort.SliceStable(p.creations, func(i, j int) bool { return p.creations[i].pos < p.creations[j].pos })
 	sort.Slice(p.retired, func(i, j int) bool { return p.retired[i].BlockNumber < p.retired[j].BlockNumber })
-	// Represent empty snapshots explicitly, even for parents with no
+	// Represent empty payloads explicitly, even for parents with no
 	// previous output that never appeared in either parent set. New
 	// (provisional) references have no old output at all.
 	for _, node := range nodes {

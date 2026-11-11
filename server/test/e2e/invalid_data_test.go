@@ -455,7 +455,7 @@ func TestInvalidData(t *testing.T) {
 }
 
 // Submission rejection checks need only a small populated thread, not the
-// changed-snapshot/history lifecycle in payload_submission_test.go.
+// changed-payload/history lifecycle in payload_submission_test.go.
 func TestInvalidPayloadSubmission(t *testing.T) {
 	ctx := context.Background()
 	conn, err := grpc.NewClient(grpcAddr(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -476,7 +476,7 @@ func TestInvalidPayloadSubmission(t *testing.T) {
 	threadNumber := thread.GetBlock().GetBlockNumber()
 	submitted, err := client.SubmitBlockPayload(ctx, &pb.SubmitBlockPayloadRequest{
 		Parent: docName, BlockNumber: threadNumber,
-		Payload: slackSnapshot(t, slackMessage(1, "U1", "Alice", "hello"), slackMessage(2, "U3", "", "analysis")),
+		Payload: slackPayload(t, slackMessage(1, "U1", "Alice", "hello"), slackMessage(2, "U3", "", "analysis")),
 	})
 	if err != nil {
 		t.Fatalf("SubmitBlockPayload: %v", err)
@@ -537,7 +537,7 @@ func TestInvalidPayloadSubmission(t *testing.T) {
 			unchanged(t)
 			payload := tc.payload
 			if payload == nil {
-				payload = slackSnapshot(t)
+				payload = slackPayload(t)
 			}
 			_, err := client.SubmitBlockPayload(ctx, &pb.SubmitBlockPayloadRequest{
 				Parent: tc.document, BlockNumber: tc.block, Payload: payload,
@@ -549,7 +549,7 @@ func TestInvalidPayloadSubmission(t *testing.T) {
 	t.Run("SubmitBlockPayload/http_generated_target", func(t *testing.T) {
 		unchanged(t)
 		url := fmt.Sprintf("%s/v1/%s/blocks/%d:submitPayload", httpBaseURL(), docName, conversation.GetBlockNumber())
-		code, body := httpPost(t, url, map[string]any{"payload": slackSnapshot(t).AsMap()})
+		code, body := httpPost(t, url, map[string]any{"payload": slackPayload(t).AsMap()})
 		if code != http.StatusForbidden || !strings.Contains(body, "GENERATED_BLOCK") || !strings.Contains(body, "google.rpc.ErrorInfo") {
 			t.Fatalf("expected HTTP 403 with ErrorInfo details, got %d: %s", code, body)
 		}

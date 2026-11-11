@@ -255,13 +255,13 @@ record, the lower existing block number wins and losers do not fall back
 to another desired record. Deleted blocks are never candidates. The
 matcher returns matches, unmatched desired records, and unmatched old
 blocks; applying them (revisions, fresh block allocation, retirement of
-unmatched output) is owned by the later snapshot reconciliation.
+unmatched output) is owned by the later payload reconciliation.
 
 ## Document mutation locking
 
 All block mutations within a document — public block add/update as well as
 internal host operations (child creation, cascading deletion, restoration,
-and later snapshot reconciliation) — run inside a transaction that first
+and later payload reconciliation) — run inside a transaction that first
 takes an exclusive row lock on the `documents` row:
 
 ```sql

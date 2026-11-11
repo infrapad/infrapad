@@ -65,8 +65,8 @@ as an infrapad document.
 4. Creates an infrapad document titled "Monitored app incident on ..." with a
    `Prometheus/AlertsMatcher` block matching both endpoints, `since` set to the start time.
 5. Adds ordinary `Core/Markdown` incident notes (the sanitized Markdown fallback).
-6. Creates a synthetic `Slack/Thread` reference and submits a complete snapshot
-   via `POST /v1/documents/{id}/blocks/{number}:submitPayload`. A second snapshot
+6. Creates a synthetic `Slack/Thread` reference and submits a complete payload
+   via `POST /v1/documents/{id}/blocks/{number}:submitPayload`. A second payload
    edits a message and adds human replies interleaved with AI-agent triage.
    Slack messages start just after the thread's server-assigned event timestamp,
    so the document reads alerts → notes → thread → conversation/triage. The
@@ -77,13 +77,13 @@ as an infrapad document.
    `./tmp/.doc_name`, and prints the document's UI URL.
 
 No Slack or AI service is contacted: `simulate-slack.py` produces enriched
-synthetic snapshots (see [docs/content-producers.md](../../../docs/content-producers.md)
+synthetic payloads (see [docs/content-producers.md](../../../docs/content-producers.md)
 for the payload contract and a minimal REST walkthrough), and the real server performs expansion, grouping, and
 presentation. `slack.example` source links are illustrative; Prometheus and
 application links point to the configured services. The complete last payload
-(`tmp/slack-snapshot.json`) and thread block number (`tmp/.slack_block`) are kept
+(`tmp/slack-payload.json`) and thread block number (`tmp/.slack_block`) are kept
 for the resolve step. Click a conversation's `rev` link in the UI to see the
-initial snapshot and triage enrichment. Rebuild/restart the server and UI after
+initial payload and triage enrichment. Rebuild/restart the server and UI after
 code changes so that the server sends `presentation`/`markdown` fields.
 
 ### Agent invocation
@@ -106,7 +106,7 @@ agent from the environment that already contains the token.
 
 1. Sets both endpoints back to `ok`.
 2. Updates the `Prometheus/AlertsMatcher` block's `until` field to the current time.
-3. Resubmits the complete Slack snapshot, preserving earlier message identities
+3. Resubmits the complete Slack payload, preserving earlier message identities
    and adding human recovery confirmation and an AI-agent verification reply.
    Older incidents without saved Slack state skip this step.
 4. Pulls the refreshed document and appends a Markdown resolution block.

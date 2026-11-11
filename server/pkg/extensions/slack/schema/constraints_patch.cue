@@ -23,8 +23,8 @@ package slack
 	ts: string & =~ "\\S"
 }
 
-#Snapshot: {
-	// Optional per-snapshot Slack user-ID → agent-name mapping; keys and
+#Payload: {
+	// Optional per-payload Slack user-ID → agent-name mapping; keys and
 	// values must be nonblank.
 	agents?: {[=~"^\\S+$"]: string & =~ "^\\S+$"}
 }

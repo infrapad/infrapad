@@ -1292,8 +1292,8 @@ type SubmitBlockPayloadRequest struct {
 	Parent string                 `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
 	// The targeted root primary block.
 	BlockNumber int32 `protobuf:"varint,2,opt,name=block_number,json=blockNumber,proto3" json:"block_number,omitempty"`
-	// The complete payload snapshot; its schema is defined by the
-	// primary block's type (e.g. a Slack thread snapshot).
+	// The complete payload; its schema is defined by the
+	// primary block's type (e.g. a Slack thread payload).
 	Payload       *structpb.Struct `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

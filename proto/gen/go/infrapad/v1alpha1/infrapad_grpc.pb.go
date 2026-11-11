@@ -68,13 +68,13 @@ type InfrapadServiceClient interface {
 	UpdateBlock(ctx context.Context, in *UpdateBlockRequest, opts ...grpc.CallOption) (*UpdateBlockResponse, error)
 	GetBlock(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (*GetBlockResponse, error)
 	ListBlocks(ctx context.Context, in *ListBlocksRequest, opts ...grpc.CallOption) (*ListBlocksResponse, error)
-	// Submits a complete transient payload snapshot for an existing live
+	// Submits a complete transient payload for an existing live
 	// root primary block whose type supports expansion (e.g. a
 	// "Slack/Thread" reference). The server validates the payload, runs
 	// the registered extension selected by the stored block type, and
 	// reconciles the generated output atomically. The payload is never
 	// persisted. Concurrent submissions serialize per document; the last
-	// successful submission wins. Identical snapshots create no
+	// successful submission wins. Identical payloads create no
 	// revisions.
 	//
 	// Failures use standard gRPC error details (google.rpc.ErrorInfo with
@@ -238,13 +238,13 @@ type InfrapadServiceServer interface {
 	UpdateBlock(context.Context, *UpdateBlockRequest) (*UpdateBlockResponse, error)
 	GetBlock(context.Context, *GetBlockRequest) (*GetBlockResponse, error)
 	ListBlocks(context.Context, *ListBlocksRequest) (*ListBlocksResponse, error)
-	// Submits a complete transient payload snapshot for an existing live
+	// Submits a complete transient payload for an existing live
 	// root primary block whose type supports expansion (e.g. a
 	// "Slack/Thread" reference). The server validates the payload, runs
 	// the registered extension selected by the stored block type, and
 	// reconciles the generated output atomically. The payload is never
 	// persisted. Concurrent submissions serialize per document; the last
-	// successful submission wins. Identical snapshots create no
+	// successful submission wins. Identical payloads create no
 	// revisions.
 	//
 	// Failures use standard gRPC error details (google.rpc.ErrorInfo with

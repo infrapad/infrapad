@@ -231,7 +231,7 @@ func (s *Server) ListBlockHistory(ctx context.Context, req *pb.ListBlockHistoryR
 	return resp, nil
 }
 
-// SubmitBlockPayload processes a complete payload snapshot for a live
+// SubmitBlockPayload processes a complete payload for a live
 // root primary and returns the refreshed document captured within the
 // submission transaction.
 func (s *Server) SubmitBlockPayload(ctx context.Context, req *pb.SubmitBlockPayloadRequest) (*pb.SubmitBlockPayloadResponse, error) {

@@ -1,6 +1,6 @@
 package integration
 
-// Snapshot reconciliation against the real PostgreSQL store: a
+// Payload reconciliation against the real PostgreSQL store: a
 // cross-primary regrouping commits atomically, and rolling back after a
 // successful reconciliation leaves every revision unchanged.
 
@@ -21,7 +21,7 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/store/postgres"
 )
 
-func TestSnapshotReconciliationTransactions(t *testing.T) {
+func TestPayloadReconciliationTransactions(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := postgres.OpenPG(testConnStr())
@@ -35,7 +35,7 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 	testutil.NoErr(t, err)
 	ctrl := controller.New(postgres.NewStore(db), registry)
 
-	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "snapshot reconciliation"})
+	doc, err := ctrl.CreateDocument(ctx, model.Document{Title: "payload reconciliation"})
 	testutil.NoErr(t, err)
 	addThread := func(ts string) model.Block {
 		blk, err := ctrl.AddBlock(ctx, doc.Uid, model.Block{Type: slack.ThreadTypeName, Content: []byte(`{"url":"https://slack.example/archives/C1/p` + strings.ReplaceAll(ts, ".", "") + `"}`)})
@@ -45,12 +45,12 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 	t1 := addThread("1788873542.000000")
 	t2 := addThread("1788873542.000100")
 
-	// reconcile processes a snapshot through the production host entry
+	// reconcile processes a payload through the production host entry
 	// point, returning the transaction and actual appended revision count.
 	// The caller decides whether to commit or roll back.
 	reconcile := func(thread model.Block, messages ...slack.SourceMessage) (store.Tx, int) {
 		t.Helper()
-		payload, err := json.Marshal(slack.Snapshot{Messages: append([]slack.SourceMessage{}, messages...)})
+		payload, err := json.Marshal(slack.Payload{Messages: append([]slack.SourceMessage{}, messages...)})
 		testutil.NoErr(t, err)
 		tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 		testutil.NoErr(t, err)
@@ -100,7 +100,7 @@ func TestSnapshotReconciliationTransactions(t *testing.T) {
 		}
 	}
 	if conversation == 0 {
-		t.Fatal("initial snapshot did not persist the conversation")
+		t.Fatal("initial payload did not persist the conversation")
 	}
 
 	// Thread 2's late event splits thread 1's conversation: both

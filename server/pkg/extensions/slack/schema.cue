@@ -6,7 +6,7 @@
 // definitions, unified during schema assembly (see server/README.md).
 
 // Package slack implements the Slack integration: Slack/Thread references
-// expanded from transient thread snapshots into Slack/Conversation messages
+// expanded from transient thread payloads into Slack/Conversation messages
 // and shared AIAgent/Message records.
 package slack
 
@@ -51,7 +51,7 @@ _#noReadableContent:           "No readable message content"
 	} @go(Extras,map[string]any)
 }
 
-// SourceMessage is one enriched Slack message of a Snapshot.
+// SourceMessage is one enriched Slack message of a Payload.
 #SourceMessage: {
 	// The Slack message timestamp is the stable source identity and must
 	// be nonblank; well-formedness and uniqueness are semantic checks of
@@ -78,15 +78,15 @@ _#noReadableContent:           "No readable message content"
 	previews?: [...#AttachmentPreview] @go(Previews,[]AttachmentPreview)
 }
 
-// Snapshot is the transient payload of a Slack/Thread expansion: a complete
-// enriched snapshot of the thread (parent and all replies) plus the
-// per-snapshot Slack user-ID → agent-name mapping. External producers
-// build the typed payload (converting their own enriched Slack responses,
+// Payload is the transient input of a Slack/Thread expansion: the complete
+// enriched thread (parent and all replies) plus the per-payload Slack
+// user-ID → agent-name mapping. External producers build the typed payload
+// (converting their own enriched Slack responses,
 // including raw attachments, on their side); the server only validates it.
 // Raw Slack attachments never appear here, only their typed readable
 // previews.
-#Snapshot: {
-	// Optional per-snapshot Slack user-ID → agent-name mapping; keys and
+#Payload: {
+	// Optional per-payload Slack user-ID → agent-name mapping; keys and
 	// values must be nonblank.
 
 	// Agents maps the Slack user IDs of AI-agent messages to the agent

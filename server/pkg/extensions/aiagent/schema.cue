@@ -36,3 +36,13 @@ package aiagent
 		...
 	} @go(Extras,map[string]any)
 }
+
+// messageHeader is the structured Markdown header of AIAgent/Message:
+// attribution, source link, and extras; the text is the body.
+_#messageHeader: {
+	agent: string @go(Agent)
+	url?:  string @go(URL)
+	extras?: {
+		...
+	} @go(Extras,map[string]any)
+}

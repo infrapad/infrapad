@@ -104,5 +104,5 @@ be captured in the doc itself, or a follow-up document can be created.
   [complete example](docs/infrapad-markdown-example.md).
 - [Writing content extensions](docs/content-extensions.md): adding content types
   to the server.
-- [Submitting content snapshots](docs/content-producers.md): the `submitPayload`
-  REST workflow for expandable content (e.g. Slack thread snapshots).
+- [Submitting content payloads](docs/content-producers.md): the `submitPayload`
+  REST workflow for expandable content (e.g. Slack thread payloads).

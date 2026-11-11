@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build complete synthetic Slack snapshots; no Slack connection is needed."""
+"""Build complete synthetic Slack payloads; no Slack connection is needed."""
 
 import argparse
 import json
@@ -10,7 +10,7 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stage", choices=("initial", "triage", "resolved"))
-    parser.add_argument("snapshot", type=Path, help="Saved submitPayload request JSON")
+    parser.add_argument("payload_file", type=Path, help="Saved submitPayload request JSON")
     parser.add_argument("--at", required=True, help="Thread record timestamp or resolution time (RFC3339)")
     parser.add_argument("--app-url", required=True)
     parser.add_argument("--prometheus-url", required=True)
@@ -20,9 +20,9 @@ def main():
     if args.stage == "initial":
         # Round up to the next whole second so the first message sorts
         # strictly after the thread's server-assigned event timestamp.
-        payload = initial_snapshot(at + 1, args.prometheus_url.rstrip("/"))
+        payload = initial_payload(at + 1, args.prometheus_url.rstrip("/"))
     else:
-        payload = json.loads(args.snapshot.read_text())["payload"]
+        payload = json.loads(args.payload_file.read_text())["payload"]
         if args.stage == "triage":
             add_triage(payload, args.app_url.rstrip("/"), args.prometheus_url.rstrip("/"))
         else:
@@ -30,10 +30,10 @@ def main():
 
     # This is the public SubmitBlockPayload request, not a persisted record
     # envelope. Each submission includes the entire thread, not just new replies.
-    args.snapshot.write_text(json.dumps({"payload": payload}, indent=2) + "\n")
+    args.payload_file.write_text(json.dumps({"payload": payload}, indent=2) + "\n")
 
 
-def initial_snapshot(at, prometheus_url):
+def initial_payload(at, prometheus_url):
     return {
         "agents": {"U_TRIAGE_BOT": "infrapad-triage"},
         "messages": [

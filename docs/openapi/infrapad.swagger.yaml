@@ -263,13 +263,13 @@ paths:
   /v1/{parent}/blocks/{blockNumber}:submitPayload:
     post:
       summary: |-
-        Submits a complete transient payload snapshot for an existing live
+        Submits a complete transient payload for an existing live
         root primary block whose type supports expansion (e.g. a
         "Slack/Thread" reference). The server validates the payload, runs
         the registered extension selected by the stored block type, and
         reconciles the generated output atomically. The payload is never
         persisted. Concurrent submissions serialize per document; the last
-        successful submission wins. Identical snapshots create no
+        successful submission wins. Identical payloads create no
         revisions.
       description: |-
         Failures use standard gRPC error details (google.rpc.ErrorInfo with
@@ -326,8 +326,8 @@ definitions:
       payload:
         type: object
         description: |-
-          The complete payload snapshot; its schema is defined by the
-          primary block's type (e.g. a Slack thread snapshot).
+          The complete payload; its schema is defined by the
+          primary block's type (e.g. a Slack thread payload).
     required:
       - payload
   InfrapadServiceUpdateBlockBody:

@@ -1,7 +1,7 @@
 package controller
 
 // Payload submission: the producer-driven refresh of an existing root
-// primary from a complete, transient payload snapshot.
+// primary from a complete, transient payload.
 //
 // SubmitBlockPayload owns the document-locked transaction (BeginHostTx),
 // the root-target checks, capturing the refreshed document, and
@@ -25,13 +25,13 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/store"
 )
 
-// SubmitBlockPayload processes a complete payload snapshot for the live
+// SubmitBlockPayload processes a complete payload for the live
 // root primary blockNumber, selecting the registered expander from the
 // stored block type. It reads and processes the latest state under the
 // document mutation lock: concurrent submissions serialize and the last
 // successful one wins. It returns the complete refreshed document,
 // captured within the same transaction and returned only after commit.
-// Identical snapshots create no revisions.
+// Identical payloads create no revisions.
 //
 // Rejections are *SubmissionError values (see SubmissionReason) and
 // leave the document unchanged.

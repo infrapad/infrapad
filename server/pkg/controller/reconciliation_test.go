@@ -1,6 +1,6 @@
 package controller_test
 
-// Snapshot reconciliation lifecycle with the Slack/AI-agent slice: two
+// Payload reconciliation lifecycle with the Slack/AI-agent slice: two
 // thread primaries whose output interleaves, reconciled through the
 // trusted host path in document-locked transactions.
 
@@ -20,11 +20,11 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/model"
 )
 
-// threadAgents is the per-snapshot user-ID → agent-name mapping of the
-// fixture snapshots: user U3 is the investigation agent.
+// threadAgents is the per-payload user-ID → agent-name mapping of the
+// fixture payloads: user U3 is the investigation agent.
 var threadAgents = map[string]string{"U3": "investigation-agent"}
 
-func TestSnapshotReconciliationLifecycle(t *testing.T) {
+func TestPayloadReconciliationLifecycle(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
 	ctrl := f.ctrl
@@ -55,11 +55,11 @@ func TestSnapshotReconciliationLifecycle(t *testing.T) {
 	expectChildren(t, f, doc.Uid, t1.BlockNumber, map[model.BlockNumber][]string{
 		3: {slackTS(0, 0, 0), slackTS(1, 0, 0)}, 4: {slackTS(2, 0, 0)}, 5: {slackTS(3, 0, 0), slackTS(4, 0, 0)},
 	})
-	// An identical snapshot creates no revisions anywhere.
+	// An identical payload creates no revisions anywhere.
 	before := revisions()
 	reconcile(t1, m1, m2, m3, m4, m5)
 	if got := revisions() - before; got != 0 {
-		t.Fatalf("identical snapshot appended %d revisions", got)
+		t.Fatalf("identical payload appended %d revisions", got)
 	}
 
 	// A late event of another primary splits the existing conversation;
@@ -126,7 +126,7 @@ func TestSnapshotReconciliationLifecycle(t *testing.T) {
 
 // TestReconciliationEqualTimePlanning covers deterministic planning of
 // equal timestamps across primaries: owners order by primary block number,
-// and new blocks are allocated in planner order. Within one snapshot,
+// and new blocks are allocated in planner order. Within one payload,
 // Slack timestamps are unique identities, so distinct microseconds keep
 // same-wall-clock members distinct.
 func TestReconciliationEqualTimePlanning(t *testing.T) {
@@ -176,10 +176,10 @@ func addThread(t *testing.T, f *fixture, documentUID model.DocumentUID, ts strin
 	return thread
 }
 
-// threadPayload builds a complete Slack snapshot for host expansion.
+// threadPayload builds a complete Slack payload for host expansion.
 func threadPayload(t *testing.T, agents map[string]string, messages ...slack.SourceMessage) json.RawMessage {
 	t.Helper()
-	payload, err := json.Marshal(slack.Snapshot{Agents: agents, Messages: append([]slack.SourceMessage{}, messages...)})
+	payload, err := json.Marshal(slack.Payload{Agents: agents, Messages: append([]slack.SourceMessage{}, messages...)})
 	testutil.NoErr(t, err)
 	return payload
 }
