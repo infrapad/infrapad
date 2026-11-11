@@ -6,7 +6,12 @@
 
 The server constructs one explicit content registry at startup from the
 built-in extension constructors (`server/pkg/extensions`)
-and injects it into the controller. 
+and injects it into the controller.
+
+See [docs/content-extensions.md](../docs/content-extensions.md) for the
+extension contracts and an author checklist, and
+[docs/content-producers.md](../docs/content-producers.md) for submitting
+payloads to a running server.
 
 ## Extension CUE schemas
 

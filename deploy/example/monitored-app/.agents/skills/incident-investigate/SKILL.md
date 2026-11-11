@@ -23,6 +23,7 @@ Read the file to understand:
 - The **title** and **status** from the front matter.
 - The **Prometheus/AlertsMatcher** block — which alerts are firing, the `since`/`until` timestamps, and the `labels_matchers` to identify affected components.
 - Any existing **Core/Markdown** blocks with prior notes.
+- The **Slack/Thread** reference and its generated **Slack/Conversation** and **AIAgent/Message** blocks (marked with `parent=`): the incident discussion and earlier automated triage, in chronological order. Treat them as read-only context.
 
 ### 2. Gather diagnostic information
 
@@ -32,7 +33,7 @@ Investigate the incident, gather evidence and attempt to find the root cause.
 
 Include the details about findings.
 
-Append a new markdown block to the incident file with your findings:
+Append a new markdown block to the end of the incident file with your findings. Do not modify existing blocks, especially generated ones (`parent=`), directive lines, or `yaml infrapad` headers:
 
 ```
 ::infrapad_block{type=Core/Markdown block=new}
@@ -64,7 +65,7 @@ Instead, add another block with recommended action.
 ```
 
 IMPORTANT: the recommended actions part needs to be introduced
-with a new `::inrapad_block`, as they will be treated differently later.
+with a new `::infrapad_block`, as they will be treated differently later.
 
 It's ok to add multiple blocks at once before pushing.
 
@@ -76,7 +77,7 @@ Push the changes back to the server:
 infrapad md push --file incident.md
 ```
 
-The push command auto-detects changed and new blocks and pushes only those. This ensures the investigation is recorded in the shared incident document for the team.
+The server applies only the new (and any edited) blocks and the file is refreshed with the assigned block numbers. This ensures the investigation is recorded in the shared incident document for the team. If the push is rejected, pull again, re-append your blocks, and push.
 
 ## Important Notes
 

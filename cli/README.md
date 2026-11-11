@@ -157,11 +157,19 @@ directives.
 
 - **Front matter** contains the document metadata (`document`, `title`, `namespace`, `status`).
 - **Block directives** (`::infrapad_block{block=N rev=R type=T ...}`) mark the start of each block.
-  Optional `author`, `parent`, and `timestamp` attributes are server-managed metadata;
+  `block`, `rev`, `type`, `author`, `parent`, and `timestamp` attributes of existing
+  blocks are server-managed metadata (new blocks use `block=new` and you choose their
+  `type`);
   quoted values use backslash escapes (`\\`, `\"`, `\n`). New blocks use `block=new type=T`.
 - **Structured headers**: a `` ```yaml infrapad `` fence directly after the directive
   holds the type's structured fields under `content:`. Other fences are body text.
 - **Bodies** contain free-form markdown text, interpreted by the server per content type.
+- **Generated blocks** (with a `parent` attribute, e.g. Slack conversation and AI-agent
+  messages) are read-only; editing them rejects the whole push.
+
+See [docs/markdown-format.md](../docs/markdown-format.md) for the full format and push
+rules, and [docs/content-producers.md](../docs/content-producers.md) for submitting
+integration payloads (e.g. Slack thread snapshots) through the REST API.
 
 #### Pull: download a document as markdown
 
@@ -224,7 +232,7 @@ The standard workflow for working with infrapad documents:
 infrapad md pull --document <id> --file incident.md
 
 # 2. Read and edit the file locally
-#    (modify existing blocks or append new ones)
+#    (modify ordinary blocks or append new ones; leave generated blocks untouched)
 
 # 3. Push changes back to the server
 infrapad md push --file incident.md

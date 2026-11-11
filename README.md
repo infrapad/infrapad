@@ -95,3 +95,14 @@ understanding the findings and capture answers to users questions.
 
 4. Once the changes are planned, the information about the changes can either
 be captured in the doc itself, or a follow-up document can be created. 
+
+## Documentation
+
+- [CLI](cli/README.md), [server](server/README.md), and the
+  [monitored-app demo](deploy/example/monitored-app/README.md).
+- [Markdown format](docs/markdown-format.md) and a
+  [complete example](docs/infrapad-markdown-example.md).
+- [Writing content extensions](docs/content-extensions.md): adding content types
+  to the server.
+- [Submitting content snapshots](docs/content-producers.md): the `submitPayload`
+  REST workflow for expandable content (e.g. Slack thread snapshots).

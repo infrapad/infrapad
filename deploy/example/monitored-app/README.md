@@ -77,7 +77,8 @@ as an infrapad document.
    `./tmp/.doc_name`, and prints the document's UI URL.
 
 No Slack or AI service is contacted: `simulate-slack.py` produces enriched
-synthetic snapshots, and the real server performs expansion, grouping, and
+synthetic snapshots (see [docs/content-producers.md](../../../docs/content-producers.md)
+for the payload contract and a minimal REST walkthrough), and the real server performs expansion, grouping, and
 presentation. `slack.example` source links are illustrative; Prometheus and
 application links point to the configured services. The complete last payload
 (`tmp/slack-snapshot.json`) and thread block number (`tmp/.slack_block`) are kept
