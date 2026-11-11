@@ -8,7 +8,7 @@ import (
 )
 
 // IncidentType implements PagerDuty/Incident, an expandable primary
-// reference whose content is enriched with a Markdown summary.
+// reference whose content is enriched with a Markdown summary by Expand.
 //
 // The Markdown header exposes only the ID/URL reference, editable before
 // the first successful payload submission. The summary body is read-only

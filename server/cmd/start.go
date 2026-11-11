@@ -20,6 +20,7 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
+	"github.com/infrapad/infrapad/server/pkg/extensions/pagerduty"
 	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
 	"github.com/infrapad/infrapad/server/pkg/store/postgres"
@@ -76,7 +77,8 @@ var startCmd = &cobra.Command{
 		conversationType := slack.NewConversationType()
 		registry, err := content.NewRegistry(
 			core.ContentTypes(), prometheus.ContentTypes(),
-			[]content.ContentType{agentType, slack.NewThreadType(conversationType, agentType), conversationType})
+			[]content.ContentType{agentType, slack.NewThreadType(conversationType, agentType), conversationType},
+			pagerduty.ContentTypes())
 		if err != nil {
 			return fmt.Errorf("build content registry: %w", err)
 		}
