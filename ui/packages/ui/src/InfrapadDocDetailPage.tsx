@@ -21,8 +21,6 @@ import {
   Spinner,
   Title,
 } from "@patternfly/react-core";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
 import { useCallback, useEffect, useState } from "react";
 
 import AlertsTimelineChart from "./AlertsTimelineChart.js";
@@ -30,6 +28,7 @@ import { blockContent } from "./api.js";
 import type { InfrapadBlock, InfrapadDocument } from "./api.js";
 import { useInfrapadClient } from "./infrapadClient.js";
 import BlockRevisionsPanel, { formatDate } from "./BlockRevisionsPanel.js";
+import { BlockPresentation } from "./Presentation.js";
 import type { LabelMatcher } from "./prometheusApi.js";
 
 // ---- Helpers ----
@@ -65,17 +64,6 @@ function blockTypeLabel(type: string): string {
 }
 
 // ---- Block renderers ----
-
-/** Render markdown content as sanitized HTML. */
-function MarkdownBlockContent({ text }: { text: string }) {
-  const html = DOMPurify.sanitize(marked.parse(text) as string);
-  return (
-    <div
-      className="infrapad-markdown-content"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
-}
 
 /** Render an alerts_matcher block as structured data + live timeline chart. */
 function AlertsMatcherBlockContent({ content }: { content: Record<string, unknown> }) {
@@ -148,31 +136,16 @@ function AlertsMatcherBlockContent({ content }: { content: Record<string, unknow
   );
 }
 
-/** Fallback renderer for unknown block types — show content as formatted JSON. */
-function GenericBlockContent({
-  content,
-}: {
-  content: Record<string, unknown>;
-}) {
-  return (
-    <pre className="infrapad-json-content">
-      {JSON.stringify(content, null, 2)}
-    </pre>
-  );
-}
-
-/** Render a single block's content based on its type. */
+/**
+ * Render a single block's content: registered extension content goes
+ * through the host presentation path (cards, else sanitized Markdown); the
+ * live Prometheus view is the explicit exception.
+ */
 function renderBlockContent(block: InfrapadBlock) {
-  switch (block.type) {
-    case "Core/Markdown":
-      return (
-        <MarkdownBlockContent text={(blockContent(block).text as string) ?? ""} />
-      );
-    case "Prometheus/AlertsMatcher":
-      return <AlertsMatcherBlockContent content={blockContent(block)} />;
-    default:
-      return <GenericBlockContent content={blockContent(block)} />;
+  if (block.type === "Prometheus/AlertsMatcher") {
+    return <AlertsMatcherBlockContent content={blockContent(block)} />;
   }
+  return <BlockPresentation block={block} />;
 }
 
 function BlockCard({ block, docId }: { block: InfrapadBlock; docId: string }) {

@@ -3,6 +3,7 @@ package grpc
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -64,8 +65,49 @@ func blockToProto(b model.Block, documentUID model.DocumentUID) (*pb.Block, erro
 			return nil, fmt.Errorf("block %d: convert record: %w", b.BlockNumber, err)
 		}
 		out.Record = record
+
+		markdown, presentation, err := renderBlock(b)
+		if err != nil {
+			return nil, err
+		}
+		out.Markdown = markdown
+		out.Presentation = presentation
 	}
 	return out, nil
+}
+
+// renderBlock derives the output-only Markdown body and optional structured
+// presentation from the block's exact record. Markdown failures are errors;
+// presentation failures are logged and fall back to Markdown (nil
+// presentation). Empty presentations are omitted.
+func renderBlock(b model.Block) (string, *structpb.Struct, error) {
+	ct := b.Record.ContentType()
+	markdown, err := ct.RenderMarkdown(b.Record)
+	if err != nil {
+		return "", nil, fmt.Errorf("block %d (%s): render markdown: %w", b.BlockNumber, b.Type, err)
+	}
+	presenter, ok := ct.(content.Presenter)
+	if !ok {
+		return markdown, nil, nil
+	}
+	presentation, err := presenter.Present(b.Record)
+	var presentationStruct *structpb.Struct
+	if err == nil && len(presentation.Cards) > 0 {
+		// The backend/frontend own the JSON contract; transport passes it
+		// through without knowing about individual presentation primitives.
+		var data []byte
+		data, err = json.Marshal(presentation)
+		if err == nil {
+			presentationStruct, err = structFromJSON(data)
+		}
+	}
+	if err != nil {
+		slog.Error("block presentation failed; falling back to markdown",
+			"block_number", b.BlockNumber, "revision_number", b.RevisionNumber,
+			"type", b.Type, "error", err)
+		return markdown, nil, nil
+	}
+	return markdown, presentationStruct, nil
 }
 
 func structFromJSON(data []byte) (*structpb.Struct, error) {

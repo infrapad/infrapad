@@ -38,6 +38,41 @@ export interface InfrapadBlock {
   parentBlockNumber?: number;
   // Serialized host record envelope, exposed verbatim by the server.
   record: InfrapadBlockRecord;
+  // Output-only host presentation derived from this exact record; absent
+  // (or null) when the type has no presenter or presentation failed.
+  presentation?: InfrapadPresentation | null;
+  // Output-only extension-rendered Markdown body of this exact record
+  // (no export directives/headers); must be sanitized before display.
+  markdown?: string;
+}
+
+/**
+ * Backend/frontend JSON contract (server/pkg/content/presentation.go).
+ * Transport carries an opaque object; presentation primitives are defined here,
+ * not in protobuf/OpenAPI.
+ */
+export interface InfrapadPresentation {
+  cards?: InfrapadCard[];
+}
+
+/** Card sections render in order: title, Markdown, fields, links. */
+export interface InfrapadCard {
+  title?: string;
+  markdown?: string;
+  fields?: InfrapadField[];
+  links?: InfrapadLink[];
+}
+
+/** Labeled plain-text value. */
+export interface InfrapadField {
+  label: string;
+  value: string;
+}
+
+/** Labeled link; only HTTP(S) and relative URLs are navigable. */
+export interface InfrapadLink {
+  label: string;
+  url: string;
 }
 
 /** One keyed member of a grouped record. */

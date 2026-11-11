@@ -442,6 +442,21 @@ definitions:
         title: |-
           The block's serialized host record envelope, exposed verbatim. Its
           shape is determined by `type`:
+      presentation:
+        type: object
+        description: |-
+          Optional presentation derived at response time from this exact record.
+          Its JSON structure is a contract between the backend and frontend,
+          intentionally opaque to the transport schema. When absent, clients
+          render `markdown`. Ignored on writes.
+        readOnly: true
+      markdown:
+        type: string
+        description: |-
+          Markdown body rendered by the content type from this exact record
+          (without document export directives or structured headers). Derived at
+          response time; ignored on writes. Clients must sanitize it.
+        readOnly: true
     description: Block represents a single content block within a document.
     required:
       - type

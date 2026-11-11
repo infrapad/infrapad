@@ -13,6 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TMP_DIR="${SCRIPT_DIR}/tmp"
 INCIDENT_FILE="${TMP_DIR}/incident.md"
 DOC_NAME_FILE="${TMP_DIR}/.doc_name"
+SLACK_BLOCK_FILE="${TMP_DIR}/.slack_block"
+SLACK_SNAPSHOT_FILE="${TMP_DIR}/slack-snapshot.json"
 INFRAPAD_ENV_FILE="${SCRIPT_DIR}/.env"
 
 MONITORED_APP_URL="${MONITORED_APP_URL:-http://localhost:8080}"
@@ -228,6 +230,7 @@ cmd_incident_start() {
 
   # Save doc name for later use by incident-resolve.
   mkdir -p "$TMP_DIR"
+  rm -f "$SLACK_BLOCK_FILE" "$SLACK_SNAPSHOT_FILE"
   echo "$doc_name" > "$DOC_NAME_FILE"
 
   # Add alerts_matcher block.
@@ -248,10 +251,43 @@ cmd_incident_start() {
 
   log "  alerts_matcher block added."
 
-  # 5. Pull the document to markdown.
+  # 5. Record the initial incident report from the triggered alerts.
+  local notes
+  notes=$(cat <<'EOF'
+# Monitored app incident
+
+Prometheus is firing `MonitoredAppEndpointDown` alerts for both `endpoint1`
+and `endpoint2`. Both endpoints are returning HTTP 500.
+
+The cause and scope of the incident have not yet been determined.
+EOF
+)
+  ${INFRAPAD_CLI} block add --document "$doc_name" --type Core/Markdown \
+    --content "$(jq -n --arg text "$notes" '{text: $text}')"
+
+  # 6. Create a Slack primary and submit two complete snapshots. The second
+  # enriches an existing message and adds interleaved human/agent replies.
+  # Start Slack after the matcher, notes, and thread reference, rather than
+  # backdating its messages to the beginning of the alert query window.
+  local thread_ts thread_output thread_number slack_since
+  thread_ts=$(date -u +%s)
+  thread_output=$(${INFRAPAD_CLI} block add --document "$doc_name" --type Slack/Thread \
+    --content "$(jq -n --arg url "https://slack.example/archives/CMONITOREDAPP/p${thread_ts}000000" '{url: $url}')" \
+    -o json)
+  thread_number=$(echo "$thread_output" | jq -er '.blockNumber')
+  echo "$thread_number" > "$SLACK_BLOCK_FILE"
+  slack_since=$(echo "$thread_output" | jq -er '.record.timestamp')
+  update_slack_snapshot initial "$slack_since"
+  submit_slack_snapshot "$doc_name" "$thread_number"
+  update_slack_snapshot triage "$slack_since"
+  submit_slack_snapshot "$doc_name" "$thread_number"
+  log "  Simulated Slack conversation and AI-agent triage added (including revision history)."
+
+  # 7. Pull the complete document to markdown.
   ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
 
   log "Incident started. Document written to ${INCIDENT_FILE}"
+  log "Open ${INFRAPAD_API_URL:-http://localhost:8089}/ui/${doc_name} to view the cards and live chart."
 
   if [ -n "${AUTH_USE_ENV}" ]; then
       echo "For authentication, source .env file before running the agent: \`source .env; AGENT_CMD\`"
@@ -286,7 +322,7 @@ cmd_incident_resolve() {
   # 2. Wait for Prometheus alerts to clear.
   wait_for_alerts_resolved
 
-  # 3. Update the first block's Until field to the current time.
+  # 3. Update the alert matcher's Until field to the current time.
   log "Updating alerts_matcher block with Until timestamp..."
 
   local until
@@ -295,11 +331,13 @@ cmd_incident_resolve() {
   # Pull latest to get current state.
   ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
 
-  # Set the Until in the first structured (```yaml infrapad) header. The
-  # server omits an unset (zero) until, so replace any existing value and
-  # otherwise add it next to since.
+  # Select the alert matcher by type, not by document position: Slack's
+  # event timestamps can put agent/thread headers before the metric block.
+  # The server omits an unset (zero) until, so replace any existing value
+  # and otherwise add it inside content next to since.
   awk -v until="$until" '
-    !done && /^```yaml infrapad/ { inhdr = 1; print; next }
+    /^::infrapad_block\{/ { target = ($0 ~ / type=Prometheus\/AlertsMatcher( |})/) }
+    !done && target && /^```yaml infrapad/ { inhdr = 1; print; next }
     inhdr && /^[[:space:]]*until:/ { next }
     inhdr && /^```/ {
       print indent "until: \"" until "\""
@@ -307,13 +345,27 @@ cmd_incident_resolve() {
     }
     inhdr && match($0, /^[[:space:]]*since:/) { indent = substr($0, 1, RLENGTH - 6) }
     { print }
-  ' "$INCIDENT_FILE" > "${INCIDENT_FILE}.tmp" && mv "${INCIDENT_FILE}.tmp" "$INCIDENT_FILE"
+    END { if (!done) exit 1 }
+  ' "$INCIDENT_FILE" > "${INCIDENT_FILE}.tmp" || fail "Could not locate the Prometheus alert matcher header."
+  mv "${INCIDENT_FILE}.tmp" "$INCIDENT_FILE"
 
-  # Push the updated block 1; the server applies only the changed header.
+  # The server applies only the changed alert matcher header.
   ${INFRAPAD_CLI} md push --file "$INCIDENT_FILE"
   log "  alerts_matcher block updated."
 
-  # 4. Add a markdown block about the alerts being resolved.
+  # 4. Refresh the complete Slack snapshot with human/agent recovery replies.
+  # Older incidents created before the Slack simulation have no saved state.
+  if [ -f "$SLACK_BLOCK_FILE" ] && [ -f "$SLACK_SNAPSHOT_FILE" ]; then
+    local thread_number
+    thread_number=$(<"$SLACK_BLOCK_FILE")
+    update_slack_snapshot resolved "$until"
+    submit_slack_snapshot "$doc_name" "$thread_number"
+    # Generated blocks changed; refresh before appending ordinary Markdown.
+    ${INFRAPAD_CLI} md pull --document "$doc_name" --file "$INCIDENT_FILE"
+    log "  Slack conversation updated with recovery and verification replies."
+  fi
+
+  # 5. Add a markdown block about the alerts being resolved.
   log "Adding resolution markdown block..."
 
   # Append a new markdown block to the file.
@@ -333,6 +385,33 @@ EOF
   log "  Resolution block added."
 
   log "Incident resolved. Document updated at ${INCIDENT_FILE}"
+}
+
+# ─── Slack snapshot producer and transport ──────────────────────────────────
+
+update_slack_snapshot() {
+  local stage="$1" at="$2"
+  python3 "${SCRIPT_DIR}/simulate-slack.py" "$stage" "$SLACK_SNAPSHOT_FILE" \
+    --at "$at" --app-url "$MONITORED_APP_URL" --prometheus-url "$PROMETHEUS_URL"
+}
+
+submit_slack_snapshot() {
+  local doc_name="$1" block_number="$2"
+  local api_url="${INFRAPAD_API_URL:-http://localhost:8089}"
+  local response
+  local -a auth_headers=()
+  if [ -n "${INFRAPAD_TOKEN:-}" ]; then
+    auth_headers=(-H "Authorization: Bearer ${INFRAPAD_TOKEN}")
+  fi
+  # The CLI has no payload-submission command yet. Use the public REST API
+  # with exactly the same base URL and bearer token as the CLI calls.
+  if ! response=$(curl --fail-with-body --silent --show-error \
+    --connect-timeout 5 --max-time 30 \
+    "${auth_headers[@]}" -H 'Content-Type: application/json' \
+    --data-binary "@${SLACK_SNAPSHOT_FILE}" \
+    "${api_url%/}/v1/${doc_name}/blocks/${block_number}:submitPayload"); then
+    fail "Slack payload submission failed: ${response}"
+  fi
 }
 
 # ─── main ──────────────────────────────────────────────────────────────────

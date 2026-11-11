@@ -96,8 +96,19 @@ message Block {
     // error. Generated blocks are refreshed only through
     // SubmitBlockPayload on their root primary.
     google.protobuf.Struct record = 9 [ (google.api.field_behavior) = REQUIRED ];
-}
 
+    // Optional presentation derived at response time from this exact record.
+    // Its JSON structure is a contract between the backend and frontend,
+    // intentionally opaque to the transport schema. When absent, clients
+    // render `markdown`. Ignored on writes.
+    google.protobuf.Struct presentation = 10
+        [ (google.api.field_behavior) = OUTPUT_ONLY ];
+
+    // Markdown body rendered by the content type from this exact record
+    // (without document export directives or structured headers). Derived at
+    // response time; ignored on writes. Clients must sanitize it.
+    string markdown = 11 [ (google.api.field_behavior) = OUTPUT_ONLY ];
+}
 
 // ==========================================================================
 // Service

@@ -8,6 +8,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/infrapad/infrapad/proto/gen/go/infrapad/v1alpha1"
+	"github.com/infrapad/infrapad/server/pkg/content"
 )
 
 func TestPayloadSubmissionLifecycle(t *testing.T) {
@@ -81,6 +83,7 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 		t.Fatalf("unexpected agent content: %v", recordContent(agent))
 	}
 	expectItems(t, conv2, "Slack/Conversation", 4)
+	expectPresentation(t, doc, threadNumber, conv1, agent)
 	revisions := blockRevisions(doc)
 
 	// An identical snapshot returns the unchanged document.
@@ -122,6 +125,16 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	}
 	for _, rev := range history.GetBlocks() {
 		expectItems(t, rev, "Slack/Conversation", 1, 2)
+	}
+	// Historical revisions render their own records, not the latest.
+	if md := history.GetBlocks()[0].GetMarkdown(); !strings.Contains(md, "  second\n") || strings.Contains(md, "edited") {
+		t.Fatalf("revision 1 markdown does not render the historical record:\n%s", md)
+	}
+	if md := history.GetBlocks()[1].GetMarkdown(); !strings.Contains(md, "  second (edited)\n") {
+		t.Fatalf("revision 2 markdown does not render the latest record:\n%s", md)
+	}
+	if card := presentationCards(t, history.GetBlocks()[0])[0]; strings.Contains(card.Markdown, "edited") {
+		t.Fatalf("revision 1 presentation renders the latest record: %v", card)
 	}
 
 	expectMarkdownExport(t, client, docName, threadNumber, conv1, agent, conv2)
@@ -174,6 +187,100 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	}
 
 	expectMarkdownPush(t, client, docName, threadNumber, exported.GetMarkdown())
+	expectOutputOnlyEchoIgnored(t, client, docName)
+}
+
+// expectPresentation checks the output-only presentation and body-only
+// Markdown of the initial Slack/agent output: JSON cards from the
+// registered presenters and Markdown fallback for Core/Markdown.
+func expectPresentation(t *testing.T, doc *pb.Document, threadNumber int32, conv, agent *pb.Block) {
+	t.Helper()
+	blocks := map[int32]*pb.Block{}
+	for _, blk := range doc.GetBlocks() {
+		blocks[blk.GetBlockNumber()] = blk
+	}
+	notes := blocks[1]
+	if notes.GetPresentation() != nil || notes.GetMarkdown() != "notes" {
+		t.Fatalf("Core/Markdown: expected markdown fallback only, got %v / %q", notes.GetPresentation(), notes.GetMarkdown())
+	}
+
+	threadURL := "https://slack.example/archives/C1/p" + slackID(0)
+	thread := blocks[threadNumber]
+	want := mustStruct(t, map[string]any{"cards": []any{map[string]any{
+		"title": "Slack thread",
+		"links": []any{map[string]any{"label": "Open in Slack", "url": threadURL}},
+	}}})
+	if !proto.Equal(thread.GetPresentation(), want) {
+		t.Fatalf("Slack/Thread presentation: got %v, want %v", thread.GetPresentation(), want)
+	}
+	if thread.GetMarkdown() != "[Slack thread]("+threadURL+")\n" {
+		t.Fatalf("Slack/Thread markdown: %q", thread.GetMarkdown())
+	}
+
+	cards := presentationCards(t, conv)
+	if len(cards) != 1 || cards[0].Title != "Slack conversation" ||
+		len(cards[0].Fields) != 1 || cards[0].Fields[0].Label != "Messages" || cards[0].Fields[0].Value != "2" {
+		t.Fatalf("Slack/Conversation presentation: %v", conv.GetPresentation())
+	}
+	md := conv.GetMarkdown()
+	if !strings.HasPrefix(md, "- **Alice**") || !strings.Contains(md, "  first\n") || !strings.Contains(md, "  second\n") ||
+		strings.Contains(md, "::infrapad_block") || strings.Contains(md, "```yaml") {
+		t.Fatalf("Slack/Conversation markdown is not the grouped body only:\n%s", md)
+	}
+	if cards[0].Markdown != md {
+		t.Fatalf("Slack/Conversation card markdown differs from body:\n%s\nvs\n%s", cards[0].Markdown, md)
+	}
+
+	cards = presentationCards(t, agent)
+	if len(cards) != 1 || cards[0].Title != "investigation-agent" || cards[0].Markdown != "agent analysis" ||
+		len(cards[0].Links) != 1 || cards[0].Links[0].Label != "Open source" {
+		t.Fatalf("AIAgent/Message presentation: %v", agent.GetPresentation())
+	}
+	if agent.GetMarkdown() != "agent analysis" {
+		t.Fatalf("AIAgent/Message markdown: %q", agent.GetMarkdown())
+	}
+}
+
+// presentationCards decodes the opaque transport payload using the backend's
+// presentation contract, rather than transport-specific card messages.
+func presentationCards(t *testing.T, block *pb.Block) []content.Card {
+	t.Helper()
+	data, err := block.GetPresentation().MarshalJSON()
+	if err != nil {
+		t.Fatalf("marshal presentation: %v", err)
+	}
+	var presentation content.Presentation
+	if err := json.Unmarshal(data, &presentation); err != nil {
+		t.Fatalf("decode presentation: %v", err)
+	}
+	if len(presentation.Cards) == 0 {
+		t.Fatalf("block %d: expected presentation cards", block.GetBlockNumber())
+	}
+	return presentation.Cards
+}
+
+// expectOutputOnlyEchoIgnored echoes a retrieved block with bogus
+// output-only presentation/Markdown: the write is accepted and the stored
+// content and rendering stay derived from the record.
+func expectOutputOnlyEchoIgnored(t *testing.T, client pb.InfrapadServiceClient, docName string) {
+	t.Helper()
+	ctx := context.Background()
+	got, err := client.GetBlock(ctx, &pb.GetBlockRequest{Parent: docName, BlockNumber: 1})
+	if err != nil {
+		t.Fatalf("GetBlock: %v", err)
+	}
+	echo := proto.Clone(got.GetBlock()).(*pb.Block)
+	echo.Markdown = "bogus"
+	echo.Presentation = mustStruct(t, map[string]any{"arbitrary": "ignored", "cards": "not even an array"})
+	updated, err := client.UpdateBlock(ctx, &pb.UpdateBlockRequest{Parent: docName, BlockNumber: 1, Block: echo})
+	if err != nil {
+		t.Fatalf("UpdateBlock echo: %v", err)
+	}
+	blk := updated.GetBlock()
+	if blk.GetMarkdown() != got.GetBlock().GetMarkdown() || blk.GetPresentation() != nil ||
+		!proto.Equal(blk.GetRecord(), got.GetBlock().GetRecord()) {
+		t.Fatalf("echoed output-only fields changed the block: %v -> %v", got.GetBlock(), blk)
+	}
 }
 
 // expectMarkdownPush round-trips the exported Markdown through the push

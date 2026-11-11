@@ -230,7 +230,6 @@
 .infrapad-diff-line--removed {
     background-color: rgba(211, 47, 47, 0.12);
     color: var(--pf-t--global--color--status--danger--default);
-    text-decoration: line-through;
 }
 
 .infrapad-diff-line--context {
@@ -254,15 +253,25 @@
     fill: var(--pf-t--global--text--color--regular) !important;
 }
 
-/* Generic JSON fallback */
-.infrapad-json-content {
-    font-family: var(--pf-t--global--font--family--mono);
-    font-size: var(--pf-t--global--font--size--sm);
-    background-color: var(
-        --pf-t--global--background--color--secondary--default
-    );
-    padding: var(--pf-t--global--spacer--md);
-    border-radius: var(--pf-t--global--border--radius--small);
-    overflow-x: auto;
-    margin: 0;
+/* Host-owned presentation cards (title, Markdown, fields, links) */
+.infrapad-presentation {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pf-t--global--spacer--md);
+}
+
+.infrapad-presentation-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pf-t--global--spacer--sm);
+}
+
+.infrapad-presentation-card + .infrapad-presentation-card {
+    border-top: var(--pf-t--global--border--width--regular) solid
+        var(--pf-t--global--border--color--default);
+    padding-top: var(--pf-t--global--spacer--md);
+}
+
+.infrapad-unsafe-link {
+    color: var(--pf-t--global--text--color--subtle);
 }
