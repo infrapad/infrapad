@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
+	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 )
 
 // IncidentType implements PagerDuty/Incident, an expandable primary
@@ -17,6 +18,7 @@ type IncidentType struct {
 	content.TypedMarkdownRenderer[content.Item[Incident]]
 	header       content.TypedItemMarkdownHeader[Incident, incidentMdHeader]
 	timelineType *TimelineType
+	matcherType  *prometheus.AlertsMatcherType
 }
 
 // incidentMdHeader is the structured Markdown header of PagerDuty/Incident:
@@ -26,7 +28,10 @@ type incidentMdHeader struct {
 	URL string `json:"url"`
 }
 
-func NewIncidentType(timelineType *TimelineType) *IncidentType {
+// NewIncidentType constructs PagerDuty/Incident. matcherType is the
+// registered Prometheus/AlertsMatcher implementation used for the emitted
+// matcher child; it must be the instance registered in the host registry.
+func NewIncidentType(timelineType *TimelineType, matcherType *prometheus.AlertsMatcherType) *IncidentType {
 	return &IncidentType{
 		TypedMarkdownRenderer: content.ItemMarkdown(renderIncident),
 		header: content.ItemMarkdownHeader(
@@ -34,6 +39,7 @@ func NewIncidentType(timelineType *TimelineType) *IncidentType {
 			func(i Incident, h incidentMdHeader) Incident { i.ID, i.URL = h.ID, h.URL; return i },
 		),
 		timelineType: timelineType,
+		matcherType:  matcherType,
 	}
 }
 

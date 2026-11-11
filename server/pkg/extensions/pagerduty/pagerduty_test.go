@@ -12,6 +12,7 @@ import (
 	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/extensions/pagerduty"
+	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 )
 
 const incidentURL = "https://example.pagerduty.test/incidents/Q0EXAMPLE"
@@ -19,7 +20,7 @@ const incidentURL = "https://example.pagerduty.test/incidents/Q0EXAMPLE"
 // TestSchemas checks the strict generated schemas, including the open
 // alert details inside otherwise closed payloads.
 func TestSchemas(t *testing.T) {
-	types := pagerduty.ContentTypes()
+	types := pagerduty.ContentTypes(nil)
 	incident, timeline := types[0].(*pagerduty.IncidentType), types[1]
 	const created = `"created_at": "2026-09-08T13:03:43Z"`
 	payload := func(alert string) string {
@@ -66,7 +67,7 @@ func TestSchemas(t *testing.T) {
 // TestIncidentPresentation checks the reference and enriched incident
 // rendering, presentation, and reference-edit restrictions.
 func TestIncidentPresentation(t *testing.T) {
-	registry, err := content.NewRegistry(pagerduty.ContentTypes())
+	registry, err := newRegistry()
 	testutil.NoErr(t, err)
 	incidentType, err := registry.Lookup(pagerduty.IncidentTypeName)
 	testutil.NoErr(t, err)
@@ -140,7 +141,7 @@ func TestIncidentPresentation(t *testing.T) {
 // TestTimelinePresentation checks grouped timeline rendering and
 // attribution fallbacks.
 func TestTimelinePresentation(t *testing.T) {
-	registry, err := content.NewRegistry(pagerduty.ContentTypes())
+	registry, err := newRegistry()
 	testutil.NoErr(t, err)
 	ct, err := registry.Lookup(pagerduty.TimelineTypeName)
 	testutil.NoErr(t, err)
@@ -181,4 +182,11 @@ func at(clock string) time.Time {
 		panic(err)
 	}
 	return value
+}
+
+// newRegistry registers the PagerDuty types with the shared
+// Prometheus/AlertsMatcher instance, as in production.
+func newRegistry() (*content.Registry, error) {
+	matcherType := prometheus.NewAlertsMatcherType()
+	return content.NewRegistry([]content.ContentType{matcherType}, pagerduty.ContentTypes(matcherType))
 }

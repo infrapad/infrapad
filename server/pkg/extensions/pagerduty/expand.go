@@ -14,8 +14,9 @@ import (
 // Expand turns a complete incident payload into the enriched primary and
 // its generated output: the Markdown summary in the primary's text (with
 // the source incident creation time as its timestamp) and the notes/log
-// entries as one PagerDuty/Timeline collection of stably keyed members.
-// Final sorting, grouping, interleaving, and deletion of missing output are
+// entries as one PagerDuty/Timeline collection of stably keyed members,
+// plus an optional Prometheus/AlertsMatcher child derived from the alert
+// details (see deriveMatcher). Final sorting, grouping, interleaving, and deletion of missing output are
 // up to the host. existing is not modified.
 func (t *IncidentType) Expand(ctx context.Context, existing content.Record, payload json.RawMessage) (content.ExpansionResult, error) {
 	item, err := content.ItemView[Incident](existing)
@@ -26,8 +27,12 @@ func (t *IncidentType) Expand(ctx context.Context, existing content.Record, payl
 	if err != nil {
 		return content.ExpansionResult{}, err
 	}
-	if err := validatePayload(item.ContentValue, input); err != nil {
-		return content.ExpansionResult{}, err
+	// Semantic and matcher-detail errors are collected together; any of
+	// them rejects the whole submission.
+	validationErrors := validatePayload(item.ContentValue, input)
+	matcher, matcherErrors := deriveMatcher(input.Alerts)
+	if validationErrors = append(validationErrors, matcherErrors...); len(validationErrors) > 0 {
+		return content.ExpansionResult{}, &content.ValidationError{ContentType: IncidentTypeName, Stage: content.StagePayload, Fields: validationErrors}
 	}
 
 	primary, err := enrichedPrimary(existing, item.ContentValue, input)
@@ -41,6 +46,9 @@ func (t *IncidentType) Expand(ctx context.Context, existing content.Record, payl
 	}
 	if timeline != nil {
 		result.Blocks = append(result.Blocks, content.EmittedBlock{Record: timeline})
+	}
+	if record := t.matcherBlock(matcher); record != nil {
+		result.Blocks = append(result.Blocks, content.EmittedBlock{Record: record})
 	}
 	return result, nil
 }
@@ -91,11 +99,12 @@ func (t *IncidentType) timelineBlock(ctx context.Context, input Payload) (conten
 // validatePayload checks what the payload schema cannot express: the
 // incident matches the primary reference, collections are explicit arrays,
 // creation times are nonzero, and IDs are unique within each collection
-// (they may overlap across collections).
-func validatePayload(incident Incident, input Payload) error {
-	var fields []content.FieldError
+// (they may overlap across collections). It returns the collected field
+// errors.
+func validatePayload(incident Incident, input Payload) []content.FieldError {
+	var fieldErrors []content.FieldError
 	add := func(path, format string, args ...any) {
-		fields = append(fields, content.FieldError{Path: path, Message: fmt.Sprintf(format, args...)})
+		fieldErrors = append(fieldErrors, content.FieldError{Path: path, Message: fmt.Sprintf(format, args...)})
 	}
 	if input.Incident.ID != incident.ID {
 		add("incident.id", "payload incident %q does not match the referenced incident %q", input.Incident.ID, incident.ID)
@@ -109,10 +118,7 @@ func validatePayload(incident Incident, input Payload) error {
 	checkCollection(add, "alerts", input.Alerts, func(a SourceAlert) (string, time.Time) { return a.ID, a.CreatedAt })
 	checkCollection(add, "notes", input.Notes, func(n SourceNote) (string, time.Time) { return n.ID, n.CreatedAt })
 	checkCollection(add, "log_entries", input.LogEntries, func(e SourceLogEntry) (string, time.Time) { return e.ID, e.CreatedAt })
-	if len(fields) > 0 {
-		return &content.ValidationError{ContentType: IncidentTypeName, Stage: content.StagePayload, Fields: fields}
-	}
-	return nil
+	return fieldErrors
 }
 
 // checkCollection reports a missing/null collection, zero creation times,

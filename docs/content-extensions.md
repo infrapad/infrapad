@@ -10,7 +10,7 @@ built-in extensions as examples:
 | `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher` | Structured, header-only block with an empty body. |
 | `server/pkg/extensions/aiagent` | `AIAgent/Message` | Shared type emitted by other extensions, presentation, companion schema constraints. |
 | `server/pkg/extensions/slack` | `Slack/Thread`, `Slack/Conversation` | Expandable primary with a transient payload, a groupable type, and output of another extension's type. |
-| `server/pkg/extensions/pagerduty` | `PagerDuty/Incident`, `PagerDuty/Timeline` | Read-only generated Markdown `text` body, header reference locked after enrichment, open JSON inside a strict payload. |
+| `server/pkg/extensions/pagerduty` | `PagerDuty/Incident`, `PagerDuty/Timeline` | Read-only generated Markdown `text` body, header reference locked after enrichment, open JSON inside a strict payload; emits the registered `Prometheus/AlertsMatcher` type (injected via `ContentTypes(matcherType)`). |
 
 This guide is for changing the InfraPad server itself. If you're writing an external
 producer that submits content to a running server through its

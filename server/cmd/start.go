@@ -75,10 +75,11 @@ var startCmd = &cobra.Command{
 		// extensions register their content types here.
 		agentType := aiagent.NewMessageType()
 		conversationType := slack.NewConversationType()
+		alertsMatcherType := prometheus.NewAlertsMatcherType()
 		registry, err := content.NewRegistry(
-			core.ContentTypes(), prometheus.ContentTypes(),
+			core.ContentTypes(), []content.ContentType{alertsMatcherType},
 			[]content.ContentType{agentType, slack.NewThreadType(conversationType, agentType), conversationType},
-			pagerduty.ContentTypes())
+			pagerduty.ContentTypes(alertsMatcherType))
 		if err != nil {
 			return fmt.Errorf("build content registry: %w", err)
 		}

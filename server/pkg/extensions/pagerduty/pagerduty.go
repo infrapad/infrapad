@@ -1,6 +1,7 @@
 // Package pagerduty implements the PagerDuty integration: PagerDuty/Incident
 // references enriched from transient incident payloads with a Markdown
-// summary, and generated PagerDuty/Timeline notes and log entries.
+// summary, generated PagerDuty/Timeline notes and log entries, and an
+// optional Prometheus/AlertsMatcher derived from the alert details.
 package pagerduty
 
 import (
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
+	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 )
 
 //go:embed schema.cue
@@ -124,8 +126,11 @@ type SourceLogEntry struct {
 	ActorName string `json:"actor_name,omitempty"`
 }
 
-// ContentTypes returns the PagerDuty content types.
-func ContentTypes() []content.ContentType {
+// ContentTypes returns the PagerDuty content types. matcherType is the
+// registered Prometheus/AlertsMatcher implementation used for emitted
+// matcher children; it must be the instance registered in the host
+// registry (it is not included in the returned types).
+func ContentTypes(matcherType *prometheus.AlertsMatcherType) []content.ContentType {
 	timelineType := NewTimelineType()
-	return []content.ContentType{NewIncidentType(timelineType), timelineType}
+	return []content.ContentType{NewIncidentType(timelineType, matcherType), timelineType}
 }
