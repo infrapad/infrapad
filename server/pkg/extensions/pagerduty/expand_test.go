@@ -66,10 +66,12 @@ func TestIncidentExpansion(t *testing.T) {
 	testutil.NoErr(t, err)
 
 	// The primary keeps its key and reference, gains the summary with
-	// canonically ordered alerts, and moves to the incident creation time.
+	// canonically ordered alerts, and moves to the incident creation time,
+	// not the earlier alert times (13:02).
 	primary, err := content.KeyedItemView[pagerduty.Incident](testutil.RoundTripRecord(t, registry, result.Record))
 	testutil.NoErr(t, err)
 	if primary.Key() != "generated-incident" || !primary.Timestamp().Equal(at("13:03")) ||
+		primary.Timestamp().Equal(at("13:02")) ||
 		primary.ContentValue.ID != "Q0EXAMPLE" || primary.ContentValue.URL != incidentURL {
 		t.Fatalf("unexpected primary: %#v", primary)
 	}
@@ -186,6 +188,58 @@ func TestIncidentExpansion(t *testing.T) {
 	testutil.NoErr(t, err)
 	if view, _ := content.ItemView[pagerduty.Incident](result.Record); !view.ContentValue.Enriched() || len(result.Blocks) != 0 {
 		t.Fatalf("unexpected empty expansion: %#v", result)
+	}
+}
+
+// TestIncidentTimestampRefresh checks that every valid expansion selects
+// the payload's incident creation time exactly, moving the primary earlier
+// or later, regardless of earlier alerts, notes, and log entries.
+func TestIncidentTimestampRefresh(t *testing.T) {
+	registry, err := newRegistry()
+	testutil.NoErr(t, err)
+	incidentType, err := registry.Lookup(pagerduty.IncidentTypeName)
+	testutil.NoErr(t, err)
+	reference := content.NewKeyedItem(incidentType, "generated-incident", at("09:00"),
+		pagerduty.Incident{ID: "Q0EXAMPLE", URL: incidentURL})
+
+	// Later, then earlier, then a fractional non-UTC time; each refresh is
+	// authoritative and keeps the exact source time, normalized to UTC.
+	created := time.Date(2026, 10, 25, 15, 3, 43, 500000000, time.FixedZone("CEST", 2*3600))
+	for i, want := range []time.Time{at("13:10"), at("12:00"), created} {
+		payload := incidentPayload()
+		payload.Incident.CreatedAt = want
+		// Events predating the incident must not drag the reference below
+		// the incident creation time.
+		payload.Alerts[0].CreatedAt = want.Add(-time.Minute)
+		payload.Notes[0].CreatedAt = want.Add(-2 * time.Minute)
+		payload.LogEntries[1].CreatedAt = want.Add(-3 * time.Minute)
+		result, err := expand(registry, reference, payload)
+		testutil.NoErr(t, err)
+		primary, err := content.KeyedItemView[pagerduty.Incident](testutil.RoundTripRecord(t, registry, result.Record))
+		testutil.NoErr(t, err)
+		if !primary.Timestamp().Equal(want) || primary.Timestamp().Location() != time.UTC {
+			t.Fatalf("step %d: primary timestamp %s, want %s in UTC", i, primary.Timestamp(), want.UTC())
+		}
+		if primary.Key() != "generated-incident" || primary.ContentType() != incidentType ||
+			primary.ContentValue.ID != "Q0EXAMPLE" || primary.ContentValue.URL != incidentURL ||
+			primary.ContentValue.Text == "" {
+			t.Fatalf("step %d: unexpected primary: %#v", i, primary)
+		}
+		if original, _ := content.KeyedItemView[pagerduty.Incident](reference); !original.Timestamp().Equal(at("09:00")) ||
+			original.ContentValue.Text != "" {
+			t.Fatalf("step %d: expansion mutated the input record", i)
+		}
+	}
+
+	// A plain (keyless) primary is copied the same way.
+	plain := content.NewItem(incidentType, at("09:00"), pagerduty.Incident{ID: "Q0EXAMPLE", URL: incidentURL})
+	result, err := expand(registry, plain, incidentPayload())
+	testutil.NoErr(t, err)
+	primary, err := content.ItemView[pagerduty.Incident](result.Record)
+	testutil.NoErr(t, err)
+	if !primary.Timestamp().Equal(at("13:03")) || primary.ContentValue.Text == "" ||
+		primary.ContentValue.ID != "Q0EXAMPLE" {
+		t.Fatalf("unexpected plain primary: %#v", primary)
 	}
 }
 

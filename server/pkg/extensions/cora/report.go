@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
@@ -124,7 +123,7 @@ func (t *ReportType) Expand(_ context.Context, existing content.Record, payload 
 	}
 
 	at := input.Timestamp.UTC()
-	primary, err := retimestamped(existing, at, report)
+	primary, err := content.WithTimestamp(existing, at)
 	if err != nil {
 		return content.ExpansionResult{}, err
 	}
@@ -151,18 +150,6 @@ func validatePayload(report Report, input Payload) []content.FieldError {
 		violations = append(violations, content.FieldError{Path: "timestamp", Message: "must be a nonzero time"})
 	}
 	return violations
-}
-
-// retimestamped returns a copy of the primary at the given event time,
-// preserving its type, content, and any generated key.
-func retimestamped(existing content.Record, at time.Time, report Report) (content.Record, error) {
-	if keyed, ok := existing.(content.KeyedRecord); ok {
-		return content.NewKeyedItem(existing.ContentType(), keyed.Key(), at, report), nil
-	}
-	if _, ok := existing.(content.ItemRecord); !ok {
-		return nil, fmt.Errorf("expected an individual report record, got %T", existing)
-	}
-	return content.NewItem(existing.ContentType(), at, report), nil
 }
 
 // renderReport renders the report label, linked when a source URL exists.

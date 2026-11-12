@@ -62,14 +62,11 @@ func enrichedPrimary(existing content.Record, incident Incident, input Payload) 
 		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), cmp.Compare(a.ID, b.ID))
 	})
 	incident.Text = FormatIncidentSummary(input.Incident, alerts)
-	createdAt := input.Incident.CreatedAt.UTC()
-	if keyed, ok := existing.(content.KeyedRecord); ok {
-		return content.NewKeyedItem(existing.ContentType(), keyed.Key(), createdAt, incident), nil
+	primary, err := content.WithContent(existing, incident)
+	if err != nil {
+		return nil, err
 	}
-	if _, ok := existing.(content.ItemRecord); !ok {
-		return nil, fmt.Errorf("expected an individual incident record, got %T", existing)
-	}
-	return content.NewItem(existing.ContentType(), createdAt, incident), nil
+	return content.WithTimestamp(primary, input.Incident.CreatedAt.UTC())
 }
 
 // timelineBlock builds one timeline collection of the notes and log

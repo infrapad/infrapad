@@ -135,24 +135,34 @@ untouched.
 
 ## Reference timestamps
 
-A `Slack/Thread` reference's event timestamp is derived from its payloads;
-producers don't supply it.
+A reference's event timestamp is derived from its payloads; producers
+don't supply it directly.
 
 - **New references** get the server-assigned creation time until the first
-  non-empty payload arrives.
-- **Non-empty payloads** set it to the earliest message `ts` (any message,
-  including mapped agent messages; array order doesn't matter; fractional
-  seconds are kept). The reference shares that time with its first
-  generated message and sorts before it by block number.
-- **Authoritative refreshes.** Every non-empty payload recomputes it, so it
-  may move earlier or later; e.g. a payload missing the parent moves it to
-  the earliest reply. A change creates a new reference revision; identical
-  payloads stay no-ops.
-- **Empty payloads** keep the current timestamp while removing generated
-  output.
-- It is never inferred from the permalink. API and Markdown edits keep it;
-  the record-level `timestamp` can only be omitted or echoed unchanged, and
-  `content.timestamp` is rejected as an unknown field.
+  valid payload arrives.
+- **Authoritative refreshes.** Every valid payload recomputes the timestamp
+  from the source, so it may move earlier or later. A change creates a new
+  reference revision; identical payloads stay no-ops. Malformed or
+  incomplete payloads are rejected and never reset the timestamp.
+- API and Markdown edits keep it; the record-level `timestamp` can only be
+  omitted or echoed unchanged, and `content.timestamp` is rejected as an
+  unknown field.
+
+The selected source time is type-specific:
+
+- **`Slack/Thread`** takes the earliest message `ts` of each non-empty
+  payload (any message, including mapped agent messages; array order
+  doesn't matter; fractional seconds are kept). The reference shares that
+  time with its first generated message and sorts before it by block
+  number. **Empty payloads** keep the current timestamp while removing
+  generated output. It is never inferred from the permalink.
+- **`PagerDuty/Incident`** always takes the payload's `incident.created_at`,
+  even when alerts, notes, or log entries predate the incident creation;
+  generated output keeps its own event times.
+- **`Cora/Report`** takes the payload's `timestamp` for both the reference
+  and its generated `AIAgent/Message`.
+
+All selected times are stored in UTC with the source precision.
 
 ## Payload semantics
 

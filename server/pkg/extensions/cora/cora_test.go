@@ -66,6 +66,49 @@ func TestReportExpansion(t *testing.T) {
 	}
 }
 
+// TestReportTimestampRefresh checks that every valid payload sets the
+// primary and message timestamps exactly to the payload source time,
+// moving them earlier or later across sequential refreshes.
+func TestReportTimestampRefresh(t *testing.T) {
+	registry, reportType := newRegistry(t)
+	base := time.Date(2026, 1, 1, 10, 5, 0, 0, time.FixedZone("CET", 3600))
+	reference := content.NewItem(reportType, time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		cora.Report{ReportID: "r-1", URL: reportURL})
+
+	// Later, then earlier, then a fractional non-UTC time; each refresh is
+	// authoritative and keeps the exact source time, normalized to UTC.
+	fractional := time.Date(2026, 1, 1, 7, 5, 6, 123456789, time.FixedZone("EST", -5*3600))
+	for i, want := range []time.Time{base.Add(time.Hour), base.Add(-90 * time.Minute), fractional} {
+		result, err := expand(registry, reference, map[string]any{"report_id": "r-1", "timestamp": want, "text": reportText})
+		testutil.NoErr(t, err)
+		primary, err := content.ItemView[cora.Report](result.Record)
+		testutil.NoErr(t, err)
+		if !primary.Timestamp().Equal(want) || primary.Timestamp().Location() != time.UTC ||
+			primary.ContentValue != (cora.Report{ReportID: "r-1", URL: reportURL}) {
+			t.Fatalf("step %d: unexpected primary: %#v", i, primary)
+		}
+		message, err := content.KeyedItemView[aiagent.Message](result.Blocks[0].Record)
+		testutil.NoErr(t, err)
+		if !message.Timestamp().Equal(want) || message.Key() != cora.MessageKey("r-1") {
+			t.Fatalf("step %d: unexpected message: %#v", i, message)
+		}
+	}
+	if original, _ := content.ItemView[cora.Report](reference); !original.Timestamp().Equal(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatal("expansion mutated the input record")
+	}
+
+	// A keyed primary is copied with its key preserved.
+	keyed := content.NewKeyedItem(reportType, "generated-report", base, cora.Report{ReportID: "r-1", URL: reportURL})
+	result, err := expand(registry, keyed, map[string]any{"report_id": "r-1", "timestamp": fractional, "text": reportText})
+	testutil.NoErr(t, err)
+	view, err := content.KeyedItemView[cora.Report](result.Record)
+	testutil.NoErr(t, err)
+	if view.Key() != "generated-report" || !view.Timestamp().Equal(fractional) ||
+		view.ContentValue != (cora.Report{ReportID: "r-1", URL: reportURL}) {
+		t.Fatalf("unexpected keyed primary: %#v", view)
+	}
+}
+
 // TestReportMarkdown checks rendering, presentation, reference validation,
 // and the header rules: initial values on a seed, then immutability.
 func TestReportMarkdown(t *testing.T) {

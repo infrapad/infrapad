@@ -185,6 +185,16 @@ Expand(ctx, existing Record, payload json.RawMessage) (ExpansionResult, error)
   test-only `Test/Ref` in `server/internal/testext`.
 - **Primary state.** `ExpansionResult.Record` is the resulting primary
   record. Return `existing` when the primary doesn't change.
+- **Primary timestamps.** An expander may also move the primary's event
+  timestamp (PagerDuty/Incident and Cora/Report do it on every valid
+  payload, Slack/Thread on every non-empty one): return the updated record
+  through `ExpansionResult.Record` rather than adding a host capability.
+  Copy records with the shared helpers instead of rebuilding them:
+  `content.WithContent(existing, value)` replaces the inner value while
+  preserving type, timestamp, and key, and `content.WithTimestamp(existing,
+  ts)` replaces the timestamp while preserving content and key. Neither
+  mutates the input, and the host permits timestamp changes to the primary
+  on reconciliation.
 - **Errors.** Return `*content.ValidationError` (with `StagePayload` and
   field paths) for semantic payload problems that the schema can't express.
   Any error rejects the whole submission, and the document stays unchanged.
