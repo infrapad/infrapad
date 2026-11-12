@@ -7,7 +7,8 @@
 
 // Package pagerduty implements the PagerDuty integration: PagerDuty/Incident
 // references enriched from transient incident payloads with a Markdown
-// summary, and generated PagerDuty/Timeline notes and log entries.
+// summary, generated PagerDuty/Timeline notes and log entries, and an
+// optional Prometheus/AlertsMatcher derived from the alert details.
 package pagerduty
 
 import "time"
@@ -26,6 +27,7 @@ _#incidentMdHeader: {
 	id:  string @go(ID)
 	url: string @go(URL)
 }
+#AlertsMatcherKey: "pagerduty-alerts-matcher"
 #IncidentTypeName: "PagerDuty/Incident"
 #TimelineTypeName: "PagerDuty/Timeline"
 
