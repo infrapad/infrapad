@@ -101,6 +101,20 @@ func WithContent[T any](existing Record, value T) (Record, error) {
 	return NewItem(existing.ContentType(), existing.Timestamp(), value), nil
 }
 
+// WithTimestamp returns a new individual record with the event timestamp
+// replaced while preserving type association, inner value, and key.
+// existing is not modified.
+func WithTimestamp(existing Record, ts time.Time) (Record, error) {
+	item, ok := existing.(ItemRecord)
+	if !ok {
+		return nil, fmt.Errorf("cannot replace the timestamp of %T", existing)
+	}
+	if keyed, ok := existing.(KeyedRecord); ok {
+		return NewKeyedItem(existing.ContentType(), keyed.Key(), ts, item.Content()), nil
+	}
+	return NewItem(existing.ContentType(), ts, item.Content()), nil
+}
+
 // ---------------------------------------------------------------------------
 // Host record codec. Records use ordinary JSON encoding of their fields;
 // only inner content is delegated to extension decoders. Keeping all record

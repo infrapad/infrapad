@@ -4,6 +4,9 @@ package e2e
 // the Slack/AI-agent slice: initial, identical, and changed payloads with
 // grouped records, stable block identities, and revision/no-op behavior,
 // followed by a failed refresh that leaves the cached document unchanged.
+// The thread timestamp starts server-assigned and is then inferred from the
+// earliest message of every non-empty payload (authoritative refreshes,
+// empty payloads preserve it); explicit content timestamps are rejected.
 // Generic rejection cases live in invalid_data_test.go.
 
 import (
@@ -42,14 +45,29 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 		t.Fatalf("CreateDocument: %v", err)
 	}
 	docName := created.GetDocument().GetName()
+	threadURL := "https://slack.example/archives/C1/p" + slackID(0)
 	thread, err := client.AddBlock(ctx, &pb.AddBlockRequest{Parent: docName, Block: &pb.Block{
 		Type:   "Slack/Thread",
-		Record: contentRecord(t, map[string]any{"url": "https://slack.example/archives/C1/p" + slackID(0)}),
+		Record: contentRecord(t, map[string]any{"url": threadURL}),
 	}})
 	if err != nil {
 		t.Fatalf("AddBlock thread: %v", err)
 	}
 	threadNumber := thread.GetBlock().GetBlockNumber()
+	// Until a payload arrives, the reference keeps its creation time.
+	if got, notes := recordTimestamp(t, thread.GetBlock()), recordTimestamp(t, created.GetDocument().GetBlocks()[0]); got.Before(notes) {
+		t.Fatalf("thread timestamp %s, want the server-assigned creation time (after %s)", got, notes)
+	}
+	// threadAt asserts the thread timestamp and that it sorts first.
+	threadAt := func(doc *pb.Document, minute int) {
+		t.Helper()
+		expectChronological(t, doc)
+		first := doc.GetBlocks()[0]
+		if want := slackOrigin.Add(time.Duration(minute) * time.Minute); first.GetBlockNumber() != threadNumber ||
+			!recordTimestamp(t, first).Equal(want) {
+			t.Fatalf("expected thread %d first at %s, got %v", threadNumber, want, first)
+		}
+	}
 
 	submit := func(messages ...map[string]any) (*pb.Document, error) {
 		t.Helper()
@@ -69,7 +87,16 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitBlockPayload: %v", err)
 	}
-	expectChronological(t, doc)
+	// The reference takes its earliest message time and sorts before the
+	// tied first conversation (lower block number) and the newer notes.
+	threadAt(doc, 1)
+	if second := doc.GetBlocks()[1]; second.GetParentBlockNumber() != threadNumber ||
+		!recordTimestamp(t, second).Equal(recordTimestamp(t, doc.GetBlocks()[0])) {
+		t.Fatalf("expected the tied first conversation after the reference: %v", doc.GetBlocks())
+	}
+	if doc.GetBlocks()[0].GetRevisionNumber() != 2 {
+		t.Fatalf("inferred timestamp should revise the primary: %v", doc.GetBlocks()[0])
+	}
 	generated := generatedBlocks(doc, threadNumber)
 	if len(generated) != 3 {
 		t.Fatalf("expected 3 generated blocks, got %d: %v", len(generated), doc.GetBlocks())
@@ -102,9 +129,9 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("changed SubmitBlockPayload: %v", err)
 	}
-	expectChronological(t, doc)
+	threadAt(doc, 1)
 	revisions = blockRevisions(doc)
-	want := map[int32]int32{1: 1, threadNumber: 1, conv1.GetBlockNumber(): 2, agent.GetBlockNumber(): 1, conv2.GetBlockNumber(): 2}
+	want := map[int32]int32{1: 1, threadNumber: 2, conv1.GetBlockNumber(): 2, agent.GetBlockNumber(): 1, conv2.GetBlockNumber(): 2}
 	if !equalRevisions(revisions, want) {
 		t.Fatalf("unexpected revisions after change: %v, want %v", revisions, want)
 	}
@@ -173,6 +200,31 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 	}
 	unchanged("identical HTTP submission")
 
+	// Ordinary edits preserve the inferred timestamp; direct host-timestamp
+	// changes and the removed content.timestamp field are rejected.
+	edited, err := client.UpdateBlock(ctx, &pb.UpdateBlockRequest{
+		Parent: docName, BlockNumber: threadNumber,
+		Block: &pb.Block{Type: "Slack/Thread", Record: contentRecord(t, map[string]any{"url": threadURL})},
+	})
+	if err != nil {
+		t.Fatalf("UpdateBlock thread: %v", err)
+	}
+	if got, want := recordTimestamp(t, edited.GetBlock()), slackOrigin.Add(time.Minute); !got.Equal(want) {
+		t.Fatalf("ordinary edit changed the event time: %s, want %s", got, want)
+	}
+	_, err = client.UpdateBlock(ctx, &pb.UpdateBlockRequest{
+		Parent: docName, BlockNumber: threadNumber,
+		Block: &pb.Block{Type: "Slack/Thread", Record: timestampedRecord(t, map[string]any{"url": threadURL}, slackOrigin)},
+	})
+	requireCode(t, err, codes.InvalidArgument, "direct host-timestamp change")
+	_, err = client.UpdateBlock(ctx, &pb.UpdateBlockRequest{
+		Parent: docName, BlockNumber: threadNumber,
+		Block: &pb.Block{Type: "Slack/Thread", Record: contentRecord(t, map[string]any{
+			"url": threadURL, "timestamp": slackOrigin.Format(time.RFC3339Nano),
+		})},
+	})
+	requireCode(t, err, codes.InvalidArgument, "removed content.timestamp")
+
 	// The HTTP export route returns JSON containing the same Markdown.
 	exported, err := client.ExportDocumentMarkdown(ctx, &pb.ExportDocumentMarkdownRequest{Name: docName})
 	if err != nil {
@@ -188,6 +240,25 @@ func TestPayloadSubmissionLifecycle(t *testing.T) {
 
 	expectMarkdownPush(t, client, docName, threadNumber, exported.GetMarkdown())
 	expectOutputOnlyEchoIgnored(t, client, docName)
+
+	// Refreshes are authoritative: without the parent the reference moves
+	// to the earliest reply; an earlier message moves it back. An empty
+	// payload removes the children and keeps the current timestamp.
+	if doc, err = submit(m2b, m3, m4, m5); err != nil {
+		t.Fatalf("SubmitBlockPayload without the parent: %v", err)
+	}
+	threadAt(doc, 2)
+	if doc, err = submit(slackMessage(0, "U1", "Alice", "zeroth"), m2b, m3, m4, m5); err != nil {
+		t.Fatalf("SubmitBlockPayload with an earlier message: %v", err)
+	}
+	threadAt(doc, 0)
+	if doc, err = submit(); err != nil {
+		t.Fatalf("empty SubmitBlockPayload: %v", err)
+	}
+	threadAt(doc, 0)
+	if n := len(generatedBlocks(doc, threadNumber)); n != 0 {
+		t.Fatalf("empty payload kept %d generated blocks", n)
+	}
 }
 
 // expectPresentation checks the output-only presentation and body-only
@@ -285,7 +356,8 @@ func expectOutputOnlyEchoIgnored(t *testing.T, client pb.InfrapadServiceClient, 
 
 // expectMarkdownPush round-trips the exported Markdown through the push
 // API: a no-op push over HTTP, then an ordinary body edit, a header-only
-// edit of the Slack thread reference, and a new AI-agent message block.
+// edit of the Slack thread reference (keeping its inferred timestamp), and a
+// new AI-agent message block. A content.timestamp header is rejected.
 func expectMarkdownPush(t *testing.T, client pb.InfrapadServiceClient, docName string, threadNumber int32, exported string) {
 	t.Helper()
 	url := fmt.Sprintf("%s/v1/%s/markdown", httpBaseURL(), docName)
@@ -300,6 +372,11 @@ func expectMarkdownPush(t *testing.T, client pb.InfrapadServiceClient, docName s
 
 	oldURL := "https://slack.example/archives/C1/p" + slackID(0)
 	newURL := "https://slack.example/archives/C1/p" + slackID(9)
+	threadTime := slackOrigin.Add(time.Minute).Format(time.RFC3339Nano)
+	_, err := client.PushDocumentMarkdown(context.Background(), &pb.PushDocumentMarkdownRequest{Name: docName,
+		Markdown: exported + "::infrapad_block{block=new type=Slack/Thread}\n```yaml infrapad\ncontent:\n  url: " + oldURL +
+			"\n  timestamp: \"" + threadTime + "\"\n```\n"})
+	requireCode(t, err, codes.InvalidArgument, "Markdown content.timestamp")
 	edited := strings.Replace(exported, "}\nnotes\n", "}\nnotes (edited)\n", 1)
 	edited = strings.Replace(edited, "  url: "+oldURL+"\n", "  url: "+newURL+"\n", 1)
 	edited += "::infrapad_block{block=new type=AIAgent/Message}\n```yaml infrapad\ncontent:\n  agent: reviewer\n```\nLooks good.\n"
@@ -315,14 +392,15 @@ func expectMarkdownPush(t *testing.T, client pb.InfrapadServiceClient, docName s
 			added = change.GetBlockNumber()
 		}
 	}
-	if want := fmt.Sprintf("1:updated,%d:updated,%d:added", threadNumber, added); strings.Join(changes, ",") != want {
+	// The reference sorts first by its inferred source time.
+	if want := fmt.Sprintf("%d:updated,1:updated,%d:added", threadNumber, added); strings.Join(changes, ",") != want {
 		t.Fatalf("unexpected changes %v, want %s", changes, want)
 	}
 	md := resp.GetMarkdown()
 	for _, want := range []string{
 		"block=1 rev=2 type=Core/Markdown", "}\nnotes (edited)\n",
 		// Header-only edit: the body is regenerated from the new URL.
-		fmt.Sprintf("block=%d rev=2 type=Slack/Thread", threadNumber), "[Slack thread](" + newURL + ")",
+		fmt.Sprintf("block=%d rev=4 type=Slack/Thread timestamp=%s", threadNumber, threadTime), "[Slack thread](" + newURL + ")",
 		fmt.Sprintf("block=%d rev=1 type=AIAgent/Message timestamp=", added), "  agent: reviewer\n", "Looks good.\n",
 	} {
 		if !strings.Contains(md, want) {
@@ -389,7 +467,7 @@ func expectMarkdownExport(t *testing.T, client pb.InfrapadServiceClient, docName
 		}
 	}
 	threadURL := "https://slack.example/archives/C1/p" + slackID(0)
-	expectSection(threadNumber, header+"  url: "+threadURL+"\n```\n[Slack thread]("+threadURL+")\n")
+	expectSection(threadNumber, "rev=2 type=Slack/Thread timestamp="+at(1)+header+"  url: "+threadURL+"\n```\n[Slack thread]("+threadURL+")\n")
 	parent := fmt.Sprintf(" parent=%d timestamp=", threadNumber)
 	expectSection(agent.GetBlockNumber(), "type=AIAgent/Message"+parent+at(3)+header,
 		"  agent: investigation-agent\n", "  url: ", "```\nagent analysis\n")

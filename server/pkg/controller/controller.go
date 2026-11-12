@@ -118,8 +118,8 @@ func (c *Controller) buildRecord(blockType string, inner json.RawMessage, ts tim
 }
 
 // updatedRecord validates the submitted inner content JSON and replaces
-// the inner value of existing while preserving its type association,
-// timestamp, and key.
+// the inner value of existing while preserving its type association and
+// key and event timestamp.
 func (c *Controller) updatedRecord(existing content.Record, blockType string, inner json.RawMessage) (content.Record, error) {
 	value, err := c.registry.DecodeContent(blockType, inner)
 	if err != nil {
@@ -174,7 +174,7 @@ func (c *Controller) prepareNew(blk *model.Block, ts time.Time) error {
 }
 
 // prepareUpdate validates blk.Content against the existing record,
-// preserving the existing record timestamp (and key).
+// preserving the key and existing record timestamp.
 func (c *Controller) prepareUpdate(blk *model.Block, existing content.Record) error {
 	if blk.Type != existing.ContentType().Name() {
 		return &content.ValidationError{

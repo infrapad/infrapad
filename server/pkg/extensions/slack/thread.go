@@ -68,8 +68,12 @@ func MessageKey(ts string) string { return "slack-message:" + ts }
 // Expand emits the complete desired output for a thread payload: ordinary
 // messages as one Slack/Conversation collection and mapped agent messages as
 // standalone AIAgent/Message records. Final conversation splitting around
-// interleaved records is up to the host.  The primary state is unchanged;
-// returning existing keeps its metadata.
+// interleaved records is up to the host.
+//
+// The payload is the complete thread, so the earliest message time is
+// authoritative for the primary's event timestamp on every non-empty
+// payload (it may move earlier or later between refreshes). An empty
+// payload keeps the current timestamp. Content, type, and key are kept.
 func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payload json.RawMessage) (content.ExpansionResult, error) {
 	item, err := content.ItemView[ThreadReference](existing)
 	if err != nil {
@@ -101,6 +105,11 @@ func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payloa
 	}
 
 	result := content.ExpansionResult{Record: existing}
+	if earliest, ok := earliestTime(times); ok {
+		if result.Record, err = content.WithTimestamp(existing, earliest); err != nil {
+			return content.ExpansionResult{}, err
+		}
+	}
 	var conversation []content.KeyedRecord
 	for i, message := range input.Messages {
 		if err := ctx.Err(); err != nil {
@@ -139,6 +148,20 @@ func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payloa
 		result.Blocks = append(result.Blocks, content.EmittedBlock{Record: collection})
 	}
 	return result, nil
+}
+
+// earliestTime returns the minimum of times, or false when empty.
+func earliestTime(times []time.Time) (time.Time, bool) {
+	if len(times) == 0 {
+		return time.Time{}, false
+	}
+	earliest := times[0]
+	for _, at := range times[1:] {
+		if at.Before(earliest) {
+			earliest = at
+		}
+	}
+	return earliest, true
 }
 
 // payloadError builds a structured validation error of the Slack/Thread

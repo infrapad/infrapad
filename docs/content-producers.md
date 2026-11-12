@@ -21,7 +21,9 @@ types to the server, see [content-extensions.md](content-extensions.md).
   and are refreshed only by resubmitting a payload.
 - Blocks are ordered by event timestamp, then block number. Generated Slack
   messages use the Slack message time, so they interleave with other content
-  in the document.
+  in the document. A `Slack/Thread` reference takes the time of its
+  payload's earliest message (see [Reference
+  timestamps](#reference-timestamps)).
 
 ## Walkthrough
 
@@ -91,20 +93,21 @@ api -X POST "$API/v1/$DOC/blocks/$THREAD:submitPayload" -d @payload.json \
 ```
 
 ```text
+1 rev=2 Slack/Thread parent=-
 2 rev=1 Slack/Conversation parent=1
 3 rev=1 AIAgent/Message parent=1
 4 rev=1 Slack/Conversation parent=1
-1 rev=1 Slack/Thread parent=-
 ```
 
 The agent reply splits the human messages into two conversation blocks. The
-messages are from January 2026, so they sort before the thread reference,
-whose event time is its creation time. The response contains the complete
-refreshed document, including `presentation` and `markdown` for each block.
+thread reference takes the time of the earliest message (a new revision,
+`rev=2`) and sorts first: it ties with the first conversation and has the
+lower block number. The response contains the complete refreshed document,
+including `presentation` and `markdown` for each block.
 
 ### 3. Submit an updated payload
 
-Submitting the same file again changes nothing: all revisions stay at 1.
+Submitting the same file again changes nothing: no revision changes.
 Now edit a message and append a reply. The edit keeps the message's `ts`,
 which is its identity:
 
@@ -118,17 +121,38 @@ api -X POST "$API/v1/$DOC/blocks/$THREAD:submitPayload" -d @payload-2.json \
 ```
 
 ```text
+1 rev=2 Slack/Thread
 2 rev=2 Slack/Conversation
 3 rev=1 AIAgent/Message
 4 rev=2 Slack/Conversation
-1 rev=1 Slack/Thread
 ```
 
 Block numbers stay the same. Only the changed conversation blocks get new
-revisions; the earlier content is still in
+revisions (the earliest message, and so the thread time, is unchanged); the earlier content is still in
 `GET /v1/$DOC/blocks/2/history`. The generated blocks also appear in the
 UI and in exported Markdown; agents editing a document must leave them
 untouched.
+
+## Reference timestamps
+
+A `Slack/Thread` reference's event timestamp is derived from its payloads;
+producers don't supply it.
+
+- **New references** get the server-assigned creation time until the first
+  non-empty payload arrives.
+- **Non-empty payloads** set it to the earliest message `ts` (any message,
+  including mapped agent messages; array order doesn't matter; fractional
+  seconds are kept). The reference shares that time with its first
+  generated message and sorts before it by block number.
+- **Authoritative refreshes.** Every non-empty payload recomputes it, so it
+  may move earlier or later; e.g. a payload missing the parent moves it to
+  the earliest reply. A change creates a new reference revision; identical
+  payloads stay no-ops.
+- **Empty payloads** keep the current timestamp while removing generated
+  output.
+- It is never inferred from the permalink. API and Markdown edits keep it;
+  the record-level `timestamp` can only be omitted or echoed unchanged, and
+  `content.timestamp` is rejected as an unknown field.
 
 ## Payload semantics
 

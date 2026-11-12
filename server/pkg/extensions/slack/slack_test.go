@@ -304,6 +304,63 @@ func TestThreadValidation(t *testing.T) {
 	}
 }
 
+// TestThreadTimestamp covers the payload-inferred primary timestamp: the
+// earliest message of each non-empty payload (unordered, fractional,
+// agent messages included) is authoritative, empty payloads keep the
+// current timestamp, the input is unchanged, and explicit content
+// timestamps are rejected.
+func TestThreadTimestamp(t *testing.T) {
+	agent := aiagent.NewMessageType()
+	registry, err := content.NewRegistry([]content.ContentType{agent}, slack.ContentTypes(agent))
+	testutil.NoErr(t, err)
+	thread, err := registry.Lookup(slack.ThreadTypeName)
+	testutil.NoErr(t, err)
+	expander := thread.(content.Expander)
+	primary := func(existing content.Record, payload string) content.Record {
+		t.Helper()
+		result, err := expander.Expand(context.Background(), existing, json.RawMessage(payload))
+		testutil.NoErr(t, err)
+		testutil.NoErr(t, registry.ValidateExpansion(existing, result))
+		return result.Record
+	}
+
+	// The minimum wins regardless of array order, including the mapped
+	// agent message, with microsecond precision; type, key, and content
+	// are kept and the input is not mutated.
+	existing := content.NewKeyedItem(thread, "investigation-thread", at("10:00"), slack.ThreadReference{URL: threadURL})
+	got := primary(existing, `{"agents":{"U3":"a"},"messages":[
+		{"ts":"1788873600.000100","user":"U1","text":"reply"},
+		{"ts":"1788873542.372739","user":"U3","text":"parent"}]}`)
+	want := time.Unix(1788873542, 372739000).UTC()
+	view, err := content.KeyedItemView[slack.ThreadReference](got)
+	testutil.NoErr(t, err)
+	if !got.Timestamp().Equal(want) || got.ContentType() != thread || view.Key() != "investigation-thread" ||
+		view.ContentValue.URL != threadURL || !existing.Timestamp().Equal(at("10:00")) {
+		t.Fatalf("unexpected primary %#v (timestamp %v)", got, got.Timestamp())
+	}
+
+	// Refreshes are authoritative: a payload without the parent moves the
+	// timestamp later; a later payload with an earlier message moves it back.
+	got = primary(got, `{"messages":[{"ts":"1788873600.000100","text":"reply"}]}`)
+	if want := time.Unix(1788873600, 100000).UTC(); !got.Timestamp().Equal(want) {
+		t.Fatalf("timestamp %v, want %v", got.Timestamp(), want)
+	}
+	got = primary(got, `{"messages":[{"ts":"1788873500.000001","text":"earlier"}]}`)
+	if want := time.Unix(1788873500, 1000).UTC(); !got.Timestamp().Equal(want) {
+		t.Fatalf("timestamp %v, want %v", got.Timestamp(), want)
+	}
+
+	// An empty payload keeps the current timestamp.
+	if empty := primary(got, `{"messages":[]}`); !empty.Timestamp().Equal(got.Timestamp()) {
+		t.Fatalf("empty payload changed the timestamp to %v", empty.Timestamp())
+	}
+
+	// The explicit content timestamp is no longer part of the schema.
+	_, err = registry.DecodeContent(slack.ThreadTypeName,
+		json.RawMessage(`{"url":"`+threadURL+`","timestamp":"2026-09-08T13:03:43Z"}`))
+	expectField(t, err, content.StageContent, "timestamp")
+}
+
 // expand runs the host sequence around a direct expander invocation:
 // validate the existing record and the payload, invoke the expander, then
 // check the result. It returns the emitted constituents.

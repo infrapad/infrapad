@@ -20,6 +20,8 @@ _#noReadableContent:           "No readable message content"
 
 // ThreadReference is the inner content of a Slack/Thread primary record.
 // URL is the absolute HTTP(S) Slack permalink of the thread parent message.
+// The record event timestamp is inferred from the earliest message of each
+// non-empty payload (see ThreadType.Expand), never from the permalink.
 #ThreadReference: {
 	// Absolute HTTP(S) Slack thread permalink:
 	// https://<workspace>/archives/<channelID>/p<16-digit timestamp>.

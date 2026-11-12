@@ -35,6 +35,9 @@ func TestPayloadReconciliationLifecycle(t *testing.T) {
 
 	reconcile := func(thread model.Block, messages ...slack.SourceMessage) {
 		t.Helper()
+		// Payloads revise the primary timestamp: expand its latest revision.
+		thread, err := ctrl.GetBlock(ctx, doc.Uid, thread.BlockNumber, 0)
+		testutil.NoErr(t, err)
 		tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 		testutil.NoErr(t, err)
 		defer tx.Rollback()
@@ -73,12 +76,25 @@ func TestPayloadReconciliationLifecycle(t *testing.T) {
 	expectRevision(t, f, doc.Uid, 3, 1)
 	expectRevision(t, f, doc.Uid, 5, 2)
 
-	// Removing the separator keeps the surviving groups distinct.
+	// Clearing the payload removes the generated separator, but the thread
+	// reference keeps its inferred 3:30 timestamp. Delete it too so there
+	// is no remaining separator between the surviving conversation groups.
 	before = revisions()
 	reconcile(t2)
 	if got := revisions() - before; got != 1 {
-		t.Fatalf("expected only the separator deletion, got %d revisions", got)
+		t.Fatalf("expected only the generated separator deletion, got %d revisions", got)
 	}
+	deleteTx, err := ctrl.BeginHostTx(ctx, doc.Uid)
+	testutil.NoErr(t, err)
+	defer deleteTx.Rollback()
+	deleted, err := ctrl.DeleteBlockTreeTx(ctx, deleteTx, doc.Uid, t2.BlockNumber, "host")
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, deleteTx.Commit())
+	if len(deleted) != 1 {
+		t.Fatalf("expected only the thread reference deletion, got %d revisions", len(deleted))
+	}
+	expectStatus(t, f, doc.Uid, t2.BlockNumber, model.DeletedBlock)
+	// Removing both separators keeps the surviving groups distinct.
 	expectChildren(t, f, doc.Uid, t1.BlockNumber, map[model.BlockNumber][]string{
 		3: {slackTS(0, 0, 0), slackTS(1, 0, 0)}, 4: {slackTS(2, 0, 0)}, 5: {slackTS(3, 0, 0)}, 7: {slackTS(4, 0, 0)},
 	})
