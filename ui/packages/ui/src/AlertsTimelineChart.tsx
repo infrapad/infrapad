@@ -5,48 +5,13 @@ import {
   ChartThemeColor,
   ChartVoronoiContainer,
 } from "@patternfly/react-charts/victory";
-import { Alert, Bullseye, Spinner } from "@patternfly/react-core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert } from "@patternfly/react-core";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { LabelMatcher, PromRangeSeries } from "./prometheusApi.js";
-import {
-  buildAlertsQuery,
-  isoToUnix,
-  seriesLabel,
-} from "./prometheusApi.js";
-import { useInfrapadClient } from "./infrapadClient.js";
+import type { QueryResults } from "./alertsData.js";
+import { isoToUnix, samplesToTransitions, seriesLabel } from "./alertsData.js";
 
 // ---- Constants ----
-
-/** Padding (seconds) to add before/after the incident window. */
-const TIME_PAD_S = 120;
-
-/** Prometheus rejects queries exceeding 11,000 points per series. */
-const MAX_POINTS = 10_000;
-
-/** Nice step candidates (seconds) used for longer incident windows. */
-const STEP_CANDIDATES_S = [15, 30, 60, 120, 300, 600, 1800, 3600, 6 * 3600, 24 * 3600];
-
-/**
- * Pick the smallest nice step that keeps the window within the point
- * budget, so long-running incidents do not exceed Prometheus's maximum
- * query resolution.
- */
-function computeStepS(startUnix: number, endUnix: number): number {
-  const rangeS = Math.max(endUnix - startUnix, 1);
-  const minStep = Math.ceil(rangeS / MAX_POINTS);
-  for (const step of STEP_CANDIDATES_S) {
-    if (step >= minStep) return step;
-  }
-  return Math.ceil(minStep / (24 * 3600)) * 24 * 3600;
-}
-
-/** Format a step in seconds as a Prometheus duration string. */
-function formatStep(stepS: number): string {
-  if (stepS % 3600 === 0) return `${stepS / 3600}h`;
-  if (stepS % 60 === 0) return `${stepS / 60}m`;
-  return `${stepS}s`;
-}
 
 /** Height per swimlane row (px). */
 const LANE_HEIGHT = 50;
@@ -72,31 +37,6 @@ interface ChartDataPoint {
   name: string;
 }
 
-/**
- * Build chart data points for a single series in a swimlane row.
- *
- * The y value is offset by `laneIndex` so each series occupies its own
- * vertical band:  lane 0 → [0,1], lane 1 → [1,2], etc.
- */
-function seriesToLaneData(
-  firingSet: Set<number>,
-  startUnix: number,
-  endUnix: number,
-  laneIndex: number,
-  label: string,
-  stepS: number,
-): ChartDataPoint[] {
-  const points: ChartDataPoint[] = [];
-  for (let t = startUnix; t <= endUnix; t += stepS) {
-    points.push({
-      x: new Date(t * 1000),
-      y: firingSet.has(t) ? laneIndex + 1 : laneIndex,
-      name: label,
-    });
-  }
-  return points;
-}
-
 // ---- Time formatting ----
 
 function formatTimeLabel(date: Date, includeDate = false): string {
@@ -119,33 +59,19 @@ const TEXT_STYLE = {
 // ---- Props ----
 
 export interface AlertsTimelineChartProps {
-  matchers: LabelMatcher[];
-  since: string;
-  until?: string;
+  /** Stored query results; absent when no snapshot was submitted. */
+  queryResults?: QueryResults;
 }
 
 // ---- Component ----
 
-export default function AlertsTimelineChart({
-  matchers,
-  since,
-  until,
-}: AlertsTimelineChartProps) {
-  const client = useInfrapadClient();
-  const [seriesData, setSeriesData] = useState<PromRangeSeries[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * Render stored AlertsMatcher query results as swimlanes. Never queries
+ * Prometheus: the window and resolution come from the stored results.
+ */
+export default function AlertsTimelineChart({ queryResults }: AlertsTimelineChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(600);
-
-  // Time bounds
-  const isOngoing = !until || until.startsWith("0001-01-01");
-  const startUnix = useMemo(() => isoToUnix(since) - TIME_PAD_S, [since]);
-  // Freeze the ongoing window for this mounted chart; state updates must not refetch it.
-  const endUnix = useMemo(() => isOngoing
-    ? Math.floor(Date.now() / 1000) + TIME_PAD_S
-    : isoToUnix(until) + TIME_PAD_S, [isOngoing, until]);
-  const stepS = useMemo(() => computeStepS(startUnix, endUnix), [startUnix, endUnix]);
 
   // Responsive width
   useEffect(() => {
@@ -160,39 +86,26 @@ export default function AlertsTimelineChart({
     return () => ro.disconnect();
   }, []);
 
-  // Fetch from Prometheus
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const query = buildAlertsQuery(matchers);
-      const result = await client.queryRange(query, startUnix, endUnix, formatStep(stepS));
-      setSeriesData(result);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to query Prometheus",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [client, matchers, startUnix, endUnix, stepS]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const startUnix = queryResults ? isoToUnix(queryResults.start) : 0;
+  const endUnix = queryResults ? isoToUnix(queryResults.end) : 0;
 
   // Build swimlane data
   const lanes = useMemo(() => {
-    return seriesData.map((s, i) => {
-      const label = seriesLabel(s.metric);
-      const firingSet = new Set(s.values.map(([ts]) => ts));
+    if (!queryResults) return [];
+    return queryResults.series.map((s, i) => {
+      const label = seriesLabel(s.labels);
+      const transitions = samplesToTransitions(s.samples, startUnix, endUnix, queryResults.step_seconds);
       return {
         label,
         color: SERIES_COLORS[i % SERIES_COLORS.length],
-        data: seriesToLaneData(firingSet, startUnix, endUnix, i, label, stepS),
+        data: transitions.map(({ t, active }): ChartDataPoint => ({
+          x: new Date(t * 1000),
+          y: active ? i + 1 : i,
+          name: label,
+        })),
       };
     });
-  }, [seriesData, startUnix, endUnix, stepS]);
+  }, [queryResults, startUnix, endUnix]);
 
   // Time axis ticks — aim for ~6
   const tickValues = useMemo(() => {
@@ -206,30 +119,10 @@ export default function AlertsTimelineChart({
     return ticks;
   }, [startUnix, endUnix]);
 
-  if (loading) {
+  if (!queryResults) {
     return (
       <div className="infrapad-alerts-chart-container" ref={containerRef}>
-        <Bullseye>
-          <Spinner size="md" />
-          <span className="pf-v6-u-ml-sm pf-v6-u-font-size-sm">
-            Loading alerts data…
-          </span>
-        </Bullseye>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="infrapad-alerts-chart-container" ref={containerRef}>
-        <Alert
-          variant="warning"
-          isInline
-          isPlain
-          title="Prometheus query failed"
-        >
-          {error}
-        </Alert>
+        <Alert variant="info" isInline isPlain title="No snapshot submitted." />
       </div>
     );
   }

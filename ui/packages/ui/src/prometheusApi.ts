@@ -1,13 +1,13 @@
 // Prometheus HTTP API helpers for querying ALERTS metric data.
 
+// Legacy browser-facing Prometheus client, no longer used for rendering
+// (the chart renders stored query results). Removed by the
+// "Remove browser-facing Prometheus connection plumbing" task.
+
 import type { InfraPadFetch } from "./api.js";
+import type { LabelMatcher } from "./alertsData.js";
 
 // ---- Types ----
-
-/** A single label matcher from the infrapad alerts_matcher block content. */
-export interface LabelMatcher {
-  [labelName: string]: string[];
-}
 
 /** A single time-series result from Prometheus range query. */
 export interface PromRangeSeries {
@@ -98,32 +98,4 @@ export async function queryRange(
   }
 
   return body.data.result;
-}
-
-// ---- Helpers ----
-
-/**
- * Build a human-readable label string for a series, omitting common/noisy
- * labels like __name__, alertstate, job, instance.
- */
-export function seriesLabel(metric: Record<string, string>): string {
-  const skip = new Set([
-    "__name__",
-    "alertstate",
-    "job",
-    "instance",
-    "severity",
-  ]);
-  const parts = Object.entries(metric)
-    .filter(([k]) => !skip.has(k))
-    .map(([k, v]) => `${k}="${v}"`)
-    .join(", ");
-  return parts || "ALERTS";
-}
-
-/**
- * Convert ISO date string to unix seconds.  Returns NaN for invalid input.
- */
-export function isoToUnix(iso: string): number {
-  return Math.floor(new Date(iso).getTime() / 1000);
 }

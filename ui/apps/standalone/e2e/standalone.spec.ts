@@ -92,6 +92,14 @@ const document = {
           labels_matchers: [{ alertname: ["EndpointDown"], severity: ["critical"] }],
           since: "2025-01-02T03:00:00Z",
           until: "2025-01-02T03:05:00Z",
+          query_results: {
+            start: "2025-01-02T02:58:00Z",
+            end: "2025-01-02T03:07:00Z",
+            step_seconds: 15,
+            series: [
+              { labels: { alertname: "EndpointDown", severity: "critical" }, samples: [[1735786800, 1], [1735786815, 1]] },
+            ],
+          },
         },
       },
     },
@@ -99,30 +107,24 @@ const document = {
   ],
 };
 
-// Stub document and Prometheus responses while exercising the real auth proxy.
-async function mockServices(page: Page) {
+type MockDocument = { name: string; blocks: Array<Record<string, unknown>> };
+
+// Stub document responses while exercising the real auth proxy. Charts render
+// stored query results, so any Prometheus range query is recorded as a failure.
+async function mockServices(page: Page, doc: MockDocument = document) {
+  const prometheusRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.includes("/api/v1/query_range") || url.startsWith("http://localhost:9090")) prometheusRequests.push(url);
+  });
   await page.route("**/v1/documents**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const body = path.endsWith("/blocks/1/history")
-      ? { blocks: [document.blocks[0], { ...document.blocks[0], revisionNumber: 1, record: { timestamp: "2025-01-02T03:04:05Z", content: { text: "Service down." } } }] }
-      : path === "/v1/documents" ? { documents: [document] } : { document };
+      ? { blocks: [doc.blocks[0], { ...doc.blocks[0], revisionNumber: 1, record: { timestamp: "2025-01-02T03:04:05Z", content: { text: "Service down." } } }] }
+      : path === "/v1/documents" ? { documents: [doc] } : { document: doc };
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.route("http://localhost:9090/**", async (route) => {
-    const url = new URL(route.request().url());
-    expect(url.pathname).toBe("/api/v1/query_range");
-    expect(url.searchParams.get("query")).toBe('ALERTS{alertname="EndpointDown", severity="critical"}');
-    expect(url.searchParams.get("step")).toBe("15s");
-    const start = Number(url.searchParams.get("start"));
-    expect(start).toBe(Math.floor(Date.parse("2025-01-02T03:00:00Z") / 1000) - 120);
-    expect(Number(url.searchParams.get("end"))).toBe(Math.floor(Date.parse("2025-01-02T03:05:00Z") / 1000) + 120);
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ status: "success", data: { resultType: "matrix", result: [
-        { metric: { alertname: "EndpointDown", severity: "critical" }, values: [[start + 120, "1"]] },
-      ] } }),
-    });
-  });
+  return prometheusRequests;
 }
 
 // Host presentation: Markdown fallback, fixed card layout, sanitization, and
@@ -183,7 +185,7 @@ async function openAuthenticatedDocument(page: Page) {
 }
 
 test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
-  await mockServices(page);
+  const prometheusRequests = await mockServices(page);
 
   // Vite's root resolves to the same canonical UI route as built Go serving.
   await page.goto("/");
@@ -240,6 +242,75 @@ test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
   // Directly reloading the detail route should still load the document.
   await page.reload();
   await expect(page.getByRole("heading", { name: document.title })).toBeVisible();
+  await expect(page.locator(".infrapad-alerts-chart-container svg").first()).toBeVisible();
+  expect(prometheusRequests).toEqual([]);
+});
+
+test("alerts matchers render stored query results offline", async ({ page }) => {
+  const matcher = (blockNumber: number, content: Record<string, unknown>) => ({
+    name: `documents/doc-2/blocks/${blockNumber}`,
+    blockNumber,
+    revisionNumber: 1,
+    type: "Prometheus/AlertsMatcher",
+    record: { timestamp: "2025-01-02T03:04:05Z", content },
+  });
+  const queryResults = {
+    start: "2025-01-02T03:00:00Z",
+    end: "2025-01-02T03:10:00Z",
+    step_seconds: 30,
+    series: [
+      { labels: { alertname: "EndpointDown" }, samples: [[1735786830.5, 1], [1735786860.5, 0]] },
+      { labels: { alertname: "Quiet" }, samples: [[1735786830, 0]] },
+      { labels: { alertname: "NoSamples" }, samples: [] },
+    ],
+  };
+  const doc = {
+    name: "documents/doc-2",
+    status: "active",
+    title: "Offline alerts",
+    createdAt: "2025-01-02T03:04:05Z",
+    blocks: [
+      // Label-free ongoing fallback matcher (as emitted by PagerDuty) with stored results.
+      matcher(1, { since: "2025-01-02T03:01:00Z", query_results: queryResults }),
+      matcher(2, { labels_matchers: [{ alertname: ["Missing"] }], since: "2025-01-02T03:01:00Z" }),
+      matcher(3, { labels_matchers: [{ alertname: ["Empty"] }], since: "2025-01-02T03:01:00Z", until: "2025-01-02T03:02:00Z",
+        query_results: { ...queryResults, series: [] } }),
+    ],
+  };
+  const prometheusRequests = await mockServices(page, doc);
+
+  await page.goto("/ui/documents/doc-2");
+  await page.getByLabel("Username").fill("alice");
+  await page.getByRole("button", { name: "Log in" }).click();
+
+  for (let pass = 0; pass < 2; pass++) {
+    await expect(page.getByRole("heading", { name: doc.title })).toBeVisible();
+    const cards = page.locator(".infrapad-block-card");
+    await expect(cards).toHaveCount(3);
+
+    // Populated: incident bounds and the fixed stored window/step are shown separately.
+    const populated = cards.nth(0);
+    await expect(populated.getByText("Matchers")).toHaveCount(0);
+    await expect(populated.getByText("Ongoing")).toBeVisible();
+    await expect(populated.locator(".infrapad-alerts-query-window time").nth(0)).toHaveAttribute("datetime", queryResults.start);
+    await expect(populated.locator(".infrapad-alerts-query-window time").nth(1)).toHaveAttribute("datetime", queryResults.end);
+    await expect(populated.locator(".infrapad-alerts-query-step")).toHaveText("30s");
+    const chart = populated.locator(".infrapad-alerts-chart-container svg").first();
+    await expect(chart).toBeVisible();
+    // One lane per series, including inactive ones (Victory draws fill + outline
+    // paths per area); the axis starts at the stored start (no padding).
+    await expect(chart.locator('path[style*="fill-opacity: 0.45"]')).toHaveCount(2 * queryResults.series.length);
+    const firstTick = await page.evaluate((start) => new Date(start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }), queryResults.start);
+    await expect(chart.locator("text").first()).toHaveText(firstTick);
+
+    await expect(cards.nth(1).getByText("No snapshot submitted.")).toBeVisible();
+    await expect(cards.nth(1).locator(".infrapad-alerts-query-window")).toHaveCount(0);
+    await expect(cards.nth(2).getByText("No alert data found for this time range")).toBeVisible();
+    await expect(cards.nth(2).locator(".infrapad-alerts-query-step")).toHaveText("30s");
+
+    if (pass === 0) await page.reload();
+  }
+  expect(prometheusRequests).toEqual([]);
 });
 
 test("appearance settings apply across documents and persist", async ({ page }) => {

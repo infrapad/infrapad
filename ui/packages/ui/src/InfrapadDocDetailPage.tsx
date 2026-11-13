@@ -29,7 +29,7 @@ import type { InfrapadBlock, InfrapadDocument } from "./api.js";
 import { useInfrapadClient } from "./infrapadClient.js";
 import BlockRevisionsPanel, { formatDate } from "./BlockRevisionsPanel.js";
 import { BlockPresentation } from "./Presentation.js";
-import type { LabelMatcher } from "./prometheusApi.js";
+import type { LabelMatcher, QueryResults } from "./alertsData.js";
 
 // ---- Helpers ----
 
@@ -65,10 +65,22 @@ function blockTypeLabel(type: string): string {
 
 // ---- Block renderers ----
 
-/** Render an alerts_matcher block as structured data + live timeline chart. */
+/** Format a stored query bound with second precision. */
+function formatQueryBound(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+/** Render an alerts_matcher block as structured data + stored timeline chart. */
 function AlertsMatcherBlockContent({ content }: { content: Record<string, unknown> }) {
-  const matchers = content.labels_matchers as
-    Array<Record<string, string[]>> | undefined;
+  const matchers = content.labels_matchers as LabelMatcher[] | undefined;
+  const queryResults = (content.query_results ?? undefined) as QueryResults | undefined;
   const since = content.since as string | undefined;
   const until = content.until as string | undefined;
   // "0001-01-01T00:00:00Z" is the Go zero time — treat as "ongoing"
@@ -122,16 +134,28 @@ function AlertsMatcherBlockContent({ content }: { content: Record<string, unknow
             )}
           </DescriptionListDescription>
         </DescriptionListGroup>
+        {queryResults && (
+          <>
+            <DescriptionListGroup>
+              <DescriptionListTerm>Snapshot window</DescriptionListTerm>
+              <DescriptionListDescription className="infrapad-alerts-query-window">
+                <time dateTime={queryResults.start}>{formatQueryBound(queryResults.start)}</time>
+                {" – "}
+                <time dateTime={queryResults.end}>{formatQueryBound(queryResults.end)}</time>
+              </DescriptionListDescription>
+            </DescriptionListGroup>
+            <DescriptionListGroup>
+              <DescriptionListTerm>Step</DescriptionListTerm>
+              <DescriptionListDescription className="infrapad-alerts-query-step">
+                {queryResults.step_seconds}s
+              </DescriptionListDescription>
+            </DescriptionListGroup>
+          </>
+        )}
       </DescriptionList>
 
-      {/* Live alerts timeline chart from Prometheus */}
-      {matchers && matchers.length > 0 && since && (
-        <AlertsTimelineChart
-          matchers={matchers as LabelMatcher[]}
-          since={since}
-          until={isOngoing ? undefined : until}
-        />
-      )}
+      {/* Stored alerts timeline; never queries Prometheus. */}
+      <AlertsTimelineChart queryResults={queryResults} />
     </>
   );
 }
@@ -139,7 +163,7 @@ function AlertsMatcherBlockContent({ content }: { content: Record<string, unknow
 /**
  * Render a single block's content: registered extension content goes
  * through the host presentation path (cards, else sanitized Markdown); the
- * live Prometheus view is the explicit exception.
+ * stored AlertsMatcher timeline is the explicit exception.
  */
 function renderBlockContent(block: InfrapadBlock) {
   if (block.type === "Prometheus/AlertsMatcher") {
