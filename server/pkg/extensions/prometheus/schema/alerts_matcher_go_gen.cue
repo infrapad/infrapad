@@ -23,10 +23,17 @@ import "time"
 
 	// Extras carries additional metadata not anticipated by the schema.
 	extras?: {...} @go(Extras,map[string]any)
+
+	// QueryResults are the retained producer-submitted range-query
+	// results, replaced through payload submission (see Payload). They are
+	// not part of the Markdown header and are cleared when the matcher
+	// labels or incident bounds change.
+	query_results?: null | #QueryResults @go(QueryResults,*QueryResults)
 }
 
 // alertsMatcherMdHeader is the structured Markdown header of
-// Prometheus/AlertsMatcher: all content fields (the body is empty). An
+// Prometheus/AlertsMatcher: all matcher metadata (the body is empty;
+// query results are not exposed). An
 // open-ended interval omits until instead of exposing a zero time.
 _#alertsMatcherMdHeader: {
 	labels_matchers?: [... {[string]: [...string]}] @go(LabelsMatchers,[]map[string][]string)

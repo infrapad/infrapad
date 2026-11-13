@@ -3,8 +3,11 @@
 package prometheus
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/infrapad/infrapad/server/pkg/content"
@@ -33,19 +36,26 @@ type AlertsMatcher struct {
 	Until          time.Time             `json:"until,omitempty"`
 	// Extras carries additional metadata not anticipated by the schema.
 	Extras map[string]any `json:"extras,omitempty"`
+	// QueryResults are the retained producer-submitted range-query
+	// results, replaced through payload submission (see Payload). They are
+	// not part of the Markdown header and are cleared when the matcher
+	// labels or incident bounds change.
+	QueryResults *QueryResults `json:"query_results,omitempty"`
 }
 
 // AlertsMatcherType implements Prometheus/AlertsMatcher. It renders no
-// Markdown body of its own: all its fields belong to the host-managed
-// structured header of a block (MarkdownHeader). It is therefore not
-// editable through Markdown body updates.
+// Markdown body of its own: its matcher metadata belongs to the
+// host-managed structured header of a block (MarkdownHeader). It is
+// therefore not editable through Markdown body updates. Query results are
+// ingested through payload submission (Expander).
 type AlertsMatcherType struct {
 	content.TypedMarkdownRenderer[content.Item[AlertsMatcher]]
 	content.TypedItemMarkdownHeader[AlertsMatcher, alertsMatcherMdHeader]
 }
 
 // alertsMatcherMdHeader is the structured Markdown header of
-// Prometheus/AlertsMatcher: all content fields (the body is empty). An
+// Prometheus/AlertsMatcher: all matcher metadata (the body is empty;
+// query results are not exposed). An
 // open-ended interval omits until instead of exposing a zero time.
 type alertsMatcherMdHeader struct {
 	LabelsMatchers []map[string][]string `json:"labels_matchers,omitempty"`
@@ -63,12 +73,27 @@ func projectAlertsMatcherMdHeader(m AlertsMatcher) alertsMatcherMdHeader {
 	return header
 }
 
-func replaceAlertsMatcherMdHeader(_ AlertsMatcher, h alertsMatcherMdHeader) AlertsMatcher {
+// replaceAlertsMatcherMdHeader applies the header, preserving the query
+// results only when the labels matchers and incident bounds are unchanged
+// (plain structural comparison; changes of extras alone preserve them).
+func replaceAlertsMatcherMdHeader(existing AlertsMatcher, h alertsMatcherMdHeader) AlertsMatcher {
 	m := AlertsMatcher{LabelsMatchers: h.LabelsMatchers, Since: h.Since, Extras: h.Extras}
 	if h.Until != nil {
 		m.Until = *h.Until
 	}
+	if sameMatcherQuery(existing, m) {
+		m.QueryResults = existing.QueryResults
+	}
 	return m
+}
+
+// sameMatcherQuery reports whether a and b select the same alerts: equal
+// labels matchers (nil and empty are equal) and equal incident bounds.
+func sameMatcherQuery(a, b AlertsMatcher) bool {
+	return a.Since.Equal(b.Since) && a.Until.Equal(b.Until) &&
+		slices.EqualFunc(a.LabelsMatchers, b.LabelsMatchers, func(x, y map[string][]string) bool {
+			return maps.EqualFunc(x, y, slices.Equal[[]string])
+		})
 }
 
 // NewAlertsMatcherType constructs the Prometheus/AlertsMatcher implementation.
@@ -87,6 +112,37 @@ func (*AlertsMatcherType) ContentSchema() content.Schema {
 
 func (*AlertsMatcherType) DecodeJSON(data json.RawMessage) (content.Content, error) {
 	return content.DecodeContent[AlertsMatcher](data)
+}
+
+func (*AlertsMatcherType) PayloadSchema() content.Schema {
+	return content.Schema{Source: schemaCUE, Definition: "#Payload"}
+}
+
+// Expand replaces the retained query results with the payload's (clearing
+// them when omitted), leaving matcher metadata, extras, the timestamp, and
+// any generated key unchanged. It emits no children and does not mutate
+// existing.
+func (*AlertsMatcherType) Expand(_ context.Context, existing content.Record, payload json.RawMessage) (content.ExpansionResult, error) {
+	item, err := content.ItemView[AlertsMatcher](existing)
+	if err != nil {
+		return content.ExpansionResult{}, err
+	}
+	input, err := content.DecodePayload[Payload](payload)
+	if err != nil {
+		return content.ExpansionResult{}, err
+	}
+	if input.QueryResults != nil {
+		if errs := input.QueryResults.Validate("query_results"); len(errs) > 0 {
+			return content.ExpansionResult{}, &content.ValidationError{ContentType: AlertsMatcherTypeName, Stage: content.StagePayload, Fields: errs}
+		}
+	}
+	matcher := item.ContentValue
+	matcher.QueryResults = input.QueryResults
+	primary, err := content.WithContent(existing, matcher)
+	if err != nil {
+		return content.ExpansionResult{}, err
+	}
+	return content.ExpansionResult{Record: primary}, nil
 }
 
 func renderAlertsMatcher(item content.Item[AlertsMatcher]) (string, error) {

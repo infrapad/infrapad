@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -145,7 +146,27 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	t.Logf("updated markdown block %d to rev %d", updatedMd.GetBlockNumber(), updatedMd.GetRevisionNumber())
 
 	// -----------------------------------------------------------------------
-	// Verify final state: GetDocument should return 2 blocks, each at revision 2.
+	// 6. Submit producer-fetched query results to the matcher itself.
+	// Detailed lifecycle and validation checks live in the extension tests;
+	// here verify compact numeric pairs survive transport and persistence.
+	// -----------------------------------------------------------------------
+	queryResults := map[string]any{
+		"start": "2026-08-14T08:58:00Z", "end": "2026-08-14T09:12:00Z", "step_seconds": 15.0,
+		"series": []any{map[string]any{
+			"labels":  map[string]any{"alertname": "CrashLoopBackOff", "alertstate": "firing"},
+			"samples": []any{[]any{1786698000.5, 1.25}, []any{1786698015.5, 0.0}},
+		}},
+	}
+	_, err = client.SubmitBlockPayload(ctx, &pb.SubmitBlockPayloadRequest{
+		Parent: docName, BlockNumber: alertsBlock.GetBlockNumber(),
+		Payload: mustStruct(t, map[string]any{"query_results": queryResults}),
+	})
+	if err != nil {
+		t.Fatalf("SubmitBlockPayload alerts_matcher: %v", err)
+	}
+
+	// -----------------------------------------------------------------------
+	// Verify final state: two blocks, matcher at revision 3, Markdown at 2.
 	// -----------------------------------------------------------------------
 	getDocResp, err := client.GetDocument(ctx, &pb.GetDocumentRequest{Name: docName})
 	if err != nil {
@@ -156,8 +177,15 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		t.Fatalf("expected 2 blocks, got %d", len(finalDoc.GetBlocks()))
 	}
 	for _, blk := range finalDoc.GetBlocks() {
-		if blk.GetRevisionNumber() != 2 {
-			t.Errorf("block %d: expected revision 2, got %d", blk.GetBlockNumber(), blk.GetRevisionNumber())
+		wantRevision := int32(2)
+		if blk.GetBlockNumber() == alertsBlock.GetBlockNumber() {
+			wantRevision = 3
+			if got := recordContent(blk)["query_results"]; !reflect.DeepEqual(got, queryResults) {
+				t.Errorf("query results did not round-trip: got %#v, want %#v", got, queryResults)
+			}
+		}
+		if blk.GetRevisionNumber() != wantRevision {
+			t.Errorf("block %d: expected revision %d, got %d", blk.GetBlockNumber(), wantRevision, blk.GetRevisionNumber())
 		}
 	}
 
@@ -170,8 +198,8 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 		t.Fatalf("ListBlockHistory: %v", err)
 	}
 	alertHistory := histResp.GetBlocks()
-	if len(alertHistory) != 2 {
-		t.Fatalf("expected 2 revisions for alerts_matcher, got %d", len(alertHistory))
+	if len(alertHistory) != 3 {
+		t.Fatalf("expected 3 revisions for alerts_matcher, got %d", len(alertHistory))
 	}
 
 	// First revision should have 1 matcher, second should have 2.
@@ -184,6 +212,9 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	}
 	if len(matchers2) != 2 {
 		t.Errorf("rev 2: expected 2 matchers, got %d", len(matchers2))
+	}
+	if _, ok := am2["query_results"]; ok {
+		t.Error("rev 2: query results appeared before payload submission")
 	}
 
 	t.Log("incident investigation e2e test passed")

@@ -7,7 +7,7 @@ built-in extensions as examples:
 | Package | Types | Shows |
 |---------|-------|-------|
 | `server/pkg/extensions/core` | `Core/Markdown` | Ordinary editable block: body and header editing. |
-| `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher` | Structured, header-only block with an empty body. |
+| `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher` | Structured header-only block with an empty body; an expander without children that stores submitted `query_results` in the primary record only. |
 | `server/pkg/extensions/aiagent` | `AIAgent/Message` | Shared type emitted by other extensions, presentation, companion schema constraints. |
 | `server/pkg/extensions/slack` | `Slack/Thread`, `Slack/Conversation` | Expandable primary with a transient payload, a groupable type, and output of another extension's type. |
 | `server/pkg/extensions/pagerduty` | `PagerDuty/Incident`, `PagerDuty/Timeline` | Read-only generated Markdown `text` body, header reference locked after enrichment, open JSON inside a strict payload; emits the registered `Prometheus/AlertsMatcher` type (injected via `ContentTypes(matcherType)`). |
@@ -85,7 +85,7 @@ checks for them with type assertions.
 | `content.MarkdownHeader` | Project selected fields into the `yaml infrapad` header, and apply edited header fields. | `Core/Markdown`, `Prometheus/AlertsMatcher`, `Slack/Thread`… |
 | `content.MarkdownUpdater` | Apply an edited Markdown body (`UpdateMarkdown(existing, body)`). | `Core/Markdown`, `AIAgent/Message` |
 | `content.Presenter` | Fixed UI cards: title, Markdown, labeled fields, labeled links. | `AIAgent/Message`, `Slack/Trhead`… |
-| `content.Expander` | Turn a transient payload into the complete desired generated output. | `Slack/Thread` |
+| `content.Expander` | Turn a transient payload into the complete desired generated output and/or updated primary state. | `Slack/Thread`, `Prometheus/AlertsMatcher` |
 | `content.GroupableContentType` | Store multiple keyed items in one block that the host groups. | `Slack/Conversation` |
 
 ### Markdown header and body
@@ -184,7 +184,11 @@ Expand(ctx, existing Record, payload json.RawMessage) (ExpansionResult, error)
   than eight levels, and commits the whole tree atomically. See the
   test-only `Test/Ref` in `server/internal/testext`.
 - **Primary state.** `ExpansionResult.Record` is the resulting primary
-  record. Return `existing` when the primary doesn't change.
+  record. Return `existing` when the primary doesn't change. An expander
+  may emit no children and only update the primary:
+  `Prometheus/AlertsMatcher` replaces its retained `query_results` (kept
+  out of the Markdown header). Its header updater preserves them only
+  while the labels matchers and incident bounds are unchanged.
 - **Primary timestamps.** An expander may also move the primary's event
   timestamp (PagerDuty/Incident and Cora/Report do it on every valid
   payload, Slack/Thread on every non-empty one): return the updated record

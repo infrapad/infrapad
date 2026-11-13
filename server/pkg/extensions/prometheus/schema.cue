@@ -2,6 +2,11 @@
 // Self-contained schema assembled from schema/*_go_gen.cue and
 // schema/*_patch.cue; run 'task server:extensions:schema:generate'.
 
+// Companion constraints for the generated schema/*_go_gen.cue
+// definitions, unified during schema assembly (see server/README.md).
+// Explicit (non-null) arrays/objects, time bounds, and sample ordering are
+// semantic checks of QueryResults.Validate.
+
 // Package prometheus implements Prometheus/AlertsMatcher, matching
 // Prometheus alerts by labels and time interval.
 package prometheus
@@ -27,10 +32,57 @@ import "time"
 	extras?: {
 		...
 	} @go(Extras,map[string]any)
+
+	// QueryResults are the retained producer-submitted range-query
+	// results, replaced through payload submission (see Payload). They are
+	// not part of the Markdown header and are cleared when the matcher
+	// labels or incident bounds change.
+	query_results?: null | #QueryResults @go(QueryResults,*QueryResults)
+}
+
+// Payload is the transient input of a Prometheus/AlertsMatcher expansion:
+// the complete replacement of the retained query results. Matcher metadata
+// is not part of it. Omitting QueryResults clears the retained results.
+#Payload: {
+	query_results?: null | #QueryResults @go(QueryResults,*QueryResults)
+}
+
+// QueryResults are producer-fetched Prometheus range-query results retained
+// in an AlertsMatcher record. Start/End/StepSeconds describe the actual
+// query chosen by the producer, independent of the matcher's incident
+// since/until. An explicit empty Series means the query succeeded without
+// matching series; absent QueryResults mean no data was submitted.
+#QueryResults: {
+	// Start is the inclusive query start.
+	start: time.Time @go(Start)
+
+	// End is the inclusive query end; it must be after Start.
+	end: time.Time @go(End)
+
+	// StepSeconds is the producer's query resolution: a finite positive
+	// number of seconds (fractions allowed).
+	step_seconds: >0 & <=1.797693134862315708145274237317043567981e+308 @go(StepSeconds)
+
+	// Series is an explicit (non-null) array of the returned series.
+	series: [...#Series] @go(Series,[]Series)
+}
+
+// Series is one returned time series.
+#Series: {
+	// Labels is the series' label set.
+	labels: {
+		[string]: string
+	} @go(Labels,map[string]string)
+
+	// Samples is an explicit (non-null) array of samples with strictly
+	// increasing timestamps inside the query bounds. Gaps are allowed and
+	// timestamps need not align to the query step.
+	samples: [...#Sample] @go(Samples,[]Sample)
 }
 
 // alertsMatcherMdHeader is the structured Markdown header of
-// Prometheus/AlertsMatcher: all content fields (the body is empty). An
+// Prometheus/AlertsMatcher: all matcher metadata (the body is empty;
+// query results are not exposed). An
 // open-ended interval omits until instead of exposing a zero time.
 _#alertsMatcherMdHeader: {
 	labels_matchers?: [...{
@@ -42,3 +94,10 @@ _#alertsMatcherMdHeader: {
 		...
 	} @go(Extras,map[string]any)
 }
+
+// Sample is encoded as exactly one [unix_seconds, value] pair of numbers.
+
+// Sample is one sample, encoded in JSON as a compact [unix_seconds, value]
+// pair of numbers (see the schema companion constraints). Both coordinates
+// are finite; the timestamp may include fractional seconds.
+#Sample: [number, number]
