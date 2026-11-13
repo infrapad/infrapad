@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
@@ -50,6 +51,9 @@ func TestPayloadReconciliationTransactions(t *testing.T) {
 	// The caller decides whether to commit or roll back.
 	reconcile := func(thread model.Block, messages ...slack.SourceMessage) (store.Tx, int) {
 		t.Helper()
+		// Payloads revise the primary timestamp: expand its latest revision.
+		thread, err := ctrl.GetBlock(ctx, doc.Uid, thread.BlockNumber, 0)
+		testutil.NoErr(t, err)
 		payload, err := json.Marshal(slack.Payload{Messages: append([]slack.SourceMessage{}, messages...)})
 		testutil.NoErr(t, err)
 		tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
@@ -107,8 +111,13 @@ func TestPayloadReconciliationTransactions(t *testing.T) {
 	// primaries' changes commit together.
 	tx, appended := reconcile(t2, message("x", 1, 30))
 	testutil.NoErr(t, tx.Commit())
-	if appended != 3 { // revision of the conversation + two new blocks
-		t.Fatalf("expected 3 revisions, got %d", appended)
+	if appended != 4 { // primary timestamp + conversation revision + two new blocks
+		t.Fatalf("expected 4 revisions, got %d", appended)
+	}
+	primary, err := ctrl.GetBlock(ctx, doc.Uid, t2.BlockNumber, 0)
+	testutil.NoErr(t, err)
+	if primary.RevisionNumber != 2 || !primary.Record.Timestamp().Equal(identityAt(1).Add(30*time.Second)) {
+		t.Fatalf("primary timestamp not updated atomically: revision %d, timestamp %s", primary.RevisionNumber, primary.Record.Timestamp())
 	}
 	latest, err := ctrl.GetBlock(ctx, doc.Uid, conversation, 0)
 	testutil.NoErr(t, err)
