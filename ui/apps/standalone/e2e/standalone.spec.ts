@@ -8,9 +8,14 @@ const markdownText = [
   "",
   "See [runbook](/runbooks/endpoint-down), [dashboard](https://grafana.example/d/1), and [bad link](javascript:window.infrapadXss=true).",
   '<a href="https://example.com/new-tab" target="_blank">kept html link</a> <img src="x" onerror="window.infrapadXss = true">',
+  "",
+  "# Summary",
+  "## Evidence",
+  "### Follow-up",
 ].join("\n");
 
 const threadURL = "https://slack.example/archives/C1/p1735787045000100";
+const agentMarkdown = "**Recommended next step before destructive cleanup:**\n\nRoot cause: <b>bad deploy</b>";
 
 // Server-shaped Slack/agent blocks (as produced by the registered presenters).
 const slackBlocks = [
@@ -44,14 +49,14 @@ const slackBlocks = [
     revisionNumber: 1,
     type: "AIAgent/Message",
     parentBlockNumber: 3,
-    record: { timestamp: "2025-01-02T03:06:00Z", key: "slack-message:2", content: { agent: "investigation-agent", text: "Root cause: <b>bad deploy</b>" } },
+    record: { timestamp: "2025-01-02T03:06:00Z", key: "slack-message:2", content: { agent: "investigation-agent", text: agentMarkdown } },
     presentation: { cards: [{
       title: "investigation-agent <b>plain</b>",
-      markdown: "Root cause: <b>bad deploy</b>",
+      markdown: agentMarkdown,
       fields: [{ label: "Confidence", value: "<i>high</i>" }, { label: "Scope", value: "us-east" }],
       links: [{ label: "Open source", url: threadURL }, { label: "Unsafe source", url: "javascript:window.infrapadXss=true" }],
     }] },
-    markdown: "Root cause: <b>bad deploy</b>",
+    markdown: agentMarkdown,
   },
 ];
 
@@ -125,6 +130,10 @@ async function mockServices(page: Page) {
 async function expectPresentation(page: Page) {
   const fallback = page.locator(".infrapad-block-card").nth(0).locator(".infrapad-markdown-content");
   await expect(fallback.locator("strong")).toHaveText("Service recovered");
+  await expect(fallback.locator("strong")).toHaveCSS("font-weight", "600");
+  for (const heading of ["h1", "h2", "h3"]) {
+    await expect(fallback.locator(heading)).toHaveCSS("font-weight", "800");
+  }
   await expect(fallback.locator("script")).toHaveCount(0);
   await expect(fallback.getByRole("link", { name: "runbook" })).toHaveAttribute("href", "/runbooks/endpoint-down");
   await expect(fallback.getByRole("link", { name: "dashboard" })).toHaveAttribute("href", "https://grafana.example/d/1");
@@ -140,6 +149,7 @@ async function expectPresentation(page: Page) {
   await expect(cards.nth(0).getByRole("link", { name: "Open in Slack" })).toHaveAttribute("href", threadURL);
   await expect(cards.nth(1).getByRole("heading", { name: "Slack conversation" })).toBeVisible();
   await expect(cards.nth(1).locator(".infrapad-markdown-content strong").first()).toHaveText("Alice");
+  await expect(cards.nth(1).locator(".infrapad-markdown-content strong").first()).toHaveCSS("font-weight", "600");
   await expect(cards.nth(1).locator(".pf-v6-c-description-list__group")).toHaveText(["Messages1"]);
 
   // Agent card: title → Markdown → fields → links, with plain-text title,
@@ -149,7 +159,10 @@ async function expectPresentation(page: Page) {
   expect(sections.map((c) => c.match(/infrapad-presentation-card-title|infrapad-markdown-content|infrapad-presentation-fields|infrapad-presentation-links/)?.[0]))
     .toEqual(["infrapad-presentation-card-title", "infrapad-markdown-content", "infrapad-presentation-fields", "infrapad-presentation-links"]);
   await expect(agent.getByRole("heading")).toHaveText("investigation-agent <b>plain</b>");
+  await expect(agent.locator(".infrapad-markdown-content strong")).toHaveText("Recommended next step before destructive cleanup:");
+  await expect(agent.locator(".infrapad-markdown-content strong")).toHaveCSS("font-weight", "600");
   await expect(agent.locator(".infrapad-markdown-content b")).toHaveText("bad deploy");
+  await expect(agent.locator(".infrapad-markdown-content b")).toHaveCSS("font-weight", "600");
   await expect(agent.locator(".pf-v6-c-description-list__group")).toHaveText(["Confidence<i>high</i>", "Scopeus-east"]);
   await expect(agent.getByRole("link", { name: "Open source" })).toHaveAttribute("href", threadURL);
   await expect(agent.getByRole("link", { name: "Open source" })).not.toHaveAttribute("target", /.*/);

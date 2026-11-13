@@ -61,21 +61,21 @@
 
 .infrapad-markdown-content h1 {
     font-size: var(--pf-t--global--font--size--2xl);
-    font-weight: var(--pf-t--global--font--weight--bold);
+    font-weight: var(--pf-t--global--font--weight--heading--bold);
     margin-top: var(--pf-t--global--spacer--md);
     margin-bottom: var(--pf-t--global--spacer--sm);
 }
 
 .infrapad-markdown-content h2 {
     font-size: var(--pf-t--global--font--size--xl);
-    font-weight: var(--pf-t--global--font--weight--bold);
+    font-weight: var(--pf-t--global--font--weight--heading--bold);
     margin-top: var(--pf-t--global--spacer--md);
     margin-bottom: var(--pf-t--global--spacer--sm);
 }
 
 .infrapad-markdown-content h3 {
     font-size: var(--pf-t--global--font--size--lg);
-    font-weight: var(--pf-t--global--font--weight--bold);
+    font-weight: var(--pf-t--global--font--weight--heading--bold);
     margin-top: var(--pf-t--global--spacer--sm);
     margin-bottom: var(--pf-t--global--spacer--xs);
 }
@@ -132,8 +132,9 @@
     padding: 0;
 }
 
-.infrapad-markdown-content strong {
-    font-weight: var(--pf-t--global--font--weight--bold);
+.infrapad-markdown-content strong,
+.infrapad-markdown-content b {
+    font-weight: var(--pf-t--global--font--weight--body--bold);
 }
 
 /* Alert matchers */
@@ -238,7 +239,7 @@
 
 .infrapad-diff-line--hunk-header {
     color: var(--pf-t--global--text--color--link--default);
-    font-weight: var(--pf-t--global--font--weight--bold);
+    font-weight: var(--pf-t--global--font--weight--body--bold);
     margin-top: var(--pf-t--global--spacer--xs);
 }
 
