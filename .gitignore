@@ -6,3 +6,5 @@
 tmp/
 
 deploy/podman/generated/
+
+__pycache__

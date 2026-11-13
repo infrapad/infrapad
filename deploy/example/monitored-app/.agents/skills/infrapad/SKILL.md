@@ -34,7 +34,7 @@ so Slack messages and agent replies interleave with alerts and notes.
 ### Example document
 
 See `deploy/example/monitored-app/tmp/incident.md` (after running
-`simulate.sh incident-start`) for a real document. The general structure is:
+`simulate.sh start`) for a real document. The general structure is:
 
     ---
     document: abc-123

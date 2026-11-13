@@ -77,7 +77,7 @@ def add_triage(payload, app_url, prometheus_url):
             "| endpoint1 | HTTP 500 |", "| endpoint2 | HTTP 500 |",
             "| /metrics | HTTP 200 |", "",
             "### Suggested checks", "",
-            "1. Compare the alerts with the live Prometheus chart in this document.",
+            "1. Compare the alerts with the Prometheus snapshot chart in this document.",
             "2. Inspect the app's simulated failure controls before restarting anything.",
             "3. Ask the incident commander to approve recovery.", "",
             "```", f"curl -i {app_url}/endpoint1", f"curl -i {app_url}/endpoint2", "```", "",
@@ -88,12 +88,12 @@ def add_triage(payload, app_url, prometheus_url):
                 "No evidence of process failure; please keep the service running."),
         message(at + 4, "U_BOB", "Bob (SRE)",
                 "Recovery plan: reset both endpoint controls, wait for Prometheus to clear, "
-                "and verify the chart. Holding for approval."),
+                "and verify the refreshed snapshot. Holding for approval."),
         message(at + 5, "U_TRIAGE_BOT", "InfraPad triage agent", "\n".join([
             "### Triage hand-off", "",
             "**Working diagnosis:** deliberately injected endpoint failures.", "",
             "- **Impact:** both monitored endpoints are unavailable.",
-            "- **Mitigation:** reset the endpoint controls with `./simulate.sh incident-resolve`.",
+            "- **Mitigation:** reset the endpoint controls with `./simulate.sh resolve`.",
             "- **Success criteria:** HTTP 200 on both endpoints and no firing alerts.", "",
             "<em>Awaiting operator approval; no automated recovery action was taken.</em>",
         ])),
@@ -101,7 +101,7 @@ def add_triage(payload, app_url, prometheus_url):
 
 
 def add_resolution(payload, at):
-    # Keep resolution replies stable across repeated incident-resolve runs.
+    # Keep resolution replies stable across repeated resolve runs.
     if any(m["user"] == "U_RESOLVER" for m in payload["messages"]):
         return
     at = max(at, int(payload["messages"][-1]["ts"].split(".")[0]) + 1)
@@ -112,7 +112,7 @@ def add_resolution(payload, at):
         message(at + 1, "U_TRIAGE_BOT", "InfraPad triage agent", "\n".join([
             "### Recovery verification", "",
             "**Resolved:** both endpoints are healthy and the alerts have cleared.", "",
-            "The live chart now has a bounded incident window. The Slack conversation, "
+            "The alert snapshot now covers the bounded incident window. The Slack conversation, "
             "triage cards, and revision history remain available for the post-incident review.",
         ])),
     ])
