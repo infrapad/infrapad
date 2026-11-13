@@ -243,7 +243,11 @@ it doesn't convert raw Slack API responses. The producer:
 - decides when to refresh (polling, events, or a final payload).
 
 See `slack.Payload` in `server/pkg/extensions/slack/slack.go` for the
-complete payload schema.
+complete payload schema. Supply `text` and `readable_text` in Slack mrkdwn,
+not pre-converted Markdown. The server normalizes links, `*bold*`, `•` bullets,
+and explicit line breaks to Markdown for both human and mapped-agent messages,
+while preserving code spans and blocks. This happens during payload expansion;
+resubmit the complete payload to refresh previously stored message formatting.
 
 ## Fuller example
 

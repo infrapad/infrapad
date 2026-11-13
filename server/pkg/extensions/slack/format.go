@@ -70,23 +70,14 @@ var slackLinkPattern = regexp.MustCompile(`<(https?://[^|>\s]+|mailto:[^|>\s]+)(
 // normalizeSlackText applies light Slack formatting normalization:
 //   - Slack links are converted into Markdown links,
 //   - Slack escapes (&lt;, &gt;, &amp;) are decoded,
-//   - inline triple-backtick fences are moved onto separate lines so source
-//     code fences cannot swallow following content.
+//   - inline triple-backtick fences are moved onto separate lines,
+//   - Slack bullets, bold, and hard line breaks become Markdown equivalents.
 //
-// Remaining emphasis and emoji shortcodes are left as supplied; this is not
-// a full Slack renderer.
+// Code is excluded from formatting conversion. Emoji shortcodes and other
+// unsupported Slack constructs remain as supplied.
 func normalizeSlackText(s string) string {
-	s = slackLinkPattern.ReplaceAllStringFunc(s, func(m string) string {
-		parts := slackLinkPattern.FindStringSubmatch(m)
-		url, label := decodeSlackEscapes(parts[1]), parts[3]
-		if label != "" {
-			return "[" + decodeSlackEscapes(label) + "](" + url + ")"
-		}
-		// Bare URLs stay as CommonMark autolinks.
-		return "<" + url + ">"
-	})
-	s = decodeSlackEscapes(s)
-	return normalizeFences(s)
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return normalizeSlackFormatting(normalizeFences(decodeSlackEscapes(s)))
 }
 
 // decodeSlackEscapes decodes the entities Slack escapes in message text.
