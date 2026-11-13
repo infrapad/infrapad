@@ -16,7 +16,8 @@ import (
 // the source incident creation time as its timestamp) and the notes/log
 // entries as one PagerDuty/Timeline collection of stably keyed members,
 // plus an optional Prometheus/AlertsMatcher child derived from the alert
-// details (see deriveMatcher). Final sorting, grouping, interleaving, and deletion of missing output are
+// details (see deriveMatcher), receiving the payload's query results through
+// cascading expansion (see matcherBlock). Final sorting, grouping, interleaving, and deletion of missing output are
 // up to the host. existing is not modified.
 func (t *IncidentType) Expand(ctx context.Context, existing content.Record, payload json.RawMessage) (content.ExpansionResult, error) {
 	item, err := content.ItemView[Incident](existing)
@@ -31,7 +32,11 @@ func (t *IncidentType) Expand(ctx context.Context, existing content.Record, payl
 	// them rejects the whole submission.
 	validationErrors := validatePayload(item.ContentValue, input)
 	matcher, matcherErrors := deriveMatcher(input.Alerts)
-	if validationErrors = append(validationErrors, matcherErrors...); len(validationErrors) > 0 {
+	validationErrors = append(validationErrors, matcherErrors...)
+	if input.QueryResults != nil {
+		validationErrors = append(validationErrors, input.QueryResults.Validate("query_results")...)
+	}
+	if len(validationErrors) > 0 {
 		return content.ExpansionResult{}, &content.ValidationError{ContentType: IncidentTypeName, Stage: content.StagePayload, Fields: validationErrors}
 	}
 
@@ -47,8 +52,12 @@ func (t *IncidentType) Expand(ctx context.Context, existing content.Record, payl
 	if timeline != nil {
 		result.Blocks = append(result.Blocks, content.EmittedBlock{Record: timeline})
 	}
-	if record := t.matcherBlock(matcher); record != nil {
-		result.Blocks = append(result.Blocks, content.EmittedBlock{Record: record})
+	matcherBlock, err := t.matcherBlock(matcherOrFallback(matcher, input), input.QueryResults)
+	if err != nil {
+		return content.ExpansionResult{}, err
+	}
+	if matcherBlock != nil {
+		result.Blocks = append(result.Blocks, *matcherBlock)
 	}
 	return result, nil
 }

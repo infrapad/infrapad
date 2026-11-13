@@ -21,12 +21,32 @@ import (
 const AlertsMatcherKey = "pagerduty-alerts-matcher"
 
 // matcherBlock returns the incident's Prometheus/AlertsMatcher child, timed
-// at the matcher's since, or nil when there is no matcher.
-func (t *IncidentType) matcherBlock(matcher *prometheus.AlertsMatcher) content.KeyedRecord {
+// at the matcher's since, or nil when there is no matcher. Its expansion
+// payload forwards the query results (nil clears them), so the host's
+// cascading expansion replaces the matcher's retained results completely.
+func (t *IncidentType) matcherBlock(matcher *prometheus.AlertsMatcher, results *prometheus.QueryResults) (*content.EmittedBlock, error) {
 	if matcher == nil {
-		return nil
+		return nil, nil
 	}
-	return content.NewKeyedItem(t.matcherType, AlertsMatcherKey, matcher.Since, *matcher)
+	payload, err := json.Marshal(prometheus.Payload{QueryResults: results})
+	if err != nil {
+		return nil, fmt.Errorf("encode matcher payload: %w", err)
+	}
+	return &content.EmittedBlock{
+		Record:           content.NewKeyedItem(t.matcherType, AlertsMatcherKey, matcher.Since, *matcher),
+		ExpansionPayload: payload,
+	}, nil
+}
+
+// matcherOrFallback returns the derived matcher or, when the alert details
+// yield no usable labels but query results were submitted, a fallback
+// matcher without label alternatives spanning from the incident creation
+// (open-ended). Without labels and results, it returns nil.
+func matcherOrFallback(derived *prometheus.AlertsMatcher, input Payload) *prometheus.AlertsMatcher {
+	if derived != nil || input.QueryResults == nil {
+		return derived
+	}
+	return &prometheus.AlertsMatcher{Since: input.Incident.CreatedAt.UTC()}
 }
 
 // labeledOccurrence is one alert occurrence with usable labels. A zero end

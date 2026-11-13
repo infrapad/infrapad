@@ -8,7 +8,10 @@
 // optional Prometheus/AlertsMatcher derived from the alert details.
 package pagerduty
 
-import "time"
+import (
+	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
+	"time"
+)
 
 #IncidentTypeName: "PagerDuty/Incident"
 #TimelineTypeName: "PagerDuty/Timeline"
@@ -75,6 +78,13 @@ import "time"
 
 	// LogEntries are the incident log entries in chronological order.
 	log_entries: [...#SourceLogEntry] @go(LogEntries,[]SourceLogEntry)
+
+	// QueryResults are optional producer-fetched Prometheus range-query
+	// results (the shared Prometheus/AlertsMatcher contract), forwarded to
+	// the generated matcher child as its complete replacement. Omission or
+	// null clears the matcher's results; they are never stored on the
+	// incident or its timeline.
+	query_results?: null | prometheus.#QueryResults @go(QueryResults,*prometheus.QueryResults)
 }
 
 // SourceIncident holds the core details of the incident. Display fields

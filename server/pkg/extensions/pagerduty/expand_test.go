@@ -293,6 +293,12 @@ func TestIncidentExpansionValidation(t *testing.T) {
 		{"label values", func(p *pagerduty.Payload) {
 			p.Alerts[0].Details = json.RawMessage(`{"firing": [{"startsAt": "2026-10-25T12:00:00Z", "labels": {"a": null, "b": [], "c": {}}}]}`)
 		}, []string{"alerts.0.details.firing.0.labels.a", "alerts.0.details.firing.0.labels.b", "alerts.0.details.firing.0.labels.c"}},
+		{"query results collected with detail errors", func(p *pagerduty.Payload) {
+			p.Alerts[0].Details = json.RawMessage(`{"firing": 1}`)
+			p.QueryResults = &prometheus.QueryResults{Start: at("12:00"), End: at("11:00"), StepSeconds: 15,
+				Series: []prometheus.Series{{Labels: map[string]string{},
+					Samples: []prometheus.Sample{{Timestamp: float64(at("13:00").Unix()), Value: 1}}}}}
+		}, []string{"alerts.0.details.firing", "query_results.end", "query_results.series.0.samples.0.0"}},
 		{"label container", func(p *pagerduty.Payload) {
 			p.Alerts[0].Details = json.RawMessage(`{"firing": [{"startsAt": "2026-10-25T12:00:00Z", "labels": []}]}`)
 		}, []string{"alerts.0.details.firing.0.labels"}},
@@ -314,6 +320,81 @@ func TestIncidentExpansionValidation(t *testing.T) {
 				t.Fatalf("unexpected paths %v, want %v", paths, tc.paths)
 			}
 		})
+	}
+}
+
+// TestIncidentQueryResultsForwarding checks that query results are
+// forwarded to the matcher child's expansion payload (never the primary or
+// timeline), create a fallback matcher without usable labels, and that
+// omission yields a metadata-only payload.
+func TestIncidentQueryResultsForwarding(t *testing.T) {
+	registry, err := newRegistry()
+	testutil.NoErr(t, err)
+	incidentType, err := registry.Lookup(pagerduty.IncidentTypeName)
+	testutil.NoErr(t, err)
+	reference := content.NewItem(incidentType, at("09:00"), pagerduty.Incident{ID: "Q0EXAMPLE", URL: incidentURL})
+	results := &prometheus.QueryResults{
+		Start: at("12:00"), End: at("14:00"), StepSeconds: 15,
+		Series: []prometheus.Series{{Labels: map[string]string{"alertname": "NodeDown"},
+			Samples: []prometheus.Sample{{Timestamp: float64(at("12:30").Unix()) + 0.5, Value: 1}}}},
+	}
+	forwarded := func(t *testing.T, result content.ExpansionResult) (content.EmittedBlock, prometheus.Payload) {
+		t.Helper()
+		for _, block := range result.Blocks {
+			if block.Record.ContentType().Name() == prometheus.AlertsMatcherTypeName {
+				var payload prometheus.Payload
+				testutil.NoErr(t, json.Unmarshal(block.ExpansionPayload, &payload))
+				testutil.NoErr(t, registry.ValidatePayload(prometheus.AlertsMatcherTypeName, block.ExpansionPayload))
+				return block, payload
+			}
+		}
+		t.Fatal("expected a matcher child")
+		return content.EmittedBlock{}, prometheus.Payload{}
+	}
+
+	// Label-derived matcher: results are forwarded, not stored anywhere else.
+	payload := incidentPayload()
+	payload.QueryResults = results
+	result, err := expand(registry, reference, payload)
+	testutil.NoErr(t, err)
+	block, got := forwarded(t, result)
+	if !reflect.DeepEqual(got.QueryResults, results) || len(matcherRecord(t, registry, result).ContentValue.LabelsMatchers) != 2 {
+		t.Fatalf("unexpected forwarded payload: %s", block.ExpansionPayload)
+	}
+	for _, record := range []content.Record{result.Record, result.Blocks[0].Record} {
+		raw, err := content.EncodeRecord(record)
+		testutil.NoErr(t, err)
+		if strings.Contains(string(raw), "query_results") {
+			t.Fatalf("query results leaked into %s", record.ContentType().Name())
+		}
+	}
+
+	// Without usable labels, results (even an empty series list) produce a
+	// fallback matcher with the same key, open-ended from the incident.
+	payload.Alerts = []pagerduty.SourceAlert{}
+	payload.QueryResults = &prometheus.QueryResults{Start: at("12:00"), End: at("14:00"), StepSeconds: 15, Series: []prometheus.Series{}}
+	result, err = expand(registry, reference, payload)
+	testutil.NoErr(t, err)
+	_, got = forwarded(t, result)
+	matcher := matcherRecord(t, registry, result)
+	if want := (prometheus.AlertsMatcher{Since: at("13:03")}); !reflect.DeepEqual(matcher.ContentValue, want) ||
+		matcher.Key() != pagerduty.AlertsMatcherKey || got.QueryResults == nil || got.QueryResults.Series == nil {
+		t.Fatalf("unexpected fallback matcher %#v / %#v", matcher, got)
+	}
+
+	// Omitted results: label-derived matchers get a clearing payload;
+	// without labels there is no matcher.
+	payload = incidentPayload()
+	result, err = expand(registry, reference, payload)
+	testutil.NoErr(t, err)
+	if block, got := forwarded(t, result); got.QueryResults != nil || string(block.ExpansionPayload) != "{}" {
+		t.Fatalf("expected a clearing payload, got %s", block.ExpansionPayload)
+	}
+	payload.Alerts = []pagerduty.SourceAlert{}
+	result, err = expand(registry, reference, payload)
+	testutil.NoErr(t, err)
+	if matcherRecord(t, registry, result) != nil {
+		t.Fatal("expected no matcher without labels and results")
 	}
 }
 

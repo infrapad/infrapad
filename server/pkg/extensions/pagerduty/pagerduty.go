@@ -78,6 +78,12 @@ type Payload struct {
 	Notes    []SourceNote   `json:"notes"`
 	// LogEntries are the incident log entries in chronological order.
 	LogEntries []SourceLogEntry `json:"log_entries"`
+	// QueryResults are optional producer-fetched Prometheus range-query
+	// results (the shared Prometheus/AlertsMatcher contract), forwarded to
+	// the generated matcher child as its complete replacement. Omission or
+	// null clears the matcher's results; they are never stored on the
+	// incident or its timeline.
+	QueryResults *prometheus.QueryResults `json:"query_results,omitempty"`
 }
 
 // SourceIncident holds the core details of the incident. Display fields

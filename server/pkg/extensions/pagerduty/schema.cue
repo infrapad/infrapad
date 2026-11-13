@@ -106,6 +106,36 @@ _#incidentMdHeader: {
 
 	// LogEntries are the incident log entries in chronological order.
 	log_entries: [...#SourceLogEntry] @go(LogEntries,[]SourceLogEntry)
+
+	// QueryResults are optional producer-fetched Prometheus range-query
+	// results (the shared Prometheus/AlertsMatcher contract), forwarded to
+	// the generated matcher child as its complete replacement. Omission or
+	// null clears the matcher's results; they are never stored on the
+	// incident or its timeline.
+	query_results?: null | {
+		// Start is the inclusive query start.
+		start: time.Time @go(Start)
+
+		// End is the inclusive query end; it must be after Start.
+		end: time.Time @go(End)
+
+		// StepSeconds is the producer's query resolution: a finite positive
+		// number of seconds (fractions allowed).
+		step_seconds: >0 & <=1.797693134862315708145274237317043567981e+308 @go(StepSeconds)
+
+		// Series is an explicit (non-null) array of the returned series.
+		series: [...{
+			// Labels is the series' label set.
+			labels: {
+				[string]: string
+			} @go(Labels,map[string]string)
+
+			// Samples is an explicit (non-null) array of samples with strictly
+			// increasing timestamps inside the query bounds. Gaps are allowed and
+			// timestamps need not align to the query step.
+			samples: [...[number, number]] @go(Samples,[]Sample)
+		}] @go(Series,[]Series)
+	} @go(QueryResults,*prometheus.QueryResults)
 }
 
 // SourceIncident holds the core details of the incident. Display fields

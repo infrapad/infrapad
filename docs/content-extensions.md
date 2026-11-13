@@ -182,7 +182,9 @@ Expand(ctx, existing Record, payload json.RawMessage) (ExpansionResult, error)
   expanded too, using `EmittedBlock.ExpansionPayload` as its transient
   payload. The host expands depth-first, rejects cycles and trees deeper
   than eight levels, and commits the whole tree atomically. See the
-  test-only `Test/Ref` in `server/internal/testext`.
+  test-only `Test/Ref` in `server/internal/testext`. PagerDuty forwards
+  its optional `query_results` to the generated `Prometheus/AlertsMatcher`
+  this way, reusing `prometheus.QueryResults` and its `Validate(path)`.
 - **Primary state.** `ExpansionResult.Record` is the resulting primary
   record. Return `existing` when the primary doesn't change. An expander
   may emit no children and only update the primary:
