@@ -9,8 +9,6 @@
 #                                    restricted OAuthClient, and the
 #                                    rendered oauth-proxy config. Supports cached
 #                                    offline restarts.
-#   refresh-ca                       Refresh only the public ingress CA,
-#                                    preserving the OAuth cache.
 #   client <setup|validate-cache|cleanup>
 #                                    Guarded lifecycle of the restricted
 #                                    OAuthClient.
@@ -31,7 +29,6 @@ GEN_DIR="$DEPLOY_DIR/generated"
 CONFIG_TEMPLATE="$DEPLOY_DIR/oauth-proxy.cfg.template"
 METADATA_FILE="$GEN_DIR/oauth-metadata.json"
 INFRAPAD_AUTH_UPSTREAM="${INFRAPAD_AUTH_UPSTREAM:-http://127.0.0.1:8088}"
-INGRESS_CA_FILE="$GEN_DIR/ingress-ca.crt"
 
 # The proxy service-account token used to build the delegation kubeconfig.
 # Distinct from oauth-client-secret, which holds the OAuthClient secret.
@@ -52,7 +49,7 @@ API_URL=""
 # Helpers
 # ---------------------------------------------------------------------------
 usage() {
-  echo "Usage: $0 [bootstrap|refresh-ca|client <setup|validate-cache|cleanup>]"
+  echo "Usage: $0 [bootstrap|client <setup|validate-cache|cleanup>]"
   echo "Runs 'bootstrap' when invoked without arguments."
 }
 
@@ -177,81 +174,16 @@ has_complete_cache() {
 }
 
 # ---------------------------------------------------------------------------
-# Opt-in ingress CA preparation helpers
-# ---------------------------------------------------------------------------
-
-# Fetch the public default-ingress CA from the cluster and write it atomically.
-# Uses the host kubeconfig (not the proxy SA kubeconfig). The ConfigMap is public.
-fetch_ingress_ca() {
-  echo "Fetching public default-ingress CA for metrics upstream TLS…"
-  local ca_pem
-  ca_pem="$(oc -n openshift-config-managed get configmap default-ingress-cert \
-    -o jsonpath='{.data.ca-bundle\.crt}' 2>/dev/null)" \
-    || die "Cannot read openshift-config-managed/default-ingress-cert ConfigMap." \
-           "Verify cluster connectivity and that your kubeconfig context has read access."
-  [ -n "$ca_pem" ] || die "default-ingress-cert ConfigMap returned empty ca-bundle.crt."
-  # Validate usable PEM material.
-  echo "$ca_pem" | openssl x509 -noout 2>/dev/null \
-    || die "Fetched CA bundle does not contain valid PEM certificate material."
-  echo "$ca_pem" > "$INGRESS_CA_FILE.tmp"
-  chmod 0644 "$INGRESS_CA_FILE.tmp"
-  mv -f "$INGRESS_CA_FILE.tmp" "$INGRESS_CA_FILE"
-  echo "Wrote ingress CA to $INGRESS_CA_FILE"
-}
-
-# Check whether metrics upstream is configured (opt-in).
-metrics_upstream_enabled() {
-  [ -n "${INFRAPAD_PROMETHEUS_UPSTREAM_URL:-}" ]
-}
-
-# Ensure ingress CA is available when metrics upstream is enabled.
-# If the user supplied an explicit CA file, skip generated trust entirely.
-prepare_metrics_trust() {
-  if ! metrics_upstream_enabled; then
-    return 0
-  fi
-  # Reuse existing generated trust if present and valid.
-  if [ -s "$INGRESS_CA_FILE" ]; then
-    if openssl x509 -in "$INGRESS_CA_FILE" -noout 2>/dev/null; then
-      echo "Reusing existing generated ingress CA: $INGRESS_CA_FILE"
-      return 0
-    fi
-    echo "Existing ingress CA is invalid; will re-fetch." >&2
-  fi
-  fetch_ingress_ca
-}
-
-# Offline check: fail clearly when metrics trust is missing.
-check_metrics_trust_offline() {
-  if ! metrics_upstream_enabled; then
-    return 0
-  fi
-  if [ -s "$INGRESS_CA_FILE" ] && openssl x509 -in "$INGRESS_CA_FILE" -noout 2>/dev/null; then
-    echo "Reusing existing generated ingress CA: $INGRESS_CA_FILE"
-    return 0
-  fi
-  die "Metrics upstream is configured but no ingress CA is available offline." \
-      "Run the bootstrap while connected to the cluster, or supply" \
-      "INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE with an appropriate CA bundle."
-}
-
-# ---------------------------------------------------------------------------
 # Restricted OAuthClient (guarded lifecycle)
 # ---------------------------------------------------------------------------
-# Why a separate regular OAuthClient instead of just the proxy service
-# account: an SA-backed OAuth client can only be granted basic user scopes
-# and role scopes within its own namespace, so it cannot obtain
-# role:cluster-monitoring-view:openshift-monitoring. This restricted regular
-# OAuthClient with explicit scopeRestrictions and prompted consent is the
-# only way to grant that scope without RBAC changes.
+# A dedicated regular OAuthClient restricted to the basic login scopes
+# (user:info, user:check-access) with prompted consent.
 OAUTH_CLIENT_ID="infrapad-local-login"
 OAUTH_CALLBACK="https://localhost:8443/oauth/callback"
-OAUTH_CLIENT_OWNER="infrapad.io/local-monitoring-client-owner"
+OAUTH_CLIENT_OWNER="infrapad.io/local-login-client-owner"
 OAUTH_CLIENT_RESOURCE="/apis/oauth.openshift.io/v1/oauthclients/$OAUTH_CLIENT_ID"
 OAUTH_CLIENT_RESTRICTIONS='[
-  {"literals": ["user:info", "user:check-access"]},
-  {"clusterRole": {"roleNames": ["cluster-monitoring-view"],
-                   "namespaces": ["openshift-monitoring"], "allowEscalation": false}}
+  {"literals": ["user:info", "user:check-access"]}
 ]'
 OAUTH_CLIENT_STATE_FILE="$GEN_DIR/oauth-client-state.json"
 OAUTH_CLIENT_SECRET_FILE="$GEN_DIR/oauth-client-secret"
@@ -460,19 +392,6 @@ oauth_client() {
 }
 
 # ---------------------------------------------------------------------------
-# refresh-ca subcommand
-# ---------------------------------------------------------------------------
-cmd_refresh_ca() {
-  require_tool oc
-  require_tool openssl
-  echo "Refreshing ingress CA only (preserving OAuth cache)…"
-  mkdir -p "$GEN_DIR"
-  fetch_ingress_ca
-  echo "Certificate refresh complete. Supply the path to INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE:"
-  echo "  export INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE=\"$INGRESS_CA_FILE\""
-}
-
-# ---------------------------------------------------------------------------
 # client subcommand
 # ---------------------------------------------------------------------------
 cmd_client() {
@@ -497,7 +416,7 @@ cmd_bootstrap() {
   if has_delegation_cache; then
     if load_oauth_metadata; then
       if ! has_complete_cache; then
-        echo "Migrating cached credentials to the restricted OAuthClient (online once)…"
+        echo "Registering the restricted OAuthClient for cached credentials (online once)…"
         echo "Preserving proxy service-account credentials, cookie secret, certificates, and trust files."
         oauth_client setup
         write_oauth_metadata
@@ -505,7 +424,6 @@ cmd_bootstrap() {
       oauth_client validate-cache
       echo "Using cached OpenShift OAuth metadata and generated credentials."
       render_oauth_proxy_config
-      check_metrics_trust_offline
       echo "OAuth bootstrap complete. Regenerated $GEN_DIR/oauth-proxy.cfg without contacting OpenShift."
       exit 0
     fi
@@ -867,18 +785,7 @@ EOF
   write_oauth_metadata
   render_oauth_proxy_config
 
-  # -----------------------------------------------------------------------
-  # Opt-in ingress CA for metrics upstream
-  # -----------------------------------------------------------------------
-  require_tool openssl
-  prepare_metrics_trust
-
   echo "OAuth bootstrap complete. Generated files in $GEN_DIR"
-  if metrics_upstream_enabled; then
-    echo ""
-    echo "Metrics upstream detected. Export the following for Go:"
-    echo "  export INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE=\"$INGRESS_CA_FILE\""
-  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -893,11 +800,6 @@ case "${1:-}" in
     if [ "${1:-}" = "bootstrap" ]; then shift; fi
     [ "$#" -eq 0 ] || die "'bootstrap' takes no arguments."
     cmd_bootstrap
-    ;;
-  refresh-ca)
-    shift
-    [ "$#" -eq 0 ] || die "'refresh-ca' takes no arguments."
-    cmd_refresh_ca
     ;;
   client)
     shift

@@ -58,28 +58,7 @@ Browse [https://localhost:8443/ui/documents](https://localhost:8443/ui/documents
 
 For any workflow, `task server:watch` can replace `task server:run`. It starts the server once and restarts it after a *manual* `task server:build` in another terminal. Successful builds atomically publish `server/infrapad-server`; failed builds leave the running server intact. `server:watch` does not rebuild on source changes. If it started API-only before the first UI build, restart the task to pick up the new assets directory. If changing Go's `/ui/config` during hot reload, rebuild Go; frontend changes still hot-reload on their own.
 
-`--prometheus-url` overrides `INFRAPAD_PROMETHEUS_URL` (default `http://localhost:9090`); this URL must be browser-reachable. The InfraPad API base is `/v1`. Go trusts forwarded identity only when UI traffic comes via the authentication proxy; direct `/v1/`, gRPC, and health access remain anonymous. `INFRAPAD_AUTH_UPSTREAM` remains an explicit proxy upstream override for advanced setups.
-
-### Metrics relay mode
-
-To use an upstream Prometheus-compatible endpoint (e.g. OpenShift Thanos Querier) instead of browser-direct Prometheus, set these flags or environment variables:
-
-| Flag | Environment variable | Description |
-| --- | --- | --- |
-| `--prometheus-upstream-url` | `INFRAPAD_PROMETHEUS_UPSTREAM_URL` | HTTPS base URL of the upstream (e.g. `https://thanos-querier-openshift-monitoring.apps.example.com`). Enables the relay and overrides `--prometheus-url`. |
-| `--prometheus-upstream-ca-file` | `INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE` | PEM CA bundle for upstream TLS verification. Extends system roots. An unreadable or invalid file is a startup error. Use an absolute path or a path relative to `server/`. |
-| `--prometheus-upstream-insecure-skip-tls-verify` | `INFRAPAD_PROMETHEUS_UPSTREAM_INSECURE_SKIP_TLS_VERIFY` | Disable upstream TLS certificate verification (**security risk** – bypasses certificate trust for the configured upstream only). Verification is enabled by default; use this only when proper CA material is unavailable. |
-
-When enabled, the relay mounts `GET /prometheus/api/*` and advertises `/prometheus` as `services.prometheusApiBaseUrl` in `/ui/config`. The upstream base may include a path prefix (e.g. `https://host/thanos` maps requests to `https://host/thanos/api/v1/...`). Only GET requests are forwarded; the relay accepts a single `Authorization: Bearer …` header, constructs a fresh upstream request with that credential, and returns the response. 
-
-Run the command to get the vars relevant for your setup:
-
-```
-cat <<EOF >> .env
-export INFRAPAD_PROMETHEUS_UPSTREAM_URL="https://$(oc -n openshift-monitoring get route thanos-querier -o jsonpath='{.spec.host}')"            
-export INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE="$PWD/deploy/example/openshift-thanos/tmp/ingress-ca.pem"
-EOF
-```
+`/ui/config` advertises only the InfraPad API base (`services.infrapadApiBaseUrl`, `/v1`). The UI never contacts Prometheus: AlertsMatcher charts render `query_results` submitted by external producers (see [content extensions](docs/content-extensions.md)). Go trusts forwarded identity only when UI traffic comes via the authentication proxy; direct `/v1/`, gRPC, and health access remain anonymous. `INFRAPAD_AUTH_UPSTREAM` remains an explicit proxy upstream override for advanced setups.
 
 ## Tests
 
@@ -90,4 +69,4 @@ task ui:test:all   # both
 task test:all      # CLI, server and UI suites
 ```
 
-Start the database and a Go server on port 8088 before UI e2e tests (for example, `task podman:postgres` and `task server:run` in separate terminals). Playwright starts its own Vite and dummy-auth proxy on isolated ports 15173 and 18089; **do not** start another normal UI proxy for the test. It mocks browser document and Prometheus requests but calls Go for `/ui/config`. Set `INFRAPAD_E2E_VITE_PORT` / `INFRAPAD_E2E_AUTH_PORT` to change those ports. The root aggregate suite also needs the usual running database/services required by CLI and server tests; it does not provision them.
+Start the database and a Go server on port 8088 before UI e2e tests (for example, `task podman:postgres` and `task server:run` in separate terminals). Playwright starts its own Vite and dummy-auth proxy on isolated ports 15173 and 18089; **do not** start another normal UI proxy for the test. It mocks browser document requests but calls Go for `/ui/config`. Set `INFRAPAD_E2E_VITE_PORT` / `INFRAPAD_E2E_AUTH_PORT` to change those ports. The root aggregate suite also needs the usual running database/services required by CLI and server tests; it does not provision them.

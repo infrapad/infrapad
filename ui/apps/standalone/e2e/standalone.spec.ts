@@ -220,7 +220,7 @@ test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
   // The configuration is supplied by Go through Vite and the authentication proxy.
   const config = await page.evaluate(async () => (await fetch("/ui/config")).json());
   expect(config.identity).toEqual({ username: "alice", email: "alice@example.com" });
-  expect(config.services).toEqual({ infrapadApiBaseUrl: "/v1", prometheusApiBaseUrl: "http://localhost:9090" });
+  expect(config.services).toEqual({ infrapadApiBaseUrl: "/v1" });
   await expect(page.getByRole("heading", { name: document.title })).toBeVisible();
 
   // List/detail navigation should render the document content.

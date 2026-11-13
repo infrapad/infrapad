@@ -43,13 +43,8 @@ function parseConfig(value: unknown): UIConfig {
     throw new Error("The UI configuration response is malformed.");
   }
 
-  const { infrapadApiBaseUrl, prometheusApiBaseUrl } = value.services;
-  if (
-    typeof infrapadApiBaseUrl !== "string" ||
-    infrapadApiBaseUrl.length === 0 ||
-    typeof prometheusApiBaseUrl !== "string" ||
-    prometheusApiBaseUrl.length === 0
-  ) {
+  const { infrapadApiBaseUrl } = value.services;
+  if (typeof infrapadApiBaseUrl !== "string" || infrapadApiBaseUrl.length === 0) {
     throw new Error("The UI service configuration is malformed.");
   }
 
@@ -72,7 +67,7 @@ function parseConfig(value: unknown): UIConfig {
 
   return {
     identity,
-    services: { infrapadApiBaseUrl, prometheusApiBaseUrl },
+    services: { infrapadApiBaseUrl },
   };
 }
 

@@ -6,19 +6,16 @@ import {
   type InfraPadFetch,
   type InfraPadServices,
 } from "./api.js";
-import { queryRange } from "./prometheusApi.js";
 
 // Internal, per-mount binding of the host's destinations and request function.
 // Keep the plain API helpers responsible for URLs, parsing and errors.
 export function createInfrapadClient(services: InfraPadServices, hostFetch?: InfraPadFetch) {
-  const { infrapadApiBaseUrl, prometheusApiBaseUrl } = services;
+  const { infrapadApiBaseUrl } = services;
   return {
     listDocuments: () => listDocuments(infrapadApiBaseUrl, hostFetch),
     getDocument: (docId: string) => getDocument(infrapadApiBaseUrl, docId, hostFetch),
     listBlockHistory: (docId: string, blockNumber: number) =>
       listBlockHistory(infrapadApiBaseUrl, docId, blockNumber, hostFetch),
-    queryRange: (query: string, start: string | number, end: string | number, step: string) =>
-      queryRange(prometheusApiBaseUrl, query, start, end, step, hostFetch),
   };
 }
 

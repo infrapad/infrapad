@@ -14,7 +14,7 @@ For standalone UI development, `INFRAPAD_UI=hot-reload` makes the active authent
 
 The dummy proxy performs **no signature, issuer, audience, or expiry validation and provides no security**. Use it only for trusted local testing. For FleetShift's HTTPS shell, the local browser-facing InfraPad URL is `http://localhost:8089` (the HTTP loopback URL). Fetch `/ui/config` there with FleetShift's current OIDC bearer, then resolve the returned `/v1` API base URL against this origin. The proxy decodes the bearer to identity headers and removes `Authorization` before forwarding to Go; it does not validate the token or authorize API access.
 
-For local browser development only, the dummy proxy answers unauthenticated bearer preflights and sets `Access-Control-Allow-Origin: *` on `/ui/config`, `/v1`, and `/v1/` descendants, including proxy errors. It permits `Authorization` and `Content-Type` headers and does **not** enable cross-origin cookies. This is not production CORS or HTTPS hosting: a production cross-origin deployment requires its own HTTPS and authorization policy. This proxy policy does not cover the configured Prometheus destination or the separate OpenShift OAuth proxy.
+For local browser development only, the dummy proxy answers unauthenticated bearer preflights and sets `Access-Control-Allow-Origin: *` on `/ui/config`, `/v1`, and `/v1/` descendants, including proxy errors. It permits `Authorization` and `Content-Type` headers and does **not** enable cross-origin cookies. This is not production CORS or HTTPS hosting: a production cross-origin deployment requires its own HTTPS and authorization policy. This proxy policy does not cover the separate OpenShift OAuth proxy.
 
 Visit [http://localhost:8089/auth](http://localhost:8089/auth) to log in with a dummy username and optional email address, view the generated bearer token, or log out. Login stores the raw dummy token in an HTTP-only browser-session cookie. An optional `returnTo` query value is preserved through login only when it is a safe root-relative path; absent or unsafe values return to `/auth`. The proxy derives identity headers from the cookie but never forwards the authentication cookie to InfraPad. Requests without a session continue to InfraPad anonymously rather than being redirected.
 
@@ -34,55 +34,35 @@ The token endpoint does not create or change the browser session. The existing l
 task podman:dummy-auth:token -- --username alice --email alice@example.com
 ```
 
-In `INFRAPAD_AUTH=openshift` mode, the pinned OAuth proxy allows unauthenticated `OPTIONS` preflights so FleetShift's HTTPS browser page can send an OpenShift **user** bearer to `https://localhost:8443/ui/config` and `/v1/` document requests. Bearers are authenticated by OpenShift TokenReview and checked by SubjectAccessReview against a local, virtual `get infrapad.local/access/browser-api` marker in `infrapad-local` granted to `system:authenticated` (users and service accounts). This is **not** per-user or per-document InfraPad authorization. No arbitrary OpenShift view/admin role is required. The proxy supplies user/email identity headers and the authenticated user's raw `X-Forwarded-Access-Token`: `pass_access_token` covers cookie sessions and `pass_user_bearer_token` covers delegated bearers. Only the metrics relay consumes that token, constructing a fresh upstream bearer; tokens are never part of `/ui/config`. Standalone OAuth cookie login remains available. Direct `:8088`/gRPC access is still a trusted-development bypass.
+In `INFRAPAD_AUTH=openshift` mode, the pinned OAuth proxy allows unauthenticated `OPTIONS` preflights so FleetShift's HTTPS browser page can send an OpenShift **user** bearer to `https://localhost:8443/ui/config` and `/v1/` document requests. Bearers are authenticated by OpenShift TokenReview and checked by SubjectAccessReview against a local, virtual `get infrapad.local/access/browser-api` marker in `infrapad-local` granted to `system:authenticated` (users and service accounts). This is **not** per-user or per-document InfraPad authorization. No arbitrary OpenShift view/admin role is required. The proxy supplies only user/email identity headers; it does not forward user tokens upstream (`pass_access_token` and `pass_user_bearer_token` are disabled), and tokens are never part of `/ui/config`. Standalone OAuth cookie login remains available. Direct `:8088`/gRPC access is still a trusted-development bypass.
 
 For the CLI, use `INFRAPAD_API_URL=https://localhost:8443` and the existing `INFRAPAD_TOKEN` OpenShift user token. From FleetShift's HTTPS page, use the same local origin for `/ui/config` and `/v1/documents` with its separately acquired OpenShift user bearer. This local-development preflight behavior applies to all OPTIONS paths, not just FleetShift, and does not make proxy-generated login redirects or errors CORS-readable. Do not use the development CORS behavior as a production origin/authorization policy or for cross-origin cookies.
 
 The focused proxy tasks are `task podman:dummy-auth-proxy` and `task podman:oauth-proxy`. Run the dummy proxy tests with `task podman:dummy-auth:test`.
 
-## Restricted OAuth login for monitoring
+## Restricted OAuth login
 
 The local deployment uses its own regular OAuthClient **`infrapad-local-login`**:
 
 - Redirect: `https://localhost:8443/oauth/callback`; **`grantMethod: prompt`**.
-- Allowed/requested scopes: `user:info user:check-access role:cluster-monitoring-view:openshift-monitoring`.
-- Restrictions: the two basic literal scopes and only `cluster-monitoring-view` in `openshift-monitoring`, **`allowEscalation: false`**. No `user:full`, automatic consent, custom monitoring RBAC, or new user permissions.
-- Scopes intersect the signed-in user's existing permissions. That user still needs monitoring access. The existing role includes more than GET permissions; this is a limited role token, **not a strictly GET-only token**. InfraPad's relay stays GET-only.
+- Allowed/requested scopes: only the basic login scopes `user:info user:check-access` (literal `scopeRestrictions`). No `user:full`, role scopes, automatic consent, or new user permissions.
+- InfraPad never contacts Prometheus from the browser or server; AlertsMatcher charts render `query_results` submitted by external producers, so no monitoring permissions are requested.
 - Login uses private `generated/oauth-client-secret`; its bytes match the registered secret exactly, **without a trailing newline**. Do not recreate it with newline-appending `echo`.
 - `generated/proxy-sa-token` holds the proxy service account's token and builds `generated/kubeconfig`, the identity the proxy uses for delegated authentication: verifying incoming OpenShift bearer tokens (TokenReview), checking the local access marker (SubjectAccessReview), and watching the OAuth serving-cert ConfigMap.
 
-### Native-token migration and user redeployment
+### Initial setup
 
-**The developer runs these steps; implementation does not redeploy the stack.**
+Prerequisites: Bash, `oc`, `jq`, `openssl`, and `mkcert`, plus a logged-in `oc` context. The host user needs permission to create the namespace, service account, token Secret, and RBAC bindings, and `get`/`create` access to cluster-scoped OAuthClients. Registration verifies HTTPS using the cluster API CA.
 
-1. Select the host kubeconfig matching the existing generated cache. Setup needs `get`/`create` on cluster-scoped OAuthClients, in addition to existing first-bootstrap RBAC privileges. Prerequisites: Bash, `oc`, `jq`, `openssl`; fresh TLS generation also needs `mkcert`. API registration explicitly verifies HTTPS using the matching generated API CA, even if the host kubeconfig disables verification. A cluster/context mismatch fails without changing cached credentials.
-2. Render/migrate online once, preserving the existing directory and its contents. For hot reload, from the repository root:
+From the repository root, start the development services with OpenShift authentication:
 
-   ```sh
-   INFRAPAD_AUTH_UPSTREAM=http://127.0.0.1:5173 \
-     ./deploy/podman/scripts/openshift-oauth.sh
-   ```
+```sh
+INFRAPAD_UI=hot-reload INFRAPAD_AUTH=openshift task podman:dev:run
+```
 
-   Use `http://127.0.0.1:8088` for built UI. Delegation-ready caches migrate only the OAuthClient, metadata, and rendered config; cookie secret, SA credentials/kubeconfig, TLS certificates, and CA files are preserved byte-for-byte. Matching client setup reuses its secret. Unexpected ownership, UID, secret, redirect, consent, or restrictions fail closed rather than being overwritten. After successful migration, offline starts need no API access. They validate local state/secret integrity, **not live registration**. An old basic-only cache cannot silently qualify for offline reuse.
-3. Apply the changed Compose manifest in the **original project**, recreating only `oauth-proxy` so both the new secret mount and atomically replaced config are picked up. If the original project uses `deploy/podman/all.yaml`, for example:
+This runs bootstrap automatically, generating credentials and proxy configuration under `deploy/podman/generated/`, then starts the services. Run `task server:run` and `INFRAPAD_AUTH=openshift task ui:dev` in separate terminals. For built assets instead, follow the [development guide](../../DEVELOPMENT.md).
 
-   ```sh
-   INFRAPAD_UI=hot-reload INFRAPAD_AUTH=openshift \
-     ./deploy/podman/scripts/start.sh -f deploy/podman/all.yaml \
-     -- --no-deps --force-recreate -d oauth-proxy
-   ```
-
-   Retain any original project-name/environment options. Do not start a second project on port 8443. For a stopped stack, restart through its original task/workflow with the updated manifest. No backend or frontend code/build changes are required by this correction.
-4. Keep the backend's explicit `INFRAPAD_PROMETHEUS_UPSTREAM_URL` and verified upstream TLS. If the cluster's ingress CA changed, refresh **only** public trust:
-
-   ```sh
-   ./deploy/podman/scripts/openshift-oauth.sh refresh-ca
-   export INFRAPAD_PROMETHEUS_UPSTREAM_CA_FILE="$PWD/deploy/podman/generated/ingress-ca.crt"
-   ```
-
-   Restart the original server/watch task if its startup URL, CA file, or trust contents changed. Rebuilding alone does not reload startup settings/trust. The Kubernetes API CA is not necessarily ingress trust; an old example CA file may be stale. Never enable insecure TLS to mask this prerequisite. `refresh-ca` does not migrate/register a client.
-5. Open `https://localhost:8443/ui/documents`, log in, and accept **all three** approved scopes on the existing OpenShift consent page. The new stable cookie name `_infrapad_openshift_monitoring_session` excludes old identity-only/basic-scope sessions **without rotating the cookie secret**. Subsequent restarts keep the name/secret. Cluster SSO may supply an identity, but an old InfraPad cookie cannot establish the new scoped session.
-6. Confirm redeployment before starting the separate standalone UI-verification task. Require nonempty live charts using the signed-in user's token over verified Thanos TLS. Reproducer success and local integration tests are not deployed-chart evidence. Canonical external `Authorization: Bearer …` remains supported; the known pinned-proxy case-variant forwarding limitation is deferred, not fixed here. FleetShift acceptance and monitoring-denial testing remain outside this task.
+Open `https://localhost:8443/ui/documents`, log in, and accept the basic scopes. Subsequent starts reuse the generated credentials and cached discovery metadata, allowing offline restarts. Keep the generated directory private and preserve its client ownership state; bootstrap refuses to overwrite a registration that does not match it.
 
 ### Explicit client maintenance
 

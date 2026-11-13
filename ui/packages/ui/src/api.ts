@@ -1,10 +1,9 @@
-// Hosts provide both service locations; this package has no runtime globals.
+// Hosts provide the InfraPad API location; this package has no runtime globals.
 export interface InfraPadServices {
   infrapadApiBaseUrl: string;
-  prometheusApiBaseUrl: string;
 }
 
-/** Host-supplied fetch for document and Prometheus calls; ordinary fetch is the default. */
+/** Host-supplied fetch for document calls; ordinary fetch is the default. */
 export type InfraPadFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 async function infrapadFetch<T>(

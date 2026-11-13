@@ -23,7 +23,7 @@ func TestUIRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterHealthRoutes(mux, &Readiness{})
 	mux.HandleFunc("/v1/", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusAccepted) })
-	RegisterUIRoutes(mux, dir, "https://metrics.example.test")
+	RegisterUIRoutes(mux, dir)
 
 	get := func(url string) *httptest.ResponseRecorder {
 		t.Helper()
@@ -95,7 +95,7 @@ func TestUIRoutes(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatal(err)
 		}
-		if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || body.Services["infrapadApiBaseUrl"] != "/v1" || body.Services["prometheusApiBaseUrl"] != "https://metrics.example.test" {
+		if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || len(body.Services) != 1 || body.Services["infrapadApiBaseUrl"] != "/v1" {
 			t.Errorf("config: %d %q", w.Code, w.Body.String())
 		}
 		if headers["X-Forwarded-User"] == "" && body.Identity != nil || headers["X-Forwarded-User"] != "" && (body.Identity == nil || body.Identity.Username != headers["X-Forwarded-User"] || body.Identity.Email != headers["X-Forwarded-Email"]) {
@@ -118,7 +118,7 @@ func TestUIOptionalAndUnusable(t *testing.T) {
 		{t.TempDir(), "/", 503},
 	} {
 		mux := http.NewServeMux()
-		RegisterUIRoutes(mux, tc.dir, "http://localhost:9090")
+		RegisterUIRoutes(mux, tc.dir)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, httptest.NewRequest("GET", tc.url, nil))
 		if w.Code != tc.status {

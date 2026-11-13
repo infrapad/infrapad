@@ -7,11 +7,10 @@ tls_key_file = "/etc/oauth-proxy/tls.key"
 # Regular restricted OAuthClient; proxy-SA token is only in the delegation kubeconfig.
 client_id = "infrapad-local-login"
 client_secret_file = "/etc/oauth-proxy/oauth-client-secret"
-scope = "user:info user:check-access role:cluster-monitoring-view:openshift-monitoring"
+scope = "user:info user:check-access"
 cookie_secret_file = "/etc/oauth-proxy/cookie-secret"
-# Exclude legacy identity-only AND basic-scope sessions; log in/consent once.
-# Keep this stable name and the existing cookie secret across subsequent restarts.
-cookie_name = "_infrapad_openshift_monitoring_session"
+# Keep the cookie name and secret stable across restarts to preserve login sessions.
+cookie_name = "_infrapad_openshift_session"
 cookie_secure = true
 cookie_httponly = true
 openshift_ca = ["/etc/oauth-proxy/cluster-ca.crt"]
@@ -24,14 +23,13 @@ upstreams = ["@INFRAPAD_AUTH_UPSTREAM@"]
 request_logging = false
 pass_user_headers = true
 pass_basic_auth = false
-# Forward cookie-session OAuth tokens via X-Forwarded-Access-Token.
-pass_access_token = true
-# Forward authenticated client bearer tokens via the same header.
-pass_user_bearer_token = true
+# No upstream consumes user tokens; forward only user/email identity headers.
+pass_access_token = false
+pass_user_bearer_token = false
 # Delegation authenticates OpenShift bearers using TokenReview + the universal
 # system:authenticated marker, not per-document InfraPad authorization.
 # Only API paths are mapped; /oauth/ remains a standalone cookie login flow.
-openshift_delegate_urls = '{"/ui/config":{"group":"infrapad.local","resource":"access","name":"browser-api","namespace":"infrapad-local","verb":"get"},"/v1/":{"group":"infrapad.local","resource":"access","name":"browser-api","namespace":"infrapad-local","verb":"get"},"/prometheus/api/":{"group":"infrapad.local","resource":"access","name":"browser-api","namespace":"infrapad-local","verb":"get"}}'
+openshift_delegate_urls = '{"/ui/config":{"group":"infrapad.local","resource":"access","name":"browser-api","namespace":"infrapad-local","verb":"get"},"/v1/":{"group":"infrapad.local","resource":"access","name":"browser-api","namespace":"infrapad-local","verb":"get"}}'
 # Allow browser bearer preflights without an OpenShift login redirect.
 # This skips auth for all OPTIONS, not for GET/POST/etc.; not a production CORS policy.
 skip_auth_preflight = true

@@ -7,7 +7,7 @@ import { createInfrapadClient, InfrapadClientProvider } from "./infrapadClient.j
 
 export interface InfraPadDocumentsProps {
   services: InfraPadServices;
-  /** Optional host fetch for all document, revision, and Prometheus requests. */
+  /** Optional host fetch for all document and revision requests. */
   fetch?: InfraPadFetch;
 }
 
@@ -15,7 +15,7 @@ export interface InfraPadDocumentsProps {
 export function InfraPadDocuments({ services, fetch: hostFetch }: InfraPadDocumentsProps) {
   const client = useMemo(
     () => createInfrapadClient(services, hostFetch),
-    [services.infrapadApiBaseUrl, services.prometheusApiBaseUrl, hostFetch],
+    [services.infrapadApiBaseUrl, hostFetch],
   );
   return (
     <InfrapadClientProvider client={client}>

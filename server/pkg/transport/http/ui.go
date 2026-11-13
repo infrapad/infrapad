@@ -15,8 +15,7 @@ type uiConfig struct {
 		Email    string `json:"email,omitempty"`
 	} `json:"identity"`
 	Services struct {
-		InfrapadAPIBaseURL   string `json:"infrapadApiBaseUrl"`
-		PrometheusAPIBaseURL string `json:"prometheusApiBaseUrl"`
+		InfrapadAPIBaseURL string `json:"infrapadApiBaseUrl"`
 	} `json:"services"`
 }
 
@@ -35,7 +34,7 @@ func (config uiConfig) MarshalJSON() ([]byte, error) {
 // RegisterUIRoutes mounts the runtime configuration regardless of whether a
 // frontend build is available. Forwarded identity headers must only be accepted
 // when this server is reached through a trusted authentication proxy.
-func RegisterUIRoutes(mux *http.ServeMux, dir, prometheusURL string) {
+func RegisterUIRoutes(mux *http.ServeMux, dir string) {
 	mux.HandleFunc("/ui/config", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet {
@@ -49,7 +48,6 @@ func RegisterUIRoutes(mux *http.ServeMux, dir, prometheusURL string) {
 			config.Identity.Email = r.Header.Get("X-Forwarded-Email")
 		}
 		config.Services.InfrapadAPIBaseURL = "/v1"
-		config.Services.PrometheusAPIBaseURL = prometheusURL
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(config)
 	})
