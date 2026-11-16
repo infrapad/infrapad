@@ -290,7 +290,7 @@ func expectPresentation(t *testing.T, doc *pb.Document, threadNumber int32, conv
 
 	cards := presentationCards(t, conv)
 	if len(cards) != 1 || cards[0].Title != "Slack conversation" ||
-		len(cards[0].Fields) != 1 || cards[0].Fields[0].Label != "Messages" || cards[0].Fields[0].Value != "2" {
+		len(cards[0].Fields) != 0 {
 		t.Fatalf("Slack/Conversation presentation: %v", conv.GetPresentation())
 	}
 	md := conv.GetMarkdown()

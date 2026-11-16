@@ -176,8 +176,22 @@ func TestThreadPayloadScenario(t *testing.T) {
 
 	presentation, err := conversation.ContentType().(content.Presenter).Present(conversation)
 	testutil.NoErr(t, err)
-	if len(presentation.Cards) != 1 || presentation.Cards[0].Fields[0].Value != "2" {
+	if len(presentation.Cards) != 1 || len(presentation.Cards[0].Fields) != 0 {
 		t.Fatalf("unexpected presentation: %#v", presentation)
+	}
+	cardMarkdown := presentation.Cards[0].Markdown
+	for _, want := range []string{
+		"  - [\\[#123456\\] Example critical incident (1)](https://service.example.test/incidents/I0EXAMPLE)",
+		"  - [Classic unfurl](https://example.com/doc)",
+	} {
+		if !strings.Contains(cardMarkdown, want) {
+			t.Fatalf("presentation missing attachment link %q:\n%s", want, cardMarkdown)
+		}
+	}
+	for _, unwanted := range []string{"Attachment:", "> ", "**Status:**", "**Created:**", "Updated:", "Fallback only preview"} {
+		if strings.Contains(cardMarkdown, unwanted) {
+			t.Fatalf("presentation contains attachment metadata %q:\n%s", unwanted, cardMarkdown)
+		}
 	}
 
 	// A generated (keyed) thread reference keeps its key through expansion.

@@ -171,7 +171,7 @@ func TestTimelinePresentation(t *testing.T) {
 	}
 	presentation, err := ct.(content.Presenter).Present(reloaded)
 	testutil.NoErr(t, err)
-	if card := presentation.Cards[0]; card.Markdown != want || card.Fields[0].Value != "3" {
+	if card := presentation.Cards[0]; card.Markdown != want || len(card.Fields) != 0 {
 		t.Fatalf("unexpected presentation: %#v", card)
 	}
 }

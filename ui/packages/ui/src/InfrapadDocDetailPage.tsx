@@ -24,7 +24,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import AlertsTimelineChart from "./AlertsTimelineChart.js";
-import { blockContent } from "./api.js";
+import { blockContent, blockTimestamp } from "./api.js";
 import type { InfrapadBlock, InfrapadDocument } from "./api.js";
 import { useInfrapadClient } from "./infrapadClient.js";
 import BlockRevisionsPanel, { formatDate } from "./BlockRevisionsPanel.js";
@@ -78,9 +78,14 @@ function formatQueryBound(iso: string): string {
 }
 
 /** Render an alerts_matcher block as structured data + stored timeline chart. */
-function AlertsMatcherBlockContent({ content }: { content: Record<string, unknown> }) {
+function AlertsMatcherBlockContent({
+  content,
+}: {
+  content: Record<string, unknown>;
+}) {
   const matchers = content.labels_matchers as LabelMatcher[] | undefined;
-  const queryResults = (content.query_results ?? undefined) as QueryResults | undefined;
+  const queryResults = (content.query_results ?? undefined) as
+    QueryResults | undefined;
   const since = content.since as string | undefined;
   const until = content.until as string | undefined;
   // "0001-01-01T00:00:00Z" is the Go zero time — treat as "ongoing"
@@ -97,8 +102,7 @@ function AlertsMatcherBlockContent({ content }: { content: Record<string, unknow
                 {matchers.map((m, i) => {
                   const parts = Object.entries(m)
                     .map(
-                      ([k, v]) =>
-                        `${k}=${Array.isArray(v) ? v.join(",") : v}`,
+                      ([k, v]) => `${k}=${Array.isArray(v) ? v.join(",") : v}`,
                     )
                     .join(", ");
                   return (
@@ -139,9 +143,13 @@ function AlertsMatcherBlockContent({ content }: { content: Record<string, unknow
             <DescriptionListGroup>
               <DescriptionListTerm>Snapshot window</DescriptionListTerm>
               <DescriptionListDescription className="infrapad-alerts-query-window">
-                <time dateTime={queryResults.start}>{formatQueryBound(queryResults.start)}</time>
+                <time dateTime={queryResults.start}>
+                  {formatQueryBound(queryResults.start)}
+                </time>
                 {" – "}
-                <time dateTime={queryResults.end}>{formatQueryBound(queryResults.end)}</time>
+                <time dateTime={queryResults.end}>
+                  {formatQueryBound(queryResults.end)}
+                </time>
               </DescriptionListDescription>
             </DescriptionListGroup>
             <DescriptionListGroup>
@@ -174,6 +182,7 @@ function renderBlockContent(block: InfrapadBlock) {
 
 function BlockCard({ block, docId }: { block: InfrapadBlock; docId: string }) {
   const [showRevisions, setShowRevisions] = useState(false);
+  const timestamp = blockTimestamp(block);
 
   return (
     <Card isCompact className="infrapad-block-card">
@@ -192,7 +201,9 @@ function BlockCard({ block, docId }: { block: InfrapadBlock; docId: string }) {
                 rev {block.revisionNumber}
                 {showRevisions ? " ▾" : " ▸"}
               </Button>
-              {block.createdAt && <> · {formatDate(block.createdAt)}</>}
+              {timestamp && (
+                <> · <time dateTime={timestamp} title="Event time">{formatDate(timestamp)}</time></>
+              )}
               {block.authorId && <> · {block.authorId}</>}
             </span>
           ),
@@ -203,11 +214,6 @@ function BlockCard({ block, docId }: { block: InfrapadBlock; docId: string }) {
           <Label color="purple" isCompact>
             {blockTypeLabel(block.type)}
           </Label>
-          <Label color="orange" isCompact>
-            {block.type === "Prometheus/AlertsMatcher"
-              ? "automation: Incident Detector"
-              : "AI agent: investigator"}
-          </Label>
         </div>
       </CardHeader>
       <CardBody>{renderBlockContent(block)}</CardBody>
@@ -216,10 +222,7 @@ function BlockCard({ block, docId }: { block: InfrapadBlock; docId: string }) {
           <Title headingLevel="h4" size="md" className="pf-v6-u-mb-sm">
             Revision History
           </Title>
-          <BlockRevisionsPanel
-            docId={docId}
-            blockNumber={block.blockNumber}
-          />
+          <BlockRevisionsPanel docId={docId} blockNumber={block.blockNumber} />
         </CardBody>
       )}
     </Card>
@@ -270,8 +273,12 @@ export default function InfrapadDocDetailPage() {
             The requested document could not be loaded.
           </EmptyStateBody>
           <EmptyStateFooter>
-            <Link to=".." relative="path">Back to Documents</Link>
-            <Button variant="link" onClick={fetchDocument}>Retry</Button>
+            <Link to=".." relative="path">
+              Back to Documents
+            </Link>
+            <Button variant="link" onClick={fetchDocument}>
+              Retry
+            </Button>
           </EmptyStateFooter>
         </EmptyState>
       </PageSection>
@@ -285,7 +292,12 @@ export default function InfrapadDocDetailPage() {
       <Breadcrumb className="pf-v6-u-mb-md">
         <BreadcrumbItem
           render={({ className, ariaCurrent }) => (
-            <Link to=".." relative="path" className={className} aria-current={ariaCurrent}>
+            <Link
+              to=".."
+              relative="path"
+              className={className}
+              aria-current={ariaCurrent}
+            >
               Documents
             </Link>
           )}

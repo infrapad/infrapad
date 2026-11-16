@@ -93,6 +93,12 @@ export interface InfrapadBlockRecord {
   items?: InfrapadRecordItem[];
 }
 
+/** Event time used for ordering; grouped records take it from their first member. */
+export function blockTimestamp(block: InfrapadBlock): string | undefined {
+  const record = block.record;
+  return record?.items ? record.items[0]?.timestamp : record?.timestamp;
+}
+
 /**
  * Inner content of a standalone record; grouped records fall back to the
  * whole record (members with keys and timestamps).

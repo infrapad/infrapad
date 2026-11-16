@@ -87,7 +87,6 @@ func (*TimelineType) Present(record content.Record) (content.Presentation, error
 	card := content.Card{
 		Title:    "PagerDuty timeline",
 		Markdown: markdown,
-		Fields:   []content.Field{{Label: "Entries", Value: fmt.Sprint(len(collection.Items))}},
 	}
 	if len(collection.Items) > 0 {
 		card.Links = []content.Link{{Label: "Open in PagerDuty", URL: collection.Items[0].ContentValue.URL}}

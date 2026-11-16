@@ -16,6 +16,18 @@ const markdownText = [
 
 const threadURL = "https://slack.example/archives/C1/p1735787045000100";
 const agentMarkdown = "**Recommended next step before destructive cleanup:**\n\nRoot cause: <b>bad deploy</b>";
+const attachmentPreviews = "\n\n> Attachment: **[Incident](https://example.com/incident)** · PagerDuty\n> **Status:** Resolved\n" +
+  "\n> Attachment: **[Runbook](https://example.com/runbook)** · Docs\n> Troubleshooting preview";
+const conversationItems = [
+  { timestamp: "2025-01-02T03:05:00Z", key: "slack-message:1", content: { author: "Alice", text: "Is it **down**?" } },
+  { timestamp: "2025-01-02T03:05:10Z", key: "slack-message:2", content: { author: "Alice", text: "Checking the dashboard." + attachmentPreviews } },
+  { timestamp: "2025-01-02T03:05:20Z", key: "slack-message:3", content: { author: "Bob", text: "Confirmed." } },
+  { timestamp: "2025-01-02T03:05:30Z", key: "slack-message:4", content: { author: "Alice", text: "Rolling back." } },
+];
+const conversationMarkdown = "- **Alice** · 2025-01-02 03:05:00 UTC  \n  Is it **down**?\n\n  Checking the dashboard.\n\n" +
+  "  - [Incident](https://example.com/incident)\n\n  - [Runbook](https://example.com/runbook)\n" +
+  "- **Bob** · 2025-01-02 03:05:20 UTC  \n  Confirmed.\n" +
+  "- **Alice** · 2025-01-02 03:05:30 UTC  \n  Rolling back.\n";
 
 // Server-shaped Slack/agent blocks (as produced by the registered presenters).
 const slackBlocks = [
@@ -34,14 +46,15 @@ const slackBlocks = [
     revisionNumber: 1,
     type: "Slack/Conversation",
     parentBlockNumber: 3,
-    record: { items: [{ timestamp: "2025-01-02T03:05:00Z", key: "slack-message:1", content: { author: "Alice", text: "Is it **down**?" } }] },
+    record: { items: conversationItems },
     presentation: { cards: [{
       title: "Slack conversation",
-      markdown: "- **Alice** · 2025-01-02 03:05:00 UTC  \n  Is it **down**?\n",
-      fields: [{ label: "Messages", value: "1" }],
+      markdown: conversationMarkdown,
+      fields: [],
       links: [],
     }] },
-    markdown: "- **Alice** · 2025-01-02 03:05:00 UTC  \n  Is it **down**?\n",
+    markdown: conversationItems.map(({ timestamp, content }) =>
+      `- **${content.author}** · ${timestamp.replace("T", " ").replace("Z", " UTC")}  \n  ${content.text}\n`).join(""),
   },
   {
     name: "documents/doc-1/blocks/5",
@@ -153,13 +166,28 @@ async function expectPresentation(page: Page) {
   await expect(cards.nth(1).locator(".infrapad-markdown-content strong").first()).toHaveText("Alice");
   await expect(cards.nth(1).locator(".infrapad-markdown-content strong").first()).toHaveCSS("font-weight", "600");
   const conversation = cards.nth(1).locator(".infrapad-markdown-content");
-  await expect(conversation.locator("li > br")).toHaveCount(1);
-  const authorBounds = await conversation.getByText("Alice", { exact: true }).boundingBox();
+  // Consecutive Alice messages share one header/bullet; after Bob, Alice
+  // gets a new header. The follow-up remains a separate paragraph.
+  const groups = conversation.locator(":scope > ul > li");
+  await expect(groups).toHaveCount(3);
+  await expect(groups.locator(":scope > p:first-child > strong:first-child")).toHaveText(["Alice", "Bob", "Alice"]);
+  await expect(groups.first().locator(":scope > p")).toHaveCount(2);
+  await expect(groups.first().locator(":scope > p").nth(1)).toHaveText("Checking the dashboard.");
+  const attachments = groups.first().locator(":scope > ul > li");
+  await expect(attachments).toHaveCount(2);
+  await expect(attachments.getByRole("link")).toHaveText(["Incident", "Runbook"]);
+  await expect(attachments.getByRole("link", { name: "Incident" })).toHaveAttribute("href", "https://example.com/incident");
+  await expect(attachments.getByRole("link", { name: "Runbook" })).toHaveAttribute("href", "https://example.com/runbook");
+  await expect(conversation.locator("blockquote")).toHaveCount(0);
+  await expect(conversation).not.toContainText("Status:");
+  await expect(conversation).not.toContainText("Troubleshooting preview");
+  await expect(conversation.locator("br")).toHaveCount(3);
+  const authorBounds = await conversation.getByText("Alice", { exact: true }).first().boundingBox();
   const messageBounds = await conversation.getByText("down", { exact: true }).boundingBox();
   expect(authorBounds).not.toBeNull();
   expect(messageBounds).not.toBeNull();
   expect(messageBounds!.y).toBeGreaterThanOrEqual(authorBounds!.y + authorBounds!.height);
-  await expect(cards.nth(1).locator(".pf-v6-c-description-list__group")).toHaveText(["Messages1"]);
+  await expect(cards.nth(1).locator(".infrapad-presentation-fields")).toHaveCount(0);
 
   // Agent card: title → Markdown → fields → links, with plain-text title,
   // labels, and values, and unsafe links rendered as text.
@@ -251,6 +279,26 @@ test("dummy login opens and reloads an InfraPad document", async ({ page }) => {
   await expect(page.getByRole("heading", { name: document.title })).toBeVisible();
   await expect(page.locator(".infrapad-alerts-chart-container svg").first()).toBeVisible();
   expect(prometheusRequests).toEqual([]);
+});
+
+test("block headers display ordering timestamps rather than database creation times", async ({ page }) => {
+  const createdAt = "2025-02-01T12:00:00Z";
+  const blocks = document.blocks.map((block) => ({ ...block, createdAt }));
+  await mockServices(page, { ...document, blocks });
+  await openAuthenticatedDocument(page);
+
+  const headers = page.locator(".infrapad-block-header");
+  for (const [index, block] of blocks.entries()) {
+    const record = block.record;
+    const timestamp = "items" in record ? record.items[0].timestamp : record.timestamp;
+    const time = headers.nth(index).locator("time");
+    await expect(time).toHaveAttribute("datetime", timestamp);
+    const formatted = await page.evaluate((iso) => new Date(iso).toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    }), timestamp);
+    await expect(time).toHaveText(formatted);
+    await expect(time).not.toHaveAttribute("datetime", createdAt);
+  }
 });
 
 test("alerts matchers render stored query results offline", async ({ page }) => {
