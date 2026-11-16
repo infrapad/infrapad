@@ -37,11 +37,11 @@ const slackBlocks = [
     record: { items: [{ timestamp: "2025-01-02T03:05:00Z", key: "slack-message:1", content: { author: "Alice", text: "Is it **down**?" } }] },
     presentation: { cards: [{
       title: "Slack conversation",
-      markdown: "- **Alice** · 2025-01-02 03:05:00 UTC\n  Is it **down**?\n",
+      markdown: "- **Alice** · 2025-01-02 03:05:00 UTC  \n  Is it **down**?\n",
       fields: [{ label: "Messages", value: "1" }],
       links: [],
     }] },
-    markdown: "- **Alice** · 2025-01-02 03:05:00 UTC\n  Is it **down**?\n",
+    markdown: "- **Alice** · 2025-01-02 03:05:00 UTC  \n  Is it **down**?\n",
   },
   {
     name: "documents/doc-1/blocks/5",
@@ -152,6 +152,13 @@ async function expectPresentation(page: Page) {
   await expect(cards.nth(1).getByRole("heading", { name: "Slack conversation" })).toBeVisible();
   await expect(cards.nth(1).locator(".infrapad-markdown-content strong").first()).toHaveText("Alice");
   await expect(cards.nth(1).locator(".infrapad-markdown-content strong").first()).toHaveCSS("font-weight", "600");
+  const conversation = cards.nth(1).locator(".infrapad-markdown-content");
+  await expect(conversation.locator("li > br")).toHaveCount(1);
+  const authorBounds = await conversation.getByText("Alice", { exact: true }).boundingBox();
+  const messageBounds = await conversation.getByText("down", { exact: true }).boundingBox();
+  expect(authorBounds).not.toBeNull();
+  expect(messageBounds).not.toBeNull();
+  expect(messageBounds!.y).toBeGreaterThanOrEqual(authorBounds!.y + authorBounds!.height);
   await expect(cards.nth(1).locator(".pf-v6-c-description-list__group")).toHaveText(["Messages1"]);
 
   // Agent card: title → Markdown → fields → links, with plain-text title,

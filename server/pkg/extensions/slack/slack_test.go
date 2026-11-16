@@ -116,7 +116,7 @@ func TestThreadPayloadScenario(t *testing.T) {
 	first := markdown[0]
 	for _, want := range []string{
 		"- **Example Author** · 2026-09-08 13:19:02 UTC · " +
-			"[source](https://workspace.example.test/archives/C0EXAMPLE/p1788873542372739)",
+			"[source](https://workspace.example.test/archives/C0EXAMPLE/p1788873542372739)  \n  Hi",
 		"Hi @Example Member, see [the doc](https://example.com/doc) and run\n" +
 			"  ```\n" +
 			"  ps aux\n" +
@@ -144,8 +144,7 @@ func TestThreadPayloadScenario(t *testing.T) {
 	if !strings.HasPrefix(markdown[2], want[2]) || markdown[1] != want[1] {
 		t.Fatalf("unexpected rendering:\n%s", strings.Join(markdown, "\n---\n"))
 	}
-	if !strings.Contains(markdown[2], `- **U4** · 2026-09-08 13:23:20 UTC · [source](https://workspace.example.test/archives/C0EXAMPLE/p1788873800000300)
-  Replacement started.`) {
+	if !strings.Contains(markdown[2], "- **U4** · 2026-09-08 13:23:20 UTC · [source](https://workspace.example.test/archives/C0EXAMPLE/p1788873800000300)  \n  Replacement started.") {
 		t.Fatalf("unexpected trailing conversation:\n%s", markdown[2])
 	}
 
@@ -195,6 +194,35 @@ func TestThreadPayloadScenario(t *testing.T) {
 	root = content.NewItem(thread, at("10:00"), slack.ThreadReference{URL: threadURL})
 	if _, err := expand(unwired, root, payload); err == nil {
 		t.Fatal("expected an unregistered emitted type instance to be rejected")
+	}
+}
+
+// TestConversationMessageLineBreaks keeps each body below its header, with
+// or without a source link, while preserving multiline text and grouping.
+func TestConversationMessageLineBreaks(t *testing.T) {
+	conversation := slack.NewConversationType()
+	collection, err := conversation.NewCollection([]content.KeyedRecord{
+		content.NewKeyedItem(conversation, "first", at("10:00"), slack.Message{
+			Author: "Alice", Text: "First line\nSecond line", URL: threadURL,
+		}),
+		content.NewKeyedItem(conversation, "second", at("10:01"), slack.Message{
+			Author: "Bob", Text: "Reply without a source link",
+		}),
+	})
+	testutil.NoErr(t, err)
+	want := "- **Alice** · 2026-10-25 10:00:00 UTC · [source](" + threadURL + ")  \n" +
+		"  First line\n  Second line\n" +
+		"- **Bob** · 2026-10-25 10:01:00 UTC  \n" +
+		"  Reply without a source link\n"
+	markdown, err := conversation.RenderMarkdown(collection)
+	testutil.NoErr(t, err)
+	if markdown != want {
+		t.Fatalf("conversation markdown: got %q, want %q", markdown, want)
+	}
+	presentation, err := conversation.Present(collection)
+	testutil.NoErr(t, err)
+	if len(presentation.Cards) != 1 || presentation.Cards[0].Markdown != want {
+		t.Fatalf("unexpected presentation: %#v", presentation)
 	}
 }
 

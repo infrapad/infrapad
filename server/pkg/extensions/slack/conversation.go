@@ -49,7 +49,8 @@ func renderConversation(collection content.GroupableCollection[Message]) (string
 			header += fmt.Sprintf(" · [source](%s)", message.URL)
 		}
 		out.WriteString(header)
-		out.WriteString("\n")
+		// A soft newline is collapsed into a space by Markdown renderers.
+		out.WriteString("  \n")
 		for _, line := range strings.Split(message.Text, "\n") {
 			if line != "" {
 				out.WriteString("  ")
