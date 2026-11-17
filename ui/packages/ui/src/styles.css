@@ -254,6 +254,50 @@
     fill: var(--pf-t--global--text--color--regular) !important;
 }
 
+/* Time series chart */
+.infrapad-timeseries {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pf-t--global--spacer--sm);
+}
+
+.infrapad-timeseries-chart {
+    min-height: 100px;
+}
+
+.infrapad-timeseries-chart svg text {
+    fill: var(--pf-t--global--text--color--regular) !important;
+}
+
+.infrapad-timeseries-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pf-t--global--spacer--xs) var(--pf-t--global--spacer--md);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: var(--pf-t--global--font--size--body--sm);
+}
+
+.infrapad-timeseries-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs);
+    cursor: default;
+}
+
+.infrapad-timeseries-legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 3px;
+    border-radius: 1px;
+}
+
+.infrapad-timeseries-expression {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* Host-owned presentation cards (title, Markdown, fields, links) */
 .infrapad-presentation {
     display: flex;

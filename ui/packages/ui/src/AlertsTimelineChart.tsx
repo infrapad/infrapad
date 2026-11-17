@@ -10,23 +10,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { QueryResults } from "./alertsData.js";
 import { isoToUnix, samplesToTransitions, seriesLabel } from "./alertsData.js";
+import { SERIES_COLORS, TEXT_STYLE } from "./chartTheme.js";
 
 // ---- Constants ----
 
 /** Height per swimlane row (px). */
 const LANE_HEIGHT = 50;
-
-/** Colors for series (PatternFly-inspired, using direct hex for SVG fill). */
-const SERIES_COLORS = [
-  "#06c", // blue
-  "#f0ab00", // gold
-  "#3e8635", // green
-  "#a18fff", // purple
-  "#009596", // teal
-  "#ec7a08", // orange
-  "#c9190b", // red
-  "#005f60", // dark cyan
-];
 
 // ---- Chart data helpers ----
 
@@ -48,13 +37,6 @@ function formatTimeLabel(date: Date, includeDate = false): string {
   if (!includeDate) return time;
   return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
-
-// SVG colors inherit the host's current PatternFly theme.
-const TEXT_STYLE = {
-  fill: "var(--pf-t--global--text--color--regular)",
-  fontSize: 11,
-  fontFamily: "RedHatText, Overpass, overpass, helvetica, arial, sans-serif",
-};
 
 // ---- Props ----
 

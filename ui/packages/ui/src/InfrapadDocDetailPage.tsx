@@ -30,6 +30,8 @@ import { useInfrapadClient } from "./infrapadClient.js";
 import BlockRevisionsPanel, { formatDate } from "./BlockRevisionsPanel.js";
 import { BlockPresentation } from "./Presentation.js";
 import type { LabelMatcher, QueryResults } from "./alertsData.js";
+import TimeSeriesChart from "./TimeSeriesChart.js";
+import type { TimeSeriesChartContent } from "./timeSeriesChartData.js";
 
 // ---- Helpers ----
 
@@ -58,6 +60,8 @@ function blockTypeLabel(type: string): string {
       return "Markdown";
     case "Prometheus/AlertsMatcher":
       return "Alert Matcher";
+    case "Prometheus/TimeSeriesChart":
+      return "Time Series Chart";
     default:
       return type;
   }
@@ -171,11 +175,15 @@ function AlertsMatcherBlockContent({
 /**
  * Render a single block's content: registered extension content goes
  * through the host presentation path (cards, else sanitized Markdown); the
- * stored AlertsMatcher timeline is the explicit exception.
+ * stored AlertsMatcher timeline and TimeSeriesChart are explicit exceptions.
  */
 function renderBlockContent(block: InfrapadBlock) {
   if (block.type === "Prometheus/AlertsMatcher") {
     return <AlertsMatcherBlockContent content={blockContent(block)} />;
+  }
+  if (block.type === "Prometheus/TimeSeriesChart") {
+    const content = blockContent(block) as unknown as TimeSeriesChartContent;
+    return <TimeSeriesChart content={content} />;
   }
   return <BlockPresentation block={block} />;
 }

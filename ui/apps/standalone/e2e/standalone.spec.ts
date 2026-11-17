@@ -345,7 +345,9 @@ test("alerts matchers render stored query results offline", async ({ page }) => 
 
     // Populated: incident bounds and the fixed stored window/step are shown separately.
     const populated = cards.nth(0);
-    await expect(populated.getByText("Matchers")).toHaveCount(0);
+    // Match the description term, not concatenated card text ("Alert MatcherSince").
+    await expect(populated.getByRole("term").filter({ hasText: /^Matchers$/ })).toHaveCount(0);
+    await expect(cards.nth(1).getByRole("term").filter({ hasText: /^Matchers$/ })).toBeVisible();
     await expect(populated.getByText("Ongoing")).toBeVisible();
     await expect(populated.locator(".infrapad-alerts-query-window time").nth(0)).toHaveAttribute("datetime", queryResults.start);
     await expect(populated.locator(".infrapad-alerts-query-window time").nth(1)).toHaveAttribute("datetime", queryResults.end);
@@ -365,6 +367,98 @@ test("alerts matchers render stored query results offline", async ({ page }) => 
 
     if (pass === 0) await page.reload();
   }
+  expect(prometheusRequests).toEqual([]);
+});
+
+test("time series charts render stored snapshots offline", async ({ page }) => {
+  const query = {
+    expression: "histogram_quantile(0.99, rate(etcd_wal_bucket[5m]))",
+    source_url: "https://prometheus.example.com",
+    start: "2026-11-13T10:00:00Z",
+    end: "2026-11-13T11:00:00Z",
+    step_seconds: 60,
+  };
+  const t0 = 1794564000; // 2026-11-13T10:00:00Z
+  const base = { __name__: "wal", job: "etcd" };
+  const chart = (blockNumber: number, content: Record<string, unknown>) => ({
+    name: `documents/doc-3/blocks/${blockNumber}`,
+    blockNumber,
+    revisionNumber: 1,
+    type: "Prometheus/TimeSeriesChart",
+    record: { timestamp: "2026-11-13T11:00:00Z", content: { query, ...content } },
+  });
+  const doc = {
+    name: "documents/doc-3",
+    status: "active",
+    title: "Stored charts",
+    createdAt: "2026-11-13T11:00:00Z",
+    blocks: [
+      chart(1, {
+        title: "WAL fsync p99",
+        unit: "s",
+        query_results: { series: [
+          // Null and missing-interval gaps, plus an isolated sample.
+          { labels: { ...base, pod: "etcd-1", instance: "10.0.0.1:2381" },
+            samples: [[t0, 0.01], [t0 + 60, 0.012], [t0 + 120, null], [t0 + 180, 0.02], [t0 + 240, 0.018], [t0 + 600, 0.015]] },
+          // Pod replacement: same pod label, distinct series.
+          { labels: { ...base, pod: "etcd-1", instance: "10.0.0.2:2381" }, samples: [[t0 + 1200, 0.005], [t0 + 1260, 0.006]] },
+          { labels: { ...base, pod: "etcd-0", instance: "10.0.0.3:2381" }, samples: [[t0 + 1800, 0.004]] },
+        ] },
+      }),
+      chart(2, {}),
+      chart(3, { query_results: { series: [] } }),
+      chart(4, { query_results: { series: [{ labels: { ...base, pod: "etcd-2" }, samples: [[t0, null]] }] } }),
+    ],
+  };
+  const prometheusRequests = await mockServices(page, doc);
+  await page.goto("/ui/documents/doc-3");
+  await page.getByLabel("Username").fill("alice");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByRole("heading", { name: doc.title })).toBeVisible();
+
+  const cards = page.locator(".infrapad-block-card");
+  await expect(cards).toHaveCount(4);
+  const populated = cards.nth(0);
+  await expect(populated.getByText("Time Series Chart")).toBeVisible();
+  await expect(populated.getByRole("heading", { name: "WAL fsync p99" })).toBeVisible();
+  const svg = populated.locator(".infrapad-timeseries-chart svg").first();
+  await expect(svg).toBeVisible();
+  await expect(svg.getByText("Time (UTC)")).toBeVisible();
+  await expect(svg.locator("text").filter({ hasText: /^10:00$/ })).toHaveCount(1);
+  await expect(svg.locator("text").filter({ hasText: /^s$/ })).toHaveCount(1);
+
+  // Legend: compact distinguishing names, full labels on hover.
+  const legend = populated.getByRole("list", { name: "Series" }).getByRole("listitem");
+  await expect(legend).toHaveText([
+    "instance=10.0.0.1:2381, pod=etcd-1",
+    "instance=10.0.0.2:2381, pod=etcd-1",
+    "instance=10.0.0.3:2381, pod=etcd-0",
+  ]);
+  await legend.nth(1).locator(".infrapad-timeseries-legend-item").hover();
+  await expect(page.getByRole("tooltip")).toHaveText('wal{instance="10.0.0.2:2381", job="etcd", pod="etcd-1"}');
+
+  // Point tooltip: series, UTC timestamp, raw value with unit.
+  const box = (await svg.boundingBox())!;
+  // Padding is left 80 / right 30; the isolated t0+1800 sample is mid-window.
+  await page.mouse.move(box.x + 80 + (box.width - 110) / 2, box.y + box.height / 2);
+  const chartArea = populated.locator(".infrapad-timeseries-chart");
+  await expect(chartArea.getByText("instance=10.0.0.3:2381, pod=etcd-0")).toBeVisible();
+  await expect(chartArea.getByText("2026-11-13 10:30:00 UTC")).toBeVisible();
+  await expect(chartArea.getByText("0.004 s")).toBeVisible();
+
+  // Query details are collapsed, read-only, and in UTC.
+  await expect(populated.getByText(query.expression)).toBeHidden();
+  await populated.getByRole("button", { name: "Query details" }).click();
+  await expect(populated.getByText(query.expression)).toBeVisible();
+  await expect(populated.getByText("2026-11-13 10:00:00 UTC")).toBeVisible();
+  await expect(populated.getByText("2026-11-13 11:00:00 UTC")).toBeVisible();
+  await expect(populated.getByText("60s")).toBeVisible();
+  await expect(populated.getByText(query.source_url)).toBeVisible();
+
+  await expect(cards.nth(1).getByText("No snapshot submitted.")).toBeVisible();
+  await expect(cards.nth(2).getByText("No series found for this time range.")).toBeVisible();
+  await expect(cards.nth(3).getByText("No numeric samples in this snapshot.")).toBeVisible();
+  await expect(cards.nth(3).getByRole("list", { name: "Series" }).getByRole("listitem")).toHaveText(['wal{job="etcd", pod="etcd-2"}']);
   expect(prometheusRequests).toEqual([]);
 });
 
