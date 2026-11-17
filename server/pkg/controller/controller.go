@@ -354,7 +354,10 @@ func (c *Controller) AddBlock(ctx context.Context, documentUID model.DocumentUID
 // UpdateBlock creates a new revision for an existing block. The new revision
 // keeps the same BlockNumber but gets an incremented RevisionNumber. The
 // submitted blk.Content is validated against the registered content type;
-// the existing record timestamp is preserved.
+// the existing record timestamp is preserved. Content types with a
+// content.RevisionPolicy may instead have an inner-content change replace
+// the latest revision in place, and an unchanged submission returns the
+// stored block without a write (see storeRecord).
 func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.DocumentUID, blockNumber model.BlockNumber, blk model.Block) (model.Block, error) {
 	tx, err := c.store.Begin(ctx)
 	if err != nil {
@@ -389,12 +392,16 @@ func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.Document
 		return model.Block{}, err
 	}
 
-	blk.BlockNumber = blockNumber
-	created, err := tx.Blocks().Create(ctx, documentUID, blk)
-	if err != nil {
-		return model.Block{}, fmt.Errorf("create block revision: %w", err)
+	// The submitted status applies to the new revision (omitted means
+	// published, like the store default).
+	status := blk.Status
+	if status == "" {
+		status = model.PublishedBlock
 	}
-	created.Record = blk.Record
+	created, err := storeRecord(ctx, tx, documentUID, latest, blk.Record, status, blk.AuthorID)
+	if err != nil {
+		return model.Block{}, fmt.Errorf("update block: %w", err)
+	}
 
 	if err := tx.Commit(); err != nil {
 		return model.Block{}, fmt.Errorf("commit tx: %w", err)

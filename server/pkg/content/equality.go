@@ -15,6 +15,20 @@ import (
 // representation, ignoring object-key ordering. Revision bookkeeping is
 // not part of a record and therefore never considered.
 func EqualRecords(a, b Record) bool {
+	return equalRecords(a, b, true)
+}
+
+// EqualRecordStructure reports whether two records agree on everything
+// EqualRecords compares except inner content values: content type name,
+// shape (individual vs collection), keys, event timestamps, and collection
+// membership in order. Records differing only in inner content are
+// structurally equal; the host uses it to restrict content-type revision
+// policies (RevisionPolicy) to inner-content changes.
+func EqualRecordStructure(a, b Record) bool {
+	return equalRecords(a, b, false)
+}
+
+func equalRecords(a, b Record, compareContent bool) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
@@ -32,16 +46,16 @@ func EqualRecords(a, b Record) bool {
 			return false
 		}
 		for n := range aItems {
-			if !equalItems(aItems[n], bItems[n]) {
+			if !equalItems(aItems[n], bItems[n], compareContent) {
 				return false
 			}
 		}
 		return true
 	}
-	return equalItems(a, b)
+	return equalItems(a, b, compareContent)
 }
 
-func equalItems(a, b Record) bool {
+func equalItems(a, b Record, compareContent bool) bool {
 	aKeyed, aOK := a.(KeyedRecord)
 	bKeyed, bOK := b.(KeyedRecord)
 	if aOK != bOK || (aOK && aKeyed.Key() != bKeyed.Key()) {
@@ -54,6 +68,9 @@ func equalItems(a, b Record) bool {
 	bItem, bOK := b.(ItemRecord)
 	if !aOK || !bOK {
 		return false
+	}
+	if !compareContent {
+		return true
 	}
 	return equalJSON(aItem.Content(), bItem.Content())
 }

@@ -198,6 +198,24 @@ func (b *pgBlocks) Create(ctx context.Context, documentUid model.DocumentUID, bl
 	return scanBlock(documentUid, row)
 }
 
+// ReplaceLatest updates serialized_content of the expected revision in
+// place, guarded so that only the latest, non-deleted revision of the
+// block can be replaced; earlier revisions are never rewritten.
+func (b *pgBlocks) ReplaceLatest(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber, expected model.RevisionNumber, record model.SerializedRecord) (model.Block, error) {
+	row := b.tx.QueryRowContext(ctx,
+		`UPDATE blocks SET serialized_content = $4
+		 WHERE document_uid = $1 AND block_number = $2 AND revision_number = $3
+		   AND type = $5 AND status <> 'deleted'
+		   AND revision_number = (SELECT MAX(revision_number) FROM blocks WHERE document_uid = $1 AND block_number = $2)
+		 RETURNING block_number, revision_number, author_id, type, status, serialized_content, created_at, parent_block_number`,
+		documentUid, blockNumber, expected, record.Data, record.Type)
+	blk, err := scanBlock(documentUid, row)
+	if errors.Is(err, store.ErrNotFound) {
+		return model.Block{}, fmt.Errorf("replace block %d revision %d: %w", blockNumber, expected, store.ErrNotLatestRevision)
+	}
+	return blk, err
+}
+
 func (b *pgBlocks) Get(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber, revisionNumber model.RevisionNumber) (model.Block, error) {
 	var row *sql.Row
 	if revisionNumber == 0 {

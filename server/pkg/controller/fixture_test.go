@@ -2,7 +2,8 @@ package controller_test
 
 // Package-local test fixture: one controller over a fresh in-memory store
 // with the Markdown, Prometheus, Slack, and AI-agent types registered, plus
-// the test-only Test/Ref expander (internal/testext).
+// the test-only Test/Ref expander and Test/Snapshot revision-policy type
+// (internal/testext).
 // Tests use the exposed dependencies directly; the fixture has no methods
 // wrapping controller operations, store inspection, or record construction.
 
@@ -38,6 +39,8 @@ type fixture struct {
 	threadType       *slack.ThreadType
 	// refType is the test-only expandable reference (internal/testext).
 	refType *testext.RefType
+	// snapshotType is the test-only revision-policy type (internal/testext).
+	snapshotType *testext.SnapshotType
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -49,10 +52,11 @@ func newFixture(t *testing.T) *fixture {
 		agentType:        aiagent.NewMessageType(),
 		conversationType: slack.NewConversationType(),
 		refType:          testext.NewRefType(),
+		snapshotType:     testext.NewSnapshotType(),
 	}
 	f.threadType = slack.NewThreadType(f.conversationType, f.agentType)
 	registry, err := content.NewRegistry([]content.ContentType{
-		f.markdownType, f.alertsType, f.agentType, f.threadType, f.conversationType, f.refType,
+		f.markdownType, f.alertsType, f.agentType, f.threadType, f.conversationType, f.refType, f.snapshotType,
 	})
 	testutil.NoErr(t, err)
 	f.registry = registry
@@ -154,6 +158,22 @@ func (b *fakeBlocks) Create(ctx context.Context, documentUid model.DocumentUID, 
 	blk.CreatedAt = time.Now().UTC()
 	(*fakeStore)(b).blocks[documentUid] = append(blocks, blk)
 	return blk, nil
+}
+
+func (b *fakeBlocks) ReplaceLatest(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber, expected model.RevisionNumber, record model.SerializedRecord) (model.Block, error) {
+	latest, err := b.Get(ctx, documentUid, blockNumber, 0)
+	if err != nil || latest.RevisionNumber != expected || latest.Status == model.DeletedBlock || latest.Type != record.Type {
+		return model.Block{}, store.ErrNotLatestRevision
+	}
+	blocks := (*fakeStore)(b).blocks[documentUid]
+	for i := range blocks {
+		if blocks[i].BlockNumber == blockNumber && blocks[i].RevisionNumber == expected {
+			blocks[i].SerializedRecord = record
+			blocks[i].Record = nil
+			return blocks[i], nil
+		}
+	}
+	return model.Block{}, store.ErrNotLatestRevision
 }
 
 func (b *fakeBlocks) Get(ctx context.Context, documentUid model.DocumentUID, blockNumber model.BlockNumber, revisionNumber model.RevisionNumber) (model.Block, error) {

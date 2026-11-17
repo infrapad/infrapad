@@ -12,6 +12,11 @@ import (
 // unexpected storage failures.
 var ErrNotFound = errors.New("not found")
 
+// ErrNotLatestRevision is wrapped by Blocks.ReplaceLatest when the
+// targeted revision is missing, deleted, or no longer the latest revision
+// of its block.
+var ErrNotLatestRevision = errors.New("revision is not the latest live revision")
+
 // Store provides transactional access to all data. Use
 // [Store.Begin] to start a read-write transaction or
 // [Store.BeginReadOnly] for a read-only transaction, then access
@@ -47,8 +52,24 @@ type DocumentsCollection interface {
 	Lock(ctx context.Context, uid model.DocumentUID) error
 }
 
+// BlocksCollection stores block revisions. Revisions are append-only
+// (Create), with one narrow exception: ReplaceLatest rewrites the stored
+// record of the latest live revision for content types that opt into
+// in-place persistence (content.RevisionPolicy).
 type BlocksCollection interface {
 	Create(ctx context.Context, documentUid model.DocumentUID, block model.Block) (model.Block, error)
+	// ReplaceLatest replaces only the serialized record of revision
+	// expected of the block, which must still be its latest revision and
+	// not deleted; otherwise it fails with ErrNotLatestRevision and writes
+	// nothing. Block and revision numbers, author, revision creation time,
+	// type, status, and parent are preserved. The store stays
+	// content-type agnostic: the controller decides when to use it (under
+	// the document mutation lock) and serializes the record.
+	ReplaceLatest(ctx context.Context,
+		documentUid model.DocumentUID,
+		blockNumber model.BlockNumber,
+		expected model.RevisionNumber,
+		record model.SerializedRecord) (model.Block, error)
 	// Get the block by id and revision number. If revisionNumber == 0, get
 	// the latest, including a deletion revision (needed for restoration
 	// and lifecycle checks). Unlike ListLatest, this is a revision lookup.

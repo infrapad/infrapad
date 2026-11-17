@@ -86,8 +86,8 @@ making document fetches very efficient.
 ## Versioning
 
 Versioning is per-block, append-only. Each edit creates a new row with
-an incremented `revision_number`. No rows are ever updated or deleted
-during normal operation.
+an incremented `revision_number`. No rows are deleted during normal
+operation, and rows are updated only by the in-place exception below.
 
 The important invariant: the current version of the block always has
 the highest revision number. This allows for efficient queries for current
@@ -150,6 +150,35 @@ VALUES (
 The PK constraint on `(document_uid, block_number, revision_number)` prevents
 duplicate revisions in case of concurrent edits — the application can retry
 on conflict.
+
+### In-place updates of the latest revision
+
+Content types implementing `content.RevisionPolicy` (see
+[content-extensions.md](content-extensions.md)) may persist an
+inner-content-only change into the latest revision instead of appending one
+(e.g. refreshing a stored data snapshot). Types without it stay strictly
+append-only. `Blocks.ReplaceLatest` updates only `serialized_content`,
+guarded so that only the latest, non-deleted revision can change:
+
+```sql
+UPDATE blocks SET serialized_content = $4
+ WHERE document_uid = $1 AND block_number = $2 AND revision_number = $3
+   AND type = $5 AND status <> 'deleted'
+   AND revision_number = (SELECT MAX(revision_number) FROM blocks
+                           WHERE document_uid = $1 AND block_number = $2);
+```
+
+- Missing, deleted, or superseded targets fail (`store.ErrNotLatestRevision`);
+  earlier revisions are never rewritten.
+- Block/revision numbers, `author_id`, `created_at`, `type`, `status`, and
+  `parent_block_number` are preserved: attribution stays with the revision's
+  original author and there is no separate audit trail of refreshes.
+- The controller decides (status and structural changes always append) and
+  writes within the document mutation transaction holding the exclusive
+  document lock; the store stays content-type agnostic.
+- Historical snapshots: revision 1 holds query A/results A1; a refresh
+  replaces A1 with A2 in revision 1; a metadata change creates revision 2;
+  later refreshes touch only revision 2, and revision 1 keeps A/A2.
 
 ## Event timestamps
 

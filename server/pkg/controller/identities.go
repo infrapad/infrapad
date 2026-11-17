@@ -15,6 +15,9 @@ package controller
 // The write helpers here take validated content.Record values (see
 // Registry.ValidateRecord), never inner-content submissions: keys, member
 // order, event timestamps, and inner values survive writes unchanged.
+// Revised records are persisted through the shared record-write decision
+// (revisions.go), so content types with a content.RevisionPolicy may
+// replace the latest revision in place.
 // Ordinary public writes keep submitting inner content only.
 
 import (
@@ -28,7 +31,9 @@ import (
 )
 
 // AppendGeneratedRevisionTx appends a new revision of an existing live
-// generated block from a validated record, preserving the immutable parent
+// generated block from a validated record (or, for content types with a
+// content.RevisionPolicy, replaces the latest revision in place or skips
+// an unchanged record; see storeRecord), preserving the immutable parent
 // relationship, content type, and (for standalone references) key.
 // Collection membership and the derived anchor may change freely while the
 // block number stays stable. New member keys must not collide with the
@@ -67,24 +72,7 @@ func (c *Controller) AppendGeneratedRevisionTx(ctx context.Context, tx store.Tx,
 		return model.Block{}, err
 	}
 
-	return storeRecordRevision(ctx, tx, documentUID, latest, record, author)
-}
-
-// storeRecordRevision appends a revision of latest carrying record,
-// preserving the block's status, type, and immutable parent. It performs
-// no validation: callers check the record and identity first.
-func storeRecordRevision(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, latest model.Block, record content.Record, author model.AuthorID) (model.Block, error) {
-	blk := latest
-	blk.Record = record
-	if err := serializeRecord(&blk); err != nil {
-		return model.Block{}, err
-	}
-	rev, err := appendRevision(ctx, tx, documentUID, blk, latest.Status, author)
-	if err != nil {
-		return model.Block{}, err
-	}
-	rev.Record = record
-	return rev, nil
+	return storeRecord(ctx, tx, documentUID, latest, record, latest.Status, author)
 }
 
 // MembershipMatch pairs one live generated block with the desired record

@@ -27,7 +27,9 @@ package controller
 //     descendants are excluded from planning, which is repeated until the
 //     retired set is stable.
 //  4. Application of the validated final plan: retirements, record
-//     revisions (only for semantically changed records), then creations
+//     revisions (only for semantically changed records; content types
+//     with a revision policy may replace the latest revision in place,
+//     decided during validation), then creations
 //     in planner order, parent-first for new references. Sibling-key
 //     uniqueness is checked against the complete final plan, so
 //     membership may move between blocks without intermediate revisions.
@@ -152,6 +154,8 @@ type plannedRecord struct {
 type plannedRevision struct {
 	block  model.Block
 	record content.Record
+	// newRevision is decided during validation, before any write.
+	newRevision bool
 }
 
 // reconcilePlan is the complete final mutation plan.
@@ -159,6 +163,8 @@ type reconcilePlan struct {
 	primary        model.Block
 	primaryRecord  content.Record
 	primaryChanged bool
+	// primaryNewRevision is decided during validation, before any write.
+	primaryNewRevision bool
 
 	retired   []model.Block
 	revisions []plannedRevision
@@ -464,14 +470,21 @@ func groupEvents(events []planEvent) ([]plannedRecord, error) {
 // ---------------------------------------------------------------------------
 
 // validatePlan checks every record that will be written and sibling-key
-// uniqueness against the complete final plan, before any write.
+// uniqueness against the complete final plan, and decides how changed
+// records are persisted (revision policies), before any write.
 func (c *Controller) validatePlan(p *reconcilePlan) error {
 	if p.primaryChanged {
 		if err := c.registry.ValidateRecord(p.primaryRecord); err != nil {
 			return fmt.Errorf("block %d: %w", p.primary.BlockNumber, err)
 		}
+		newRevision, err := shouldCreateRevision(p.primary, p.primaryRecord, p.primary.Status)
+		if err != nil {
+			return err
+		}
+		p.primaryNewRevision = newRevision
 	}
-	for _, rev := range p.revisions {
+	for n := range p.revisions {
+		rev := &p.revisions[n]
 		if err := checkGeneratedRecord(rev.record); err != nil {
 			return err
 		}
@@ -484,6 +497,11 @@ func (c *Controller) validatePlan(p *reconcilePlan) error {
 		if err := c.registry.ValidateRecord(rev.record); err != nil {
 			return fmt.Errorf("block %d: %w", rev.block.BlockNumber, err)
 		}
+		newRevision, err := shouldCreateRevision(rev.block, rev.record, rev.block.Status)
+		if err != nil {
+			return err
+		}
+		rev.newRevision = newRevision
 	}
 	for _, creation := range p.creations {
 		if err := checkGeneratedRecord(creation.record); err != nil {
@@ -531,13 +549,13 @@ func (c *Controller) applyPlan(ctx context.Context, tx store.Tx, documentUID mod
 	}
 
 	if p.primaryChanged {
-		if _, err := storeRecordRevision(ctx, tx, documentUID, p.primary, p.primaryRecord, author); err != nil {
+		if _, err := applyRecordWrite(ctx, tx, documentUID, p.primary, p.primaryRecord, p.primary.Status, author, p.primaryNewRevision); err != nil {
 			return err
 		}
 	}
 
 	for _, planned := range p.revisions {
-		if _, err := storeRecordRevision(ctx, tx, documentUID, planned.block, planned.record, author); err != nil {
+		if _, err := applyRecordWrite(ctx, tx, documentUID, planned.block, planned.record, planned.block.Status, author, planned.newRevision); err != nil {
 			return err
 		}
 	}

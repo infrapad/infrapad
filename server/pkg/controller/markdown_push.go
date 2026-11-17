@@ -129,6 +129,8 @@ func (c *Controller) PushDocumentMarkdown(ctx context.Context, uid model.Documen
 type markdownPlan struct {
 	latest *model.Block
 	record content.Record
+	// newRevision is false for in-place updates of existing blocks.
+	newRevision bool
 }
 
 // planMarkdownBlock returns the validated change of one parsed block, or
@@ -207,7 +209,11 @@ func (c *Controller) planExistingMarkdownBlock(ctx context.Context, tx store.Tx,
 	if content.EqualRecords(updated, record) {
 		return nil, nil
 	}
-	return &markdownPlan{latest: &latest, record: updated}, nil
+	newRevision, err := shouldCreateRevision(latest, updated, latest.Status)
+	if err != nil {
+		return nil, reject(PushInvalidOutput, revision.Type, err)
+	}
+	return &markdownPlan{latest: &latest, record: updated, newRevision: newRevision}, nil
 }
 
 func (c *Controller) planNewMarkdownBlock(uid model.DocumentUID, blk markdown.Block, now time.Time) (*markdownPlan, error) {
@@ -298,13 +304,14 @@ func (c *Controller) markdownEditError(reject func(MarkdownPushReason, string, e
 }
 
 // applyMarkdownPlans persists validated changes in submitted order:
-// revisions preserve stored status, type, parent, and event time; new
+// revisions (or in-place replacements chosen by a content type's revision
+// policy) preserve stored status, type, parent, and event time; new
 // blocks are allocated by the store.
 func applyMarkdownPlans(ctx context.Context, tx store.Tx, uid model.DocumentUID, plans []markdownPlan, author model.AuthorID) ([]MarkdownChange, error) {
 	changes := []MarkdownChange{}
 	for _, plan := range plans {
 		if plan.latest != nil {
-			rev, err := storeRecordRevision(ctx, tx, uid, *plan.latest, plan.record, author)
+			rev, err := applyRecordWrite(ctx, tx, uid, *plan.latest, plan.record, plan.latest.Status, author, plan.newRevision)
 			if err != nil {
 				return nil, err
 			}

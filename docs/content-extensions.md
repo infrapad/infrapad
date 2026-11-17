@@ -87,6 +87,7 @@ checks for them with type assertions.
 | `content.Presenter` | Fixed UI cards: title, Markdown, labeled fields, labeled links. | `AIAgent/Message`, `Slack/Trhead`… |
 | `content.Expander` | Turn a transient payload into the complete desired generated output and/or updated primary state. | `Slack/Thread`, `Prometheus/AlertsMatcher` |
 | `content.GroupableContentType` | Store multiple keyed items in one block that the host groups. | `Slack/Conversation` |
+| `content.RevisionPolicy` | Decide whether an inner-content change creates a revision or replaces the latest revision in place. | `Test/Snapshot` (tests) |
 
 ### Markdown header and body
 
@@ -126,6 +127,41 @@ checks for them with type assertions.
   (before the first successful payload submission); afterward it accepts
   only an unchanged header, so Markdown round-trips still work. It implements
   `UpdateMarkdownHeader` itself, around `content.ItemMarkdownHeader`.
+
+### Revision policy: in-place updates
+
+By default every content change appends a block revision. A type storing
+refreshable data (e.g. a query snapshot) can opt out for selected changes:
+
+```go
+type RevisionPolicy interface {
+	ShouldCreateRevision(previous, next Record) (bool, error)
+}
+```
+
+- Both arguments are complete, validated records of the type (including
+  content hidden from Markdown). Don't mutate them.
+- `true` appends a new revision. `false` stores `next` in the **latest**
+  revision in place: revision number, author, and revision creation time
+  stay unchanged. It never discards the change. An error rejects the whole
+  mutation (nothing is written).
+- The host decides first and consults the policy only for inner-content
+  changes:
+  - semantically equal records (`content.EqualRecords`) write nothing and
+    the policy isn't called;
+  - status/lifecycle changes (including deletion/restoration) and
+    host-owned structural changes (event timestamps, keys,
+    individual/collection shape, collection membership and order) always
+    append revisions.
+- It applies to every write path: direct JSON updates, Markdown edits,
+  payload reconciliation of the primary record, and matched generated
+  output. It never relaxes validation or ownership (generated blocks stay
+  non-editable through public APIs).
+- Earlier revisions are never rewritten: each keeps the last data stored
+  before the next revision was created.
+- Markdown stale-revision checks are unchanged. In-place refreshes don't
+  advance the revision number, so header/body edits apply to the currently
+  stored record (keep refreshed data unless the edit should clear it).
 
 ### Presentation
 

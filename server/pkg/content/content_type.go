@@ -88,6 +88,29 @@ type MarkdownUpdater interface {
 	UpdateMarkdown(existing Record, body string) (Record, error)
 }
 
+// RevisionPolicy is implemented by types that decide whether an
+// inner-content change creates a new block revision or replaces the stored
+// record of the latest revision in place (e.g. refreshing a stored data
+// snapshot without changing what the block is about). Types without it
+// always append revisions. This is an opt-in exception to append-only
+// block history: earlier revisions are never rewritten.
+//
+// The host consults the policy only for changes of inner content values.
+// It always appends a revision for status/lifecycle changes and for
+// host-owned structural changes (content type, event timestamps, keys,
+// individual/collection shape, collection membership and member order),
+// and it skips both the policy and the write when the records are
+// semantically equal (see EqualRecords). Ownership and validation rules
+// are unaffected.
+type RevisionPolicy interface {
+	// ShouldCreateRevision receives the complete stored record and the
+	// complete validated replacement, both of this content type; it must
+	// not mutate either. true appends a new revision; false persists next
+	// in the latest revision in place, preserving its revision number,
+	// author, and creation time. An error rejects the whole mutation.
+	ShouldCreateRevision(previous, next Record) (bool, error)
+}
+
 // Presenter is implemented by types providing structured presentation.
 // Without it, Markdown is the fallback.
 type Presenter interface {
