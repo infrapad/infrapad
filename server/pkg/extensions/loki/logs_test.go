@@ -53,6 +53,73 @@ func TestLogsSnapshots(t *testing.T) {
 	}
 }
 
+// TestLogsSeverity exercises the same JSON boundary used by API ingestion
+// and stored-record decoding, including legacy entries with no explicit field.
+func TestLogsSeverity(t *testing.T) {
+	registry, err := content.NewRegistry(loki.ContentTypes())
+	testutil.NoErr(t, err)
+	query := logsView(t, ingest(t, registry, `{`+logsQuery+`}`)).Query
+	type severityCase struct {
+		name, explicit, line string
+		metadata, labels     map[string]string
+		want                 loki.Severity
+	}
+	cases := []severityCase{
+		{name: "explicit wins", explicit: " ERROR ", metadata: map[string]string{"level": "warn"}, line: `{"level":"info"}`, want: loki.SeverityError},
+		{name: "metadata wins", metadata: map[string]string{"level": "warning"}, line: `{"level":"error"}`, labels: map[string]string{"level": "debug"}, want: loki.SeverityWarn},
+		{name: "JSON wins", line: ` { "level": "err", "large": 1794567686759710823 } `, labels: map[string]string{"level": "info"}, want: loki.SeverityError},
+		{name: "field precedence", metadata: map[string]string{"level": "info", "severity_text": "fatal"}, want: loki.SeverityInfo},
+		{name: "severity text", metadata: map[string]string{"severity_text": " Notice "}, want: loki.SeverityInfo},
+		{name: "detected level", labels: map[string]string{"detected_level": "trace"}, want: loki.SeverityTrace},
+		{name: "severity field", line: `{"level":null,"severity":"crit"}`, want: loki.SeverityCritical},
+		{name: "malformed JSON falls back", line: `{"level":`, labels: map[string]string{"level": "debug"}, want: loki.SeverityDebug},
+		{name: "nonstring JSON falls back", line: `{"level":42}`, labels: map[string]string{"severity_text": "panic"}, want: loki.SeverityFatal},
+		{name: "nested JSON ignored", line: `{"nested":{"level":"error"}}`},
+		{name: "plain text not guessed", line: "ERROR: failed"},
+		{name: "array not inspected", line: `[{"level":"error"}]`},
+		{name: "empty fields ignored", explicit: " ", metadata: map[string]string{"level": " "}, line: `{"level":""}`},
+		{name: "custom becomes unknown", line: `{"level":"audit"}`, want: loki.SeverityUnknown},
+		{name: "explicit unknown wins", explicit: "unknown", line: `{"level":"error"}`, want: loki.SeverityUnknown},
+		{name: "custom explicit wins", explicit: "custom", line: `{"level":"error"}`, want: loki.SeverityUnknown},
+	}
+	// Keep the complete explicit alias mapping covered at the ingestion boundary.
+	for raw, want := range map[string]loki.Severity{
+		"trace": loki.SeverityTrace, "debug": loki.SeverityDebug,
+		"info": loki.SeverityInfo, "information": loki.SeverityInfo, "informational": loki.SeverityInfo, "notice": loki.SeverityInfo,
+		"warn": loki.SeverityWarn, "warning": loki.SeverityWarn,
+		"error": loki.SeverityError, "err": loki.SeverityError,
+		"critical": loki.SeverityCritical, "crit": loki.SeverityCritical, "alert": loki.SeverityCritical,
+		"fatal": loki.SeverityFatal, "panic": loki.SeverityFatal, "emergency": loki.SeverityFatal, "emerg": loki.SeverityFatal,
+	} {
+		cases = append(cases, severityCase{name: "alias " + raw, explicit: raw, want: want})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			labels := tc.labels
+			if labels == nil {
+				labels = map[string]string{}
+			}
+			entry := loki.Entry{Timestamp: "1794567686759710823", Line: tc.line, Severity: loki.Severity(tc.explicit), StructuredMetadata: tc.metadata}
+			logs := loki.Logs{Query: query, QueryResults: &loki.LogsResults{Streams: []loki.Stream{{Labels: labels, Entries: []loki.Entry{entry, entry}}}}}
+			data, err := json.Marshal(logs)
+			testutil.NoErr(t, err)
+			record := ingest(t, registry, string(data))
+			stored := logsView(t, testutil.RoundTripRecord(t, registry, record))
+			entry.Severity = tc.want
+			// All evidence and duplicates survive; only Severity is normalized.
+			logs.QueryResults.Streams[0].Entries = []loki.Entry{entry, entry}
+			if !reflect.DeepEqual(stored, logs) {
+				t.Fatalf("unexpected normalized snapshot: got %#v, want %#v", stored.QueryResults.Streams, logs.QueryResults.Streams)
+			}
+		})
+	}
+	// Typed Go producers must supply canonical severities; validation does not mutate.
+	ct, err := registry.Lookup(loki.LogsTypeName)
+	testutil.NoErr(t, err)
+	logs := loki.Logs{Query: query, QueryResults: &loki.LogsResults{Streams: []loki.Stream{{Labels: map[string]string{}, Entries: []loki.Entry{{Timestamp: "1794567686759710823", Severity: "WARNING"}}}}}}
+	expectField(t, registry.ValidateRecord(content.NewItem(ct, time.Now(), logs)), "query_results.streams.0.entries.0.severity")
+}
+
 // TestLogsValidation checks schema and semantic rejection with field paths
 // following the content JSON layout.
 func TestLogsValidation(t *testing.T) {
@@ -85,6 +152,10 @@ func TestLogsValidation(t *testing.T) {
 		{"after end", entry(`"1794567780000000001"`), "query_results.streams.0.entries.0.timestamp"},
 		{"null line", withStreams(`[{"labels": {}, "entries": [{"timestamp": "1794567420000000000", "line": null}]}]`),
 			"query_results.streams.0.entries.0.line"},
+		{"numeric severity", withStreams(`[{"labels": {}, "entries": [{"timestamp": "1794567420000000000", "line": "", "severity": 3}]}]`),
+			"query_results.streams.0.entries.0.severity"},
+		{"null severity", withStreams(`[{"labels": {}, "entries": [{"timestamp": "1794567420000000000", "line": "", "severity": null}]}]`),
+			"query_results.streams.0.entries.0.severity"},
 		{"null metadata", withStreams(`[{"labels": {}, "entries": [{"timestamp": "1794567420000000000", "line": "", "structured_metadata": null}]}]`),
 			"query_results.streams.0.entries.0.structured_metadata"},
 	}

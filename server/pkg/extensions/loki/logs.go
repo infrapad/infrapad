@@ -80,6 +80,21 @@ type Stream struct {
 	Entries []Entry `json:"entries"`
 }
 
+// Severity is the canonical per-entry log severity. An empty severity means
+// no severity evidence was submitted; unrecognized values map to unknown.
+type Severity string
+
+const (
+	SeverityTrace    Severity = "trace"
+	SeverityDebug    Severity = "debug"
+	SeverityInfo     Severity = "info"
+	SeverityWarn     Severity = "warn"
+	SeverityError    Severity = "error"
+	SeverityCritical Severity = "critical"
+	SeverityFatal    Severity = "fatal"
+	SeverityUnknown  Severity = "unknown"
+)
+
 // Entry is one log entry.
 type Entry struct {
 	// Timestamp is the decimal Unix-nanosecond timestamp string, kept
@@ -87,6 +102,9 @@ type Entry struct {
 	Timestamp string `json:"timestamp"`
 	// Line is the original log message (may be empty).
 	Line string `json:"line"`
+	// Severity is normalized on decoding. When omitted, it is derived from
+	// entry metadata, JSON message fields, then stream labels, in that order.
+	Severity Severity `json:"severity,omitempty"`
 	// StructuredMetadata is optional per-entry structured metadata.
 	StructuredMetadata map[string]string `json:"structured_metadata,omitempty"`
 }
@@ -115,7 +133,20 @@ func (*LogsType) ContentSchema() content.Schema {
 }
 
 func (*LogsType) DecodeJSON(data json.RawMessage) (content.Content, error) {
-	return content.DecodeContent[Logs](data)
+	var logs Logs
+	if err := json.Unmarshal(data, &logs); err != nil {
+		return nil, err
+	}
+	if logs.QueryResults != nil {
+		for i := range logs.QueryResults.Streams {
+			stream := &logs.QueryResults.Streams[i]
+			for j := range stream.Entries {
+				entry := &stream.Entries[j]
+				entry.Severity = entrySeverity(*entry, stream.Labels)
+			}
+		}
+	}
+	return logs, nil
 }
 
 // ValidateContent implements content.ContentValidator (see Validate).
@@ -198,7 +229,11 @@ func (l Logs) Validate() []content.FieldError {
 			add(streamPath+".entries", "must be an explicit array; missing or null arrays are invalid")
 		}
 		for j, entry := range stream.Entries {
-			path := fmt.Sprintf("%s.entries.%d.timestamp", streamPath, j)
+			entryPath := fmt.Sprintf("%s.entries.%d", streamPath, j)
+			if entry.Severity != normalizeSeverity(string(entry.Severity)) {
+				add(entryPath+".severity", "must be a canonical severity: trace, debug, info, warn, error, critical, fatal, or unknown")
+			}
+			path := entryPath + ".timestamp"
 			ns, err := strconv.ParseInt(entry.Timestamp, 10, 64)
 			if err != nil || !decimalInteger.MatchString(entry.Timestamp) {
 				add(path, "must be a base-10 integer string of signed 64-bit Unix nanoseconds")
@@ -211,6 +246,69 @@ func (l Logs) Validate() []content.FieldError {
 		}
 	}
 	return errs
+}
+
+// entrySeverity runs at the JSON boundary, including decoding older stored
+// snapshots that lack Severity. It never modifies original evidence fields.
+func entrySeverity(entry Entry, labels map[string]string) Severity {
+	if severity := normalizeSeverity(string(entry.Severity)); severity != "" {
+		return severity
+	}
+	if severity := mapSeverity(entry.StructuredMetadata); severity != "" {
+		return severity
+	}
+	// Inspect JSON only for severity; do not rewrite or pretty-print Line.
+	if strings.HasPrefix(strings.TrimSpace(entry.Line), "{") {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal([]byte(entry.Line), &fields) == nil {
+			for _, key := range severityFields {
+				var raw string
+				if json.Unmarshal(fields[key], &raw) == nil {
+					if severity := normalizeSeverity(raw); severity != "" {
+						return severity
+					}
+				}
+			}
+		}
+	}
+	return mapSeverity(labels)
+}
+
+var severityFields = []string{"level", "severity_text", "detected_level", "severity"}
+
+func mapSeverity(fields map[string]string) Severity {
+	for _, key := range severityFields {
+		if severity := normalizeSeverity(fields[key]); severity != "" {
+			return severity
+		}
+	}
+	return ""
+}
+
+// normalizeSeverity maps source spellings to a bounded set of display values.
+// Unknown values are not guessed from message text; originals remain in the
+// submitted Line, StructuredMetadata, or Labels for inspection.
+func normalizeSeverity(raw string) Severity {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "":
+		return ""
+	case "trace":
+		return SeverityTrace
+	case "debug":
+		return SeverityDebug
+	case "info", "information", "informational", "notice":
+		return SeverityInfo
+	case "warn", "warning":
+		return SeverityWarn
+	case "error", "err":
+		return SeverityError
+	case "critical", "crit", "alert":
+		return SeverityCritical
+	case "fatal", "panic", "emergency", "emerg":
+		return SeverityFatal
+	default:
+		return SeverityUnknown
+	}
 }
 
 func isHTTPURL(raw string) bool {

@@ -80,6 +80,35 @@ import "time"
 	entries: [...#Entry] @go(Entries,[]Entry)
 }
 
+// Severity is the canonical per-entry log severity. An empty severity means
+// no severity evidence was submitted; unrecognized values map to unknown.
+#Severity:     string
+#enumSeverity: #SeverityTrace | #SeverityDebug | #SeverityInfo | #SeverityWarn | #SeverityError | #SeverityCritical | #SeverityFatal | #SeverityUnknown
+#SeverityTrace: #Severity & {
+	"trace"
+}
+#SeverityDebug: #Severity & {
+	"debug"
+}
+#SeverityInfo: #Severity & {
+	"info"
+}
+#SeverityWarn: #Severity & {
+	"warn"
+}
+#SeverityError: #Severity & {
+	"error"
+}
+#SeverityCritical: #Severity & {
+	"critical"
+}
+#SeverityFatal: #Severity & {
+	"fatal"
+}
+#SeverityUnknown: #Severity & {
+	"unknown"
+}
+
 // Entry is one log entry.
 #Entry: {
 	// Timestamp is the decimal Unix-nanosecond timestamp string, kept
@@ -88,6 +117,10 @@ import "time"
 
 	// Line is the original log message (may be empty).
 	line: string @go(Line)
+
+	// Severity is normalized on decoding. When omitted, it is derived from
+	// entry metadata, JSON message fields, then stream labels, in that order.
+	severity?: #Severity @go(Severity)
 
 	// StructuredMetadata is optional per-entry structured metadata.
 	structured_metadata?: {
