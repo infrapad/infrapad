@@ -21,6 +21,7 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
 	"github.com/infrapad/infrapad/server/pkg/extensions/cora"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
+	"github.com/infrapad/infrapad/server/pkg/extensions/loki"
 	"github.com/infrapad/infrapad/server/pkg/extensions/pagerduty"
 	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
@@ -72,7 +73,7 @@ var startCmd = &cobra.Command{
 		registry, err := content.NewRegistry(
 			core.ContentTypes(), []content.ContentType{alertsMatcherType, prometheus.NewTimeSeriesChartType()},
 			[]content.ContentType{agentType, slack.NewThreadType(conversationType, agentType), conversationType},
-			pagerduty.ContentTypes(alertsMatcherType), cora.ContentTypes(agentType))
+			pagerduty.ContentTypes(alertsMatcherType), cora.ContentTypes(agentType), loki.ContentTypes())
 		if err != nil {
 			return fmt.Errorf("build content registry: %w", err)
 		}

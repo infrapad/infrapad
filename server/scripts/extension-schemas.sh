@@ -23,6 +23,7 @@ INPUTS=(
 	pkg/extensions/aiagent
 	pkg/extensions/core
 	pkg/extensions/cora
+	pkg/extensions/loki
 	pkg/extensions/pagerduty
 	pkg/extensions/prometheus
 	pkg/extensions/slack

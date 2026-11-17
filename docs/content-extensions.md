@@ -87,8 +87,8 @@ checks for them with type assertions.
 | `content.Presenter` | Fixed UI cards: title, Markdown, labeled fields, labeled links. | `AIAgent/Message`, `Slack/Trhead`… |
 | `content.Expander` | Turn a transient payload into the complete desired generated output and/or updated primary state. | `Slack/Thread`, `Prometheus/AlertsMatcher` |
 | `content.GroupableContentType` | Store multiple keyed items in one block that the host groups. | `Slack/Conversation` |
-| `content.RevisionPolicy` | Decide whether an inner-content change creates a revision or replaces the latest revision in place. | `Prometheus/TimeSeriesChart`, `Test/Snapshot` (tests) |
-| `content.ContentValidator` | Semantic checks of inner content that the schema cannot express (ordering, bounds, URL shapes), run on every write. | `Prometheus/TimeSeriesChart` |
+| `content.RevisionPolicy` | Decide whether an inner-content change creates a revision or replaces the latest revision in place. | `Prometheus/TimeSeriesChart`, `Loki/Logs`, `Test/Snapshot` (tests) |
+| `content.ContentValidator` | Semantic checks of inner content that the schema cannot express (ordering, bounds, URL shapes), run on every write. | `Prometheus/TimeSeriesChart`, `Loki/Logs` |
 
 ### Markdown header and body
 
