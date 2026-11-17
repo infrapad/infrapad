@@ -8,7 +8,8 @@
 // semantic checks of QueryResults.Validate.
 
 // Package prometheus implements Prometheus/AlertsMatcher, matching
-// Prometheus alerts by labels and time interval.
+// Prometheus alerts by labels and time interval, and
+// Prometheus/TimeSeriesChart, a range query with a stored results snapshot.
 package prometheus
 
 import "time"
@@ -79,6 +80,29 @@ import "time"
 	// timestamps need not align to the query step.
 	samples: [...#Sample] @go(Samples,[]Sample)
 }
+#TimeSeriesChartTypeName: "Prometheus/TimeSeriesChart"
+
+// TimeSeriesChart is the inner content of a Prometheus/TimeSeriesChart
+// record: a range-query definition with an optional stored snapshot of its
+// results. Neither the server nor the browser executes the query; producers
+// upload results fetched elsewhere.
+#TimeSeriesChart: {
+	// Query is the range query the stored results belong to.
+	query: #TimeSeriesQuery @go(Query)
+
+	// Title is an optional free-form display title.
+	title?: string @go(Title)
+
+	// Unit is an optional free-form Y-axis display label (not a conversion
+	// instruction).
+	unit?: string @go(Unit)
+
+	// QueryResults is the stored snapshot of the query's results; omitted
+	// or null means no snapshot was uploaded (or it was cleared). It is not
+	// part of the Markdown header and is cleared when the query changes
+	// through Markdown.
+	query_results?: null | #TimeSeriesResults @go(QueryResults,*TimeSeriesResults)
+}
 
 // alertsMatcherMdHeader is the structured Markdown header of
 // Prometheus/AlertsMatcher: all matcher metadata (the body is empty;
@@ -103,3 +127,40 @@ _#alertsMatcherMdHeader: {
 // number and may include fractional seconds; the value is a finite number
 // or null (e.g. a non-finite Prometheus value mapped by the producer).
 #Sample: [number, number | null]
+
+// TimeSeriesQuery is the definition of a Prometheus range query.
+#TimeSeriesQuery: {
+	// Expression is the nonblank PromQL expression (not parsed).
+	expression: string @go(Expression)
+
+	// SourceURL is the optional absolute HTTP(S) URL of the Prometheus
+	// server, stored for external tooling only (never contacted).
+	source_url?: string @go(SourceURL)
+
+	// Start is the inclusive query start.
+	start: time.Time @go(Start)
+
+	// End is the inclusive query end; it must be after Start.
+	end: time.Time @go(End)
+
+	// StepSeconds is the query resolution: a finite positive number of
+	// seconds (fractions allowed).
+	step_seconds: >0 & <=1.797693134862315708145274237317043567981e+308 @go(StepSeconds)
+}
+
+// TimeSeriesResults is a stored snapshot of query results. The bounds and
+// step belong to the accompanying query. An explicit empty Series means
+// the query succeeded without matching series.
+#TimeSeriesResults: {
+	// Series is an explicit (non-null) array of the returned series.
+	series: [...#Series] @go(Series,[]Series)
+}
+
+// timeSeriesChartMdHeader is the structured Markdown header of
+// Prometheus/TimeSeriesChart: the query metadata, title, and unit (the
+// body is empty; the results are not exposed).
+_#timeSeriesChartMdHeader: {
+	query:  #TimeSeriesQuery @go(Query)
+	title?: string           @go(Title)
+	unit?:  string           @go(Unit)
+}

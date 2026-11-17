@@ -7,7 +7,7 @@ built-in extensions as examples:
 | Package | Types | Shows |
 |---------|-------|-------|
 | `server/pkg/extensions/core` | `Core/Markdown` | Ordinary editable block: body and header editing. |
-| `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher` | Structured header-only block with an empty body; an expander without children that stores submitted `query_results` in the primary record only. |
+| `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher`, `Prometheus/TimeSeriesChart` | Structured header-only blocks with an empty body. AlertsMatcher is an expander without children that stores submitted `query_results` in the primary record only. TimeSeriesChart stores a query with an optional results snapshot uploaded through ordinary block writes, with semantic validation (`ContentValidator`) and in-place result refreshes (`RevisionPolicy`). |
 | `server/pkg/extensions/aiagent` | `AIAgent/Message` | Shared type emitted by other extensions, presentation, companion schema constraints. |
 | `server/pkg/extensions/slack` | `Slack/Thread`, `Slack/Conversation` | Expandable primary with a transient payload, a groupable type, and output of another extension's type. |
 | `server/pkg/extensions/pagerduty` | `PagerDuty/Incident`, `PagerDuty/Timeline` | Read-only generated Markdown `text` body, header reference locked after enrichment, open JSON inside a strict payload; emits the registered `Prometheus/AlertsMatcher` type (injected via `ContentTypes(matcherType)`). |
@@ -87,7 +87,8 @@ checks for them with type assertions.
 | `content.Presenter` | Fixed UI cards: title, Markdown, labeled fields, labeled links. | `AIAgent/Message`, `Slack/Trhead`… |
 | `content.Expander` | Turn a transient payload into the complete desired generated output and/or updated primary state. | `Slack/Thread`, `Prometheus/AlertsMatcher` |
 | `content.GroupableContentType` | Store multiple keyed items in one block that the host groups. | `Slack/Conversation` |
-| `content.RevisionPolicy` | Decide whether an inner-content change creates a revision or replaces the latest revision in place. | `Test/Snapshot` (tests) |
+| `content.RevisionPolicy` | Decide whether an inner-content change creates a revision or replaces the latest revision in place. | `Prometheus/TimeSeriesChart`, `Test/Snapshot` (tests) |
+| `content.ContentValidator` | Semantic checks of inner content that the schema cannot express (ordering, bounds, URL shapes), run on every write. | `Prometheus/TimeSeriesChart` |
 
 ### Markdown header and body
 
@@ -273,6 +274,22 @@ Schemas are generated from Go types (see [server/README.md](../server/README.md#
 
 Reference definitions from Go with selectors, for example
 `content.Schema{Source: schemaCUE, Definition: "#Message"}`.
+
+Rules the schema can't express (ordering, cross-field bounds, URL shapes)
+belong in `content.ContentValidator`:
+
+```go
+type ContentValidator interface {
+	ValidateContent(value Content) []FieldError
+}
+```
+
+`Registry.ValidateRecord` calls it after the schema accepts each inner value,
+so it applies to every write path (JSON ingestion, Markdown header/body
+edits and Markdown creation, expansion output) and reports field paths in
+the content JSON layout. Decoding stored records doesn't call it, and it
+doesn't depend on revision-policy invocation (creation never consults the
+policy). Payload checks inside `Expand` remain the expander's job.
 
 ## Author checklist
 

@@ -3,7 +3,8 @@
 //cue:generate cue get go github.com/infrapad/infrapad/server/pkg/extensions/prometheus
 
 // Package prometheus implements Prometheus/AlertsMatcher, matching
-// Prometheus alerts by labels and time interval.
+// Prometheus alerts by labels and time interval, and
+// Prometheus/TimeSeriesChart, a range query with a stored results snapshot.
 package prometheus
 
 import "time"

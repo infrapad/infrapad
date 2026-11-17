@@ -162,7 +162,8 @@ func (r *Registry) ValidatePayload(name string, payload json.RawMessage) error {
 // ValidateRecord checks a (typically Go-constructed) record: the exact
 // registered type instance and host record shape/metadata (checkShape),
 // then the JSON representation of each inner value (each collection member
-// individually) against the type's content schema. Collection envelopes,
+// individually) against the type's content schema, followed by the type's
+// semantic checks (ContentValidator). Collection envelopes,
 // keys, and timestamps are not part of extension schemas.
 func (r *Registry) ValidateRecord(record Record) error {
 	if err := checkShape(record); err != nil {
@@ -245,13 +246,22 @@ func (r *Registry) lookupEntry(name string) (*registeredType, error) {
 	return entry, nil
 }
 
-// validateValue validates the JSON representation of an inner Go value.
+// validateValue validates the JSON representation of an inner Go value
+// and then its semantic rules (ContentValidator).
 func (r *Registry) validateValue(entry *registeredType, value Content) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return &ValidationError{ContentType: entry.contentType.Name(), Stage: StageContent, Err: fmt.Errorf("encode content: %w", err)}
 	}
-	return r.validate(entry, entry.contentSchema, StageContent, data)
+	if err := r.validate(entry, entry.contentSchema, StageContent, data); err != nil {
+		return err
+	}
+	if validator, ok := entry.contentType.(ContentValidator); ok {
+		if fields := validator.ValidateContent(value); len(fields) > 0 {
+			return &ValidationError{ContentType: entry.contentType.Name(), Stage: StageContent, Fields: fields}
+		}
+	}
+	return nil
 }
 
 func (r *Registry) validate(entry *registeredType, schema cue.Value, stage ValidationStage, data []byte) error {

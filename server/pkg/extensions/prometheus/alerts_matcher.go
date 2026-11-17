@@ -1,5 +1,6 @@
 // Package prometheus implements Prometheus/AlertsMatcher, matching
-// Prometheus alerts by labels and time interval.
+// Prometheus alerts by labels and time interval, and
+// Prometheus/TimeSeriesChart, a range query with a stored results snapshot.
 package prometheus
 
 import (
@@ -15,7 +16,7 @@ import (
 
 // ContentTypes returns the content types of the Prometheus extension.
 func ContentTypes() []content.ContentType {
-	return []content.ContentType{NewAlertsMatcherType()}
+	return []content.ContentType{NewAlertsMatcherType(), NewTimeSeriesChartType()}
 }
 
 //go:embed schema.cue

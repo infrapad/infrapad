@@ -10,3 +10,5 @@ package prometheus
 // Sample is encoded as exactly one [unix_seconds, value] pair: a numeric
 // timestamp and a numeric or null value.
 #Sample: [number, number | null]
+
+#TimeSeriesQuery: step_seconds: >0

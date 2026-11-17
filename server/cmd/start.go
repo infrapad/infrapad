@@ -70,7 +70,7 @@ var startCmd = &cobra.Command{
 		conversationType := slack.NewConversationType()
 		alertsMatcherType := prometheus.NewAlertsMatcherType()
 		registry, err := content.NewRegistry(
-			core.ContentTypes(), []content.ContentType{alertsMatcherType},
+			core.ContentTypes(), []content.ContentType{alertsMatcherType, prometheus.NewTimeSeriesChartType()},
 			[]content.ContentType{agentType, slack.NewThreadType(conversationType, agentType), conversationType},
 			pagerduty.ContentTypes(alertsMatcherType), cora.ContentTypes(agentType))
 		if err != nil {

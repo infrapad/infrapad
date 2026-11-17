@@ -111,6 +111,18 @@ type RevisionPolicy interface {
 	ShouldCreateRevision(previous, next Record) (bool, error)
 }
 
+// ContentValidator is implemented by types with semantic rules the
+// content schema cannot express (e.g. ordering, bounds, URL shapes). The
+// registry calls it from ValidateRecord after the schema accepts each inner
+// value, so it applies to every host write path (JSON ingestion, Markdown
+// edits and creation, expansion output) but not to decoding stored records.
+type ContentValidator interface {
+	// ValidateContent returns the violations of value, with paths
+	// following the inner content JSON layout; nil means valid. It must
+	// not mutate value.
+	ValidateContent(value Content) []FieldError
+}
+
 // Presenter is implemented by types providing structured presentation.
 // Without it, Markdown is the fallback.
 type Presenter interface {
