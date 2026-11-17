@@ -23,8 +23,8 @@ Markdown representation, see [markdown-format.md](markdown-format.md).
 An extension owns:
 
 - **Inner content**: a plain Go struct per type (e.g. `aiagent.Message`),
-  encoded with ordinary JSON tags. It has no keys, timestamps, or block
-  metadata.
+  encoded with ordinary JSON tags. It has no host-owned keys or block
+  metadata; a type may define its own timestamp field.
 - **Transient payload types** for expandable types (e.g. `slack.Payload`).
   Payloads are validated, passed to the extension, and then discarded. They
   are never stored.
@@ -38,7 +38,8 @@ The host (the server) owns the **record** around the content:
 - Block numbers, revisions, authors, and the `parent` relationship
   (provenance).
 - Event timestamps, which order the document chronologically. Ordinary
-  blocks default to their creation time.
+  blocks default to their creation time; types implementing
+  `content.EventTimestamper` derive them from content.
 - Generated keys, which are stable identities scoped to the generating
   parent, and the membership of grouped blocks.
 - Validation, reconciliation of generated output, ownership rules (generated
@@ -89,6 +90,7 @@ checks for them with type assertions.
 | `content.GroupableContentType` | Store multiple keyed items in one block that the host groups. | `Slack/Conversation` |
 | `content.RevisionPolicy` | Decide whether an inner-content change creates a revision or replaces the latest revision in place. | `Prometheus/TimeSeriesChart`, `Loki/Logs`, `Test/Snapshot` (tests) |
 | `content.ContentValidator` | Semantic checks of inner content that the schema cannot express (ordering, bounds, URL shapes), run on every write. | `Prometheus/TimeSeriesChart`, `Loki/Logs` |
+| `content.EventTimestamper` | Select the event timestamp from validated content (e.g. a snapshot's explicit placement time) on public JSON/Markdown writes. | `Prometheus/TimeSeriesChart`, `Loki/Logs` |
 
 ### Markdown header and body
 
@@ -163,6 +165,44 @@ type RevisionPolicy interface {
 - Markdown stale-revision checks are unchanged. In-place refreshes don't
   advance the revision number, so header/body edits apply to the currently
   stored record (keep refreshed data unless the edit should clear it).
+
+### Content-derived event timestamps
+
+```go
+type EventTimestamper interface {
+	EventTimestamp(value Content) (time.Time, error)
+}
+```
+
+- The host calls it on ordinary public writes (JSON creation/update,
+  Markdown creation/edit) after validation and after checking submitted
+  timestamp echoes against the stored record, then applies the result
+  through `content.ApplyEventTimestamp`. The zero time requests the
+  original block creation time (revision 1's `CreatedAt`, not the latest
+  revision time). During creation the controller finalizes this fallback
+  after insertion, using the actual stored creation time.
+- Producers still can't assign timestamps directly; they only influence
+  them through content.
+- A changed timestamp is a structural change: it always creates a revision,
+  even when the `RevisionPolicy` would refresh in place.
+- `Loki/Logs` and `Prometheus/TimeSeriesChart` support an optional RFC3339
+  `content.timestamp`: **explicit timestamp → original server creation time**.
+  Query bounds and results never infer placement.
+  The explicit timestamp may be outside the query window; entry/sample
+  timestamps are unchanged. Other types retain their own timestamp rules.
+- For example, an ordinary JSON write can submit
+  `{"record":{"content":{"timestamp":"2026-11-13T12:00:00Z","query":{…}}}}`.
+  This content field is separate from the read-only `record.timestamp`.
+  In Markdown, set `timestamp` inside the fenced `content:` header, not
+  in the `::infrapad_block` directive.
+- Keep `content.timestamp` in subsequent JSON refreshes to retain explicit
+  placement. Omit it or set it to `null` to restore creation time (JSON and
+  Markdown headers have replacement semantics). Markdown round-trips,
+  title edits and query edits preserve it when present; only query edits
+  clear results.
+- Setting, changing or removing an explicit timestamp is metadata-worthy
+  and creates a revision, even when the effective event time is unchanged.
+  Results-only refreshes stay in place, with or without an explicit time.
 
 ### Presentation
 

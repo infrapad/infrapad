@@ -3,6 +3,8 @@ package content
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
 )
 
 // ContentType is the required contract implemented once per canonical
@@ -121,6 +123,47 @@ type ContentValidator interface {
 	// following the inner content JSON layout; nil means valid. It must
 	// not mutate value.
 	ValidateContent(value Content) []FieldError
+}
+
+// EventTimestamper is implemented by types whose event timestamp is derived
+// from their content (e.g. an explicit timestamp of a stored snapshot)
+// rather than block creation time. The host applies it on
+// ordinary public writes (JSON creation/update, Markdown creation/edit)
+// after validation and timestamp-echo checks, so producers still cannot
+// assign timestamps directly. A changed timestamp is a structural change
+// and therefore creates a revision (see RevisionPolicy).
+type EventTimestamper interface {
+	// EventTimestamp returns the event timestamp for a validated inner
+	// value; the zero time requests original block creation time. It must not
+	// mutate value.
+	EventTimestamp(value Content) (time.Time, error)
+}
+
+// ApplyEventTimestamp returns record with its event timestamp derived
+// through the type's EventTimestamper, falling back to createdAt when it
+// returns zero. Types without this capability retain their timestamp.
+// createdAt must be the original block creation time, not revision time.
+// Only individual records are supported.
+func ApplyEventTimestamp(record Record, createdAt time.Time) (Record, error) {
+	timestamper, ok := record.ContentType().(EventTimestamper)
+	if !ok {
+		return record, nil
+	}
+	item, ok := record.(ItemRecord)
+	if !ok {
+		return nil, fmt.Errorf("event timestamp: expected an individual record, got %T", record)
+	}
+	ts, err := timestamper.EventTimestamp(item.Content())
+	if err != nil {
+		return nil, fmt.Errorf("event timestamp: %w", err)
+	}
+	if ts.IsZero() {
+		ts = createdAt
+	}
+	if ts.Equal(record.Timestamp()) {
+		return record, nil
+	}
+	return WithTimestamp(record, ts.UTC())
 }
 
 // Presenter is implemented by types providing structured presentation.

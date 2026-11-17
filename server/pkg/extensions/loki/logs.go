@@ -32,6 +32,10 @@ func ContentTypes() []content.ContentType {
 // with an optional stored snapshot of its result streams. The query
 // direction is not stored; forward is the convention.
 type Logs struct {
+	// Timestamp optionally sets the block's event time. Omit or null to use
+	// the block's original server-side creation time.
+	// It may lie outside the query window; it never alters entry timestamps.
+	Timestamp *time.Time `json:"timestamp,omitempty"`
 	// Title is an optional free-form display title.
 	Title string `json:"title,omitempty"`
 	// Query is the log query the stored results belong to.
@@ -120,9 +124,9 @@ type Entry struct {
 }
 
 // LogsType implements Loki/Logs. It renders an empty Markdown body; the
-// query and title form the structured Markdown header, while the results
-// stay hidden. Metadata changes create revisions, results-only changes
-// replace the latest revision in place (content.RevisionPolicy).
+// query, title and optional timestamp form the structured Markdown header,
+// while results stay hidden. Metadata changes create revisions; results-only
+// changes with unchanged event time refresh in place (content.RevisionPolicy).
 type LogsType struct {
 	content.TypedMarkdownRenderer[content.Item[Logs]]
 	content.TypedItemMarkdownHeader[Logs, logsMdHeader]
@@ -176,8 +180,8 @@ func (*LogsType) ValidateContent(value content.Content) []content.FieldError {
 }
 
 // ShouldCreateRevision implements content.RevisionPolicy: changes of the
-// query or title create a revision; results-only changes (including adding
-// or clearing the snapshot) are stored in place.
+// query, title or explicit timestamp create a revision; results-only changes
+// are stored in place unless the host detects a changed event timestamp.
 func (*LogsType) ShouldCreateRevision(previous, next content.Record) (bool, error) {
 	before, err := content.ItemView[Logs](previous)
 	if err != nil {
@@ -190,10 +194,31 @@ func (*LogsType) ShouldCreateRevision(previous, next content.Record) (bool, erro
 	return !before.ContentValue.SameMetadata(after.ContentValue), nil
 }
 
+// EventTimestamp implements content.EventTimestamper (see
+// Logs.EventTimestamp).
+func (*LogsType) EventTimestamp(value content.Content) (time.Time, error) {
+	logs, err := content.ContentValue[Logs](value)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return logs.EventTimestamp(), nil
+}
+
+// EventTimestamp returns the explicit Timestamp, or zero to request the
+// host's original creation-time fallback. Results never affect placement.
+func (l Logs) EventTimestamp() time.Time {
+	if l.Timestamp != nil {
+		return l.Timestamp.UTC()
+	}
+	return time.Time{}
+}
+
 // SameMetadata reports whether l and other have the same revision-worthy
-// metadata: query and title.
+// metadata: query, title, and explicit timestamp (compared as an instant).
 func (l Logs) SameMetadata(other Logs) bool {
-	return l.Query.Same(other.Query) && l.Title == other.Title
+	sameTimestamp := l.Timestamp == nil && other.Timestamp == nil ||
+		l.Timestamp != nil && other.Timestamp != nil && l.Timestamp.Equal(*other.Timestamp)
+	return l.Query.Same(other.Query) && l.Title == other.Title && sameTimestamp
 }
 
 // Same reports whether q and other define the same query: strings equal as
@@ -217,6 +242,9 @@ func (l Logs) Validate() []content.FieldError {
 	var errs []content.FieldError
 	add := func(path, format string, args ...any) {
 		errs = append(errs, content.FieldError{Path: path, Message: fmt.Sprintf(format, args...)})
+	}
+	if l.Timestamp != nil && l.Timestamp.IsZero() {
+		add("timestamp", "must not be the zero time; omit or use null to use block creation time")
 	}
 	q := l.Query
 	if strings.TrimSpace(q.Expression) == "" {
@@ -432,22 +460,23 @@ func isHTTPURL(raw string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
-// logsMdHeader is the structured Markdown header of Loki/Logs: the query
-// and title (the body is empty; the results are not exposed).
+// logsMdHeader is the structured Markdown header of Loki/Logs: the query,
+// title and optional timestamp (the body is empty; results are not exposed).
 type logsMdHeader struct {
-	Title string    `json:"title,omitempty"`
-	Query LogsQuery `json:"query"`
+	Timestamp *time.Time `json:"timestamp,omitempty"`
+	Title     string     `json:"title,omitempty"`
+	Query     LogsQuery  `json:"query"`
 }
 
 func projectLogsMdHeader(l Logs) logsMdHeader {
-	return logsMdHeader{Title: l.Title, Query: l.Query}
+	return logsMdHeader{Timestamp: l.Timestamp, Title: l.Title, Query: l.Query}
 }
 
 // replaceLogsMdHeader applies the header, preserving the stored results
-// only when the query is unchanged (title-only edits keep them; any query
-// change, including provenance, clears them).
+// only when the query is unchanged (title/timestamp edits keep them; any
+// query change, including provenance, clears them).
 func replaceLogsMdHeader(existing Logs, h logsMdHeader) Logs {
-	l := Logs{Title: h.Title, Query: h.Query}
+	l := Logs{Timestamp: h.Timestamp, Title: h.Title, Query: h.Query}
 	if existing.Query.Same(h.Query) {
 		l.QueryResults = existing.QueryResults
 	}

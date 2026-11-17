@@ -18,6 +18,7 @@ import (
 	"github.com/infrapad/infrapad/server/pkg/controller"
 	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
 	"github.com/infrapad/infrapad/server/pkg/extensions/core"
+	"github.com/infrapad/infrapad/server/pkg/extensions/loki"
 	"github.com/infrapad/infrapad/server/pkg/extensions/prometheus"
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
 	"github.com/infrapad/infrapad/server/pkg/model"
@@ -57,6 +58,7 @@ func newFixture(t *testing.T) *fixture {
 	f.threadType = slack.NewThreadType(f.conversationType, f.agentType)
 	registry, err := content.NewRegistry([]content.ContentType{
 		f.markdownType, f.alertsType, f.agentType, f.threadType, f.conversationType, f.refType, f.snapshotType,
+		loki.NewLogsType(), prometheus.NewTimeSeriesChartType(),
 	})
 	testutil.NoErr(t, err)
 	f.registry = registry

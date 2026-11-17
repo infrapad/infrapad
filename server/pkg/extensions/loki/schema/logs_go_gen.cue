@@ -15,6 +15,11 @@ import "time"
 // with an optional stored snapshot of its result streams. The query
 // direction is not stored; forward is the convention.
 #Logs: {
+	// Timestamp optionally sets the block's event time. Omit or null to use
+	// the block's original server-side creation time.
+	// It may lie outside the query window; it never alters entry timestamps.
+	timestamp?: null | time.Time @go(Timestamp,*time.Time)
+
 	// Title is an optional free-form display title.
 	title?: string @go(Title)
 
@@ -124,9 +129,10 @@ import "time"
 	fields?: {...} @go(Fields,map[string]any)
 }
 
-// logsMdHeader is the structured Markdown header of Loki/Logs: the query
-// and title (the body is empty; the results are not exposed).
+// logsMdHeader is the structured Markdown header of Loki/Logs: the query,
+// title and optional timestamp (the body is empty; results are not exposed).
 _#logsMdHeader: {
-	title?: string     @go(Title)
-	query:  #LogsQuery @go(Query)
+	timestamp?: null | time.Time @go(Timestamp,*time.Time)
+	title?:     string           @go(Title)
+	query:      #LogsQuery       @go(Query)
 }

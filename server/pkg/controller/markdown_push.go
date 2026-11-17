@@ -202,7 +202,11 @@ func (c *Controller) planExistingMarkdownBlock(ctx context.Context, tx store.Tx,
 	}
 	latest.Record = record
 
-	updated, err := c.applyMarkdownEdits(record, blk, headerChanged, bodyChanged)
+	createdAt, err := originalBlockCreationTime(ctx, tx, uid, latest)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := c.applyMarkdownEdits(record, blk, headerChanged, bodyChanged, createdAt)
 	if err != nil {
 		return nil, c.markdownEditError(reject, revision.Type, err)
 	}
@@ -237,7 +241,7 @@ func (c *Controller) planNewMarkdownBlock(uid model.DocumentUID, blk markdown.Bl
 		return nil, reject(PushInvalidOutput, typ, fmt.Errorf("decode empty seed: %w", err))
 	}
 	seed := content.NewItem(ct, now, seedValue)
-	record, err := c.applyMarkdownEdits(seed, blk, len(blk.Header) > 0, strings.TrimSpace(blk.Body) != "")
+	record, err := c.applyMarkdownEdits(seed, blk, len(blk.Header) > 0, strings.TrimSpace(blk.Body) != "", now)
 	if err != nil {
 		return nil, c.markdownEditError(reject, typ, err)
 	}
@@ -248,7 +252,7 @@ func (c *Controller) planNewMarkdownBlock(uid model.DocumentUID, blk markdown.Bl
 // and then the changed body through the type's capabilities, and checks
 // the completed record: preserved host metadata, then full validation.
 // Intermediate states are not validated.
-func (c *Controller) applyMarkdownEdits(existing content.Record, blk markdown.Block, header, body bool) (content.Record, error) {
+func (c *Controller) applyMarkdownEdits(existing content.Record, blk markdown.Block, header, body bool, createdAt time.Time) (content.Record, error) {
 	ct := existing.ContentType()
 	record := existing
 	if header {
@@ -279,7 +283,9 @@ func (c *Controller) applyMarkdownEdits(existing content.Record, blk markdown.Bl
 	if err := c.registry.ValidateRecord(record); err != nil {
 		return nil, errCallback{err}
 	}
-	return record, nil
+	// Content-derived event timestamps are applied by the host after the
+	// callbacks (which must preserve the timestamp) and validation.
+	return content.ApplyEventTimestamp(record, createdAt)
 }
 
 // errUnsupportedEdit and errCallback classify applyMarkdownEdits failures;
@@ -325,6 +331,10 @@ func applyMarkdownPlans(ctx context.Context, tx store.Tx, uid model.DocumentUID,
 		created, err := tx.Blocks().Create(ctx, uid, blk)
 		if err != nil {
 			return nil, fmt.Errorf("create block: %w", err)
+		}
+		created.Record = plan.record
+		if _, err := finalizeBlockCreation(ctx, tx, uid, created); err != nil {
+			return nil, err
 		}
 		changes = append(changes, MarkdownChange{BlockNumber: created.BlockNumber, Action: MarkdownBlockAdded})
 	}

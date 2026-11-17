@@ -100,7 +100,8 @@ func IsForbiddenEdit(err error) bool {
 
 // buildRecord validates the submitted inner content JSON against the
 // registered content type and wraps it in a new host record stamped with
-// ts (block creation time for ordinary blocks).
+// ts (block creation time for ordinary blocks), unless the type derives
+// its event timestamp from content (content.EventTimestamper).
 func (c *Controller) buildRecord(blockType string, inner json.RawMessage, ts time.Time) (content.Record, error) {
 	value, err := c.registry.DecodeContent(blockType, inner)
 	if err != nil {
@@ -114,13 +115,14 @@ func (c *Controller) buildRecord(blockType string, inner json.RawMessage, ts tim
 	if err := c.registry.ValidateRecord(record); err != nil {
 		return nil, err
 	}
-	return record, nil
+	return content.ApplyEventTimestamp(record, ts)
 }
 
 // updatedRecord validates the submitted inner content JSON and replaces
 // the inner value of existing while preserving its type association and
-// key and event timestamp.
-func (c *Controller) updatedRecord(existing content.Record, blockType string, inner json.RawMessage) (content.Record, error) {
+// key and event timestamp (re-derived for content.EventTimestamper types;
+// a changed timestamp is structural and creates a revision).
+func (c *Controller) updatedRecord(existing content.Record, blockType string, inner json.RawMessage, createdAt time.Time) (content.Record, error) {
 	value, err := c.registry.DecodeContent(blockType, inner)
 	if err != nil {
 		return nil, err
@@ -132,7 +134,7 @@ func (c *Controller) updatedRecord(existing content.Record, blockType string, in
 	if err := c.registry.ValidateRecord(updated); err != nil {
 		return nil, err
 	}
-	return updated, nil
+	return content.ApplyEventTimestamp(updated, createdAt)
 }
 
 // serializeRecord stores the full host record envelope on blk.
@@ -175,7 +177,7 @@ func (c *Controller) prepareNew(blk *model.Block, ts time.Time) error {
 
 // prepareUpdate validates blk.Content against the existing record,
 // preserving the key and existing record timestamp.
-func (c *Controller) prepareUpdate(blk *model.Block, existing content.Record) error {
+func (c *Controller) prepareUpdate(blk *model.Block, existing content.Record, createdAt time.Time) error {
 	if blk.Type != existing.ContentType().Name() {
 		return &content.ValidationError{
 			ContentType: blk.Type,
@@ -183,7 +185,7 @@ func (c *Controller) prepareUpdate(blk *model.Block, existing content.Record) er
 			Err:         fmt.Errorf("block type %q cannot be changed to %q", existing.ContentType().Name(), blk.Type),
 		}
 	}
-	record, err := c.updatedRecord(existing, blk.Type, blk.Content)
+	record, err := c.updatedRecord(existing, blk.Type, blk.Content, createdAt)
 	if err != nil {
 		return err
 	}
@@ -227,6 +229,10 @@ func (c *Controller) CreateDocument(ctx context.Context, doc model.Document) (mo
 			return model.Document{}, fmt.Errorf("create initial block %d: %w", i+1, err)
 		}
 		b.Record = blk.Record
+		b, err = finalizeBlockCreation(ctx, tx, created.Uid, b)
+		if err != nil {
+			return model.Document{}, err
+		}
 		created.Blocks = append(created.Blocks, b)
 	}
 
@@ -344,6 +350,10 @@ func (c *Controller) AddBlock(ctx context.Context, documentUID model.DocumentUID
 		return model.Block{}, fmt.Errorf("create block: %w", err)
 	}
 	created.Record = blk.Record
+	created, err = finalizeBlockCreation(ctx, tx, documentUID, created)
+	if err != nil {
+		return model.Block{}, err
+	}
 
 	if err := tx.Commit(); err != nil {
 		return model.Block{}, fmt.Errorf("commit tx: %w", err)
@@ -388,7 +398,11 @@ func (c *Controller) UpdateBlock(ctx context.Context, documentUID model.Document
 	// Preserve the stored provenance on the new revision.
 	blk.ParentBlockNumber = latest.ParentBlockNumber
 
-	if err := c.prepareUpdate(&blk, latest.Record); err != nil {
+	createdAt, err := originalBlockCreationTime(ctx, tx, documentUID, latest)
+	if err != nil {
+		return model.Block{}, err
+	}
+	if err := c.prepareUpdate(&blk, latest.Record, createdAt); err != nil {
 		return model.Block{}, err
 	}
 
@@ -580,6 +594,8 @@ func decodePublicRecord(blk *model.Block) error {
 func appendRevision(ctx context.Context, tx store.Tx, documentUID model.DocumentUID, blk model.Block, status model.BlockStatus, author model.AuthorID) (model.Block, error) {
 	blk.Status = status
 	blk.AuthorID = author
+	// Revisions receive their own creation time, not the copied row time.
+	blk.CreatedAt = time.Time{}
 	rev, err := tx.Blocks().Create(ctx, documentUID, blk)
 	if err != nil {
 		return model.Block{}, fmt.Errorf("append revision for block %d: %w", blk.BlockNumber, err)

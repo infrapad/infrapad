@@ -87,6 +87,11 @@ import "time"
 // results. Neither the server nor the browser executes the query; producers
 // upload results fetched elsewhere.
 #TimeSeriesChart: {
+	// Timestamp optionally sets the block's event time. Omit or null to use
+	// the block's original server-side creation time.
+	// It may lie outside the query window; it never alters sample timestamps.
+	timestamp?: null | time.Time @go(Timestamp,*time.Time)
+
 	// Query is the range query the stored results belong to.
 	query: #TimeSeriesQuery @go(Query)
 
@@ -157,10 +162,11 @@ _#alertsMatcherMdHeader: {
 }
 
 // timeSeriesChartMdHeader is the structured Markdown header of
-// Prometheus/TimeSeriesChart: the query metadata, title, and unit (the
-// body is empty; the results are not exposed).
+// Prometheus/TimeSeriesChart: query metadata, title, unit and optional
+// timestamp (the body is empty; results are not exposed).
 _#timeSeriesChartMdHeader: {
-	query:  #TimeSeriesQuery @go(Query)
-	title?: string           @go(Title)
-	unit?:  string           @go(Unit)
+	timestamp?: null | time.Time @go(Timestamp,*time.Time)
+	query:      #TimeSeriesQuery @go(Query)
+	title?:     string           @go(Title)
+	unit?:      string           @go(Unit)
 }
