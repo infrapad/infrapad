@@ -148,13 +148,14 @@ func TestIncidentInvestigationGRPC(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 6. Submit producer-fetched query results to the matcher itself.
 	// Detailed lifecycle and validation checks live in the extension tests;
-	// here verify compact numeric pairs survive transport and persistence.
+	// here verify compact pairs, including a null value distinct from zero,
+	// survive transport and persistence.
 	// -----------------------------------------------------------------------
 	queryResults := map[string]any{
 		"start": "2026-08-14T08:58:00Z", "end": "2026-08-14T09:12:00Z", "step_seconds": 15.0,
 		"series": []any{map[string]any{
 			"labels":  map[string]any{"alertname": "CrashLoopBackOff", "alertstate": "firing"},
-			"samples": []any{[]any{1786698000.5, 1.25}, []any{1786698015.5, 0.0}},
+			"samples": []any{[]any{1786698000.5, 1.25}, []any{1786698015.5, 0.0}, []any{1786698030.5, nil}},
 		}},
 	}
 	_, err = client.SubmitBlockPayload(ctx, &pb.SubmitBlockPayloadRequest{

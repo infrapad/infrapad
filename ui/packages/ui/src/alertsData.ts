@@ -8,8 +8,12 @@ export interface LabelMatcher {
   [labelName: string]: string[];
 }
 
-/** A `[unix_seconds, value]` sample pair as stored by the server. */
-export type QuerySample = [number, number];
+/**
+ * A `[unix_seconds, value]` sample pair as stored by the server. A `null`
+ * value marks a timestamped sample without a numeric value (e.g. a
+ * non-finite Prometheus result); it is distinct from zero.
+ */
+export type QuerySample = [number, number | null];
 
 /** One stored time series. */
 export interface QueryResultsSeries {
@@ -63,7 +67,8 @@ export function isoToUnix(iso: string): number {
  * Convert stored samples into step transitions over `[startS, endS]`.
  *
  * A sample with a positive value activates the lane for
- * `[ts, min(nextTs, ts + stepS, endS))`; zero/negative values, gaps beyond
+ * `[ts, min(nextTs, ts + stepS, endS))`; zero/negative/null values (a null
+ * sample still ends the preceding coverage), gaps beyond
  * one step, and time outside sample coverage stay inactive. Transitions are
  * derived from sample boundaries only (no iteration over the query grid).
  * The result always starts at `startS` and ends at `endS`, so it can be
@@ -90,7 +95,7 @@ export function samplesToTransitions(
 
   for (let i = 0; i < samples.length; i++) {
     const [ts, value] = samples[i];
-    if (!(value > 0)) continue;
+    if (value === null || !(value > 0)) continue;
     let segEnd = Math.min(ts + stepS, endS);
     if (i + 1 < samples.length) segEnd = Math.min(segEnd, samples[i + 1][0]);
     const segStart = Math.max(ts, startS);

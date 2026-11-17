@@ -133,7 +133,7 @@ _#incidentMdHeader: {
 			// Samples is an explicit (non-null) array of samples with strictly
 			// increasing timestamps inside the query bounds. Gaps are allowed and
 			// timestamps need not align to the query step.
-			samples: [...[number, number]] @go(Samples,[]Sample)
+			samples: [...[number, number | null]] @go(Samples,[]Sample)
 		}] @go(Series,[]Series)
 	} @go(QueryResults,*prometheus.QueryResults)
 }

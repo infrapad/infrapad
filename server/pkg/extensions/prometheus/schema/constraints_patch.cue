@@ -7,5 +7,6 @@ package prometheus
 
 #QueryResults: step_seconds: >0
 
-// Sample is encoded as exactly one [unix_seconds, value] pair of numbers.
-#Sample: [number, number]
+// Sample is encoded as exactly one [unix_seconds, value] pair: a numeric
+// timestamp and a numeric or null value.
+#Sample: [number, number | null]

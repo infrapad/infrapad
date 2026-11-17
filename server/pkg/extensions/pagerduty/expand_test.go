@@ -297,7 +297,7 @@ func TestIncidentExpansionValidation(t *testing.T) {
 			p.Alerts[0].Details = json.RawMessage(`{"firing": 1}`)
 			p.QueryResults = &prometheus.QueryResults{Start: at("12:00"), End: at("11:00"), StepSeconds: 15,
 				Series: []prometheus.Series{{Labels: map[string]string{},
-					Samples: []prometheus.Sample{{Timestamp: float64(at("13:00").Unix()), Value: 1}}}}}
+					Samples: []prometheus.Sample{{Timestamp: float64(at("13:00").Unix()), Value: prometheus.Value(1)}}}}}
 		}, []string{"alerts.0.details.firing", "query_results.end", "query_results.series.0.samples.0.0"}},
 		{"label container", func(p *pagerduty.Payload) {
 			p.Alerts[0].Details = json.RawMessage(`{"firing": [{"startsAt": "2026-10-25T12:00:00Z", "labels": []}]}`)
@@ -336,7 +336,10 @@ func TestIncidentQueryResultsForwarding(t *testing.T) {
 	results := &prometheus.QueryResults{
 		Start: at("12:00"), End: at("14:00"), StepSeconds: 15,
 		Series: []prometheus.Series{{Labels: map[string]string{"alertname": "NodeDown"},
-			Samples: []prometheus.Sample{{Timestamp: float64(at("12:30").Unix()) + 0.5, Value: 1}}}},
+			Samples: []prometheus.Sample{
+				{Timestamp: float64(at("12:30").Unix()) + 0.5, Value: prometheus.Value(1)},
+				{Timestamp: float64(at("12:31").Unix())},
+			}}},
 	}
 	forwarded := func(t *testing.T, result content.ExpansionResult) (content.EmittedBlock, prometheus.Payload) {
 		t.Helper()

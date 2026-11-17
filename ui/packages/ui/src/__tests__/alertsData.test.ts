@@ -15,6 +15,8 @@ describe("samplesToTransitions", () => {
     { name: "consecutive samples merge", samples: [[100, 1], [110, 2], [120, 0.5]], want: [on(100), off(130), off(200)] },
     { name: "gap beyond one step is inactive", samples: [[110, 1], [150, 1]], want: [off(100), on(110), off(120), on(150), off(160), off(200)] },
     { name: "next sample ends coverage early", samples: [[110, 1], [115, 0]], want: [off(100), on(110), off(115), off(200)] },
+    { name: "null sample interrupts coverage", samples: [[110, 1], [115, null], [120, 1]], want: [off(100), on(110), off(115), on(120), off(130), off(200)] },
+    { name: "all-null samples stay inactive", samples: [[110, null], [120, null]], want: [off(100), off(200)] },
     {
       name: "fractional off-grid timestamps and step",
       samples: [[103.25, 1], [105.75, 1]],

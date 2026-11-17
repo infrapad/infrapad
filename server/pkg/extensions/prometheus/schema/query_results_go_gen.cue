@@ -45,6 +45,7 @@ import "time"
 }
 
 // Sample is one sample, encoded in JSON as a compact [unix_seconds, value]
-// pair of numbers (see the schema companion constraints). Both coordinates
-// are finite; the timestamp may include fractional seconds.
+// pair (see the schema companion constraints). The timestamp is a finite
+// number and may include fractional seconds; the value is a finite number
+// or null (e.g. a non-finite Prometheus value mapped by the producer).
 #Sample: _

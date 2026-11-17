@@ -1,6 +1,7 @@
 package prometheus
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -45,37 +46,72 @@ type Series struct {
 }
 
 // Sample is one sample, encoded in JSON as a compact [unix_seconds, value]
-// pair of numbers (see the schema companion constraints). Both coordinates
-// are finite; the timestamp may include fractional seconds.
+// pair (see the schema companion constraints). The timestamp is a finite
+// number and may include fractional seconds; the value is a finite number
+// or null (e.g. a non-finite Prometheus value mapped by the producer).
 type Sample struct {
 	// Timestamp is the Unix time in seconds.
 	Timestamp float64
-	// Value is the sample value.
-	Value float64
+	// Value is the sample value; nil encodes JSON null, distinct from a
+	// pointer to zero.
+	Value *float64
 }
 
-// MarshalJSON encodes the sample as a [unix_seconds, value] pair.
+// Value returns a pointer to v, convenient for building samples.
+func Value(v float64) *float64 { return &v }
+
+// MarshalJSON encodes the sample as a [unix_seconds, value|null] pair.
 func (s Sample) MarshalJSON() ([]byte, error) {
-	return json.Marshal([2]float64{s.Timestamp, s.Value})
+	return json.Marshal([2]any{s.Timestamp, s.Value})
 }
 
-// UnmarshalJSON decodes a [unix_seconds, value] pair, rejecting any other
-// shape (the schema validates it beforehand).
+// UnmarshalJSON strictly decodes a [unix_seconds, value|null] pair,
+// rejecting any other shape (the schema validates it beforehand) rather
+// than coercing nulls or other types to numbers.
 func (s *Sample) UnmarshalJSON(data []byte) error {
-	var pair []float64
+	var pair []json.RawMessage
 	if err := json.Unmarshal(data, &pair); err != nil {
 		return fmt.Errorf("decode sample: %w", err)
 	}
-	if len(pair) != 2 {
+	if pair == nil || len(pair) != 2 {
 		return fmt.Errorf("decode sample: expected a [unix_seconds, value] pair, got %d entries", len(pair))
 	}
-	s.Timestamp, s.Value = pair[0], pair[1]
+	timestamp, err := decodeSampleNumber(pair[0])
+	if err != nil {
+		return fmt.Errorf("decode sample timestamp: %w", err)
+	}
+	if timestamp == nil {
+		return fmt.Errorf("decode sample timestamp: must not be null")
+	}
+	value, err := decodeSampleNumber(pair[1])
+	if err != nil {
+		return fmt.Errorf("decode sample value: %w", err)
+	}
+	*s = Sample{Timestamp: *timestamp, Value: value}
 	return nil
 }
 
+// decodeSampleNumber decodes a JSON number or null (nil); other JSON types
+// are rejected.
+func decodeSampleNumber(raw json.RawMessage) (*float64, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if bytes.Equal(trimmed, []byte("null")) {
+		return nil, nil
+	}
+	if len(trimmed) == 0 || (trimmed[0] != '-' && (trimmed[0] < '0' || trimmed[0] > '9')) {
+		return nil, fmt.Errorf("expected a number or null, got %s", trimmed)
+	}
+	var v float64
+	if err := json.Unmarshal(trimmed, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
 // Validate checks what the schema cannot express: start < end, a finite
-// positive step, explicit arrays, finite sample coordinates, and strictly
-// increasing timestamps within the inclusive bounds. Field paths are
+// positive step, explicit arrays, a finite timestamp and finite-or-null
+// value per sample, and strictly increasing timestamps (null-valued
+// samples included) within the inclusive bounds. Field paths are
 // prefixed with path (e.g. "query_results"). It returns the collected
 // field errors; callers reusing the contract (PagerDuty forwarding) can
 // prefix their own path.
@@ -105,9 +141,9 @@ func (q QueryResults) Validate(path string) []content.FieldError {
 		previous := math.Inf(-1)
 		for j, sample := range series.Samples {
 			samplePath := fmt.Sprintf("%s.samples.%d", seriesPath, j)
-			ts, value := sample.Timestamp, sample.Value
-			if !finite(ts) || !finite(value) {
-				add(samplePath, "must contain two finite numbers")
+			ts := sample.Timestamp
+			if !finite(ts) || (sample.Value != nil && !finite(*sample.Value)) {
+				add(samplePath, "must contain a finite timestamp and a finite number or null value")
 				continue
 			}
 			if ts < start || ts > end {

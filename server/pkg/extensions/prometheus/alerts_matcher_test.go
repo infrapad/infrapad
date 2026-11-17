@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -150,7 +151,7 @@ func TestAlertsMatcherQueryResultsLifecycle(t *testing.T) {
 	result := expandMatcher(t, registry, existing, `{"query_results": {
 		"start": "2026-10-25T09:58:00Z", "end": "2026-10-25T10:12:00Z", "step_seconds": 15,
 		"series": [{"labels": {"alertname": "HighLatency", "alertstate": "firing"},
-			"samples": [[1792922400.5, 1.25], [1792922415, 0]]}]
+			"samples": [[1792922400.5, 1.25], [1792922415, 0], [1792922430, null]]}]
 	}}`)
 	if len(result.Blocks) != 0 {
 		t.Fatalf("expected no generated children, got %d", len(result.Blocks))
@@ -163,17 +164,23 @@ func TestAlertsMatcherQueryResultsLifecycle(t *testing.T) {
 		t.Fatal("expansion mutated the existing record")
 	}
 
-	// Compact numeric pairs survive the stored record round trip.
+	// Compact pairs survive the stored record round trip, keeping numeric
+	// zero distinct from null.
 	reloaded := testutil.RoundTripRecord(t, registry, result.Record)
 	stored := matcherView(t, reloaded)
 	q := stored.QueryResults
+	wantSamples := []prometheus.Sample{
+		{Timestamp: 1792922400.5, Value: prometheus.Value(1.25)},
+		{Timestamp: 1792922415, Value: prometheus.Value(0)},
+		{Timestamp: 1792922430},
+	}
 	if q == nil || q.StepSeconds != 15 || len(q.Series) != 1 || q.Series[0].Labels["alertstate"] != "firing" ||
-		q.Series[0].Samples[0] != (prometheus.Sample{Timestamp: 1792922400.5, Value: 1.25}) || stored.Extras["team"] != "sre" {
+		!reflect.DeepEqual(q.Series[0].Samples, wantSamples) || stored.Extras["team"] != "sre" {
 		t.Fatalf("unexpected stored content: %#v", stored)
 	}
 	encoded, err := content.EncodeRecord(reloaded)
 	testutil.NoErr(t, err)
-	if !strings.Contains(string(encoded), `"samples":[[1792922400.5,1.25],[1792922415,0]]`) {
+	if !strings.Contains(string(encoded), `"samples":[[1792922400.5,1.25],[1792922415,0],[1792922430,null]]`) {
 		t.Fatalf("expected compact sample pairs, got %s", encoded)
 	}
 
@@ -187,7 +194,8 @@ func TestAlertsMatcherQueryResultsLifecycle(t *testing.T) {
 	}
 	updated, err := header.UpdateMarkdownHeader(reloaded, fields)
 	testutil.NoErr(t, err)
-	if matcherView(t, updated).QueryResults == nil {
+	if preserved := matcherView(t, updated).QueryResults; preserved == nil ||
+		!reflect.DeepEqual(preserved.Series[0].Samples, wantSamples) {
 		t.Fatal("unchanged header dropped the query results")
 	}
 	fields["extras"] = map[string]any{"team": "platform"}
@@ -239,6 +247,9 @@ func TestAlertsMatcherPayloadValidation(t *testing.T) {
 		{"missing samples", wrap(`[{"labels": {}}]`), "query_results.series.0.samples"},
 		{"missing labels", wrap(`[{"samples": []}]`), "query_results.series.0.labels"},
 		{"string value", wrap(`[{"labels": {}, "samples": [[1792922400, "NaN"]]}]`), "query_results.series.0.samples.0.1"},
+		{"null timestamp", wrap(`[{"labels": {}, "samples": [[null, 1]]}]`), "query_results.series.0.samples.0.0"},
+		{"null value out of bounds", wrap(`[{"labels": {}, "samples": [[1761386399.9, null]]}]`), "query_results.series.0.samples.0.0"},
+		{"null value not increasing", wrap(`[{"labels": {}, "samples": [[1792922460, 1], [1792922460, null]]}]`), "query_results.series.0.samples.1.0"},
 		{"triple", wrap(`[{"labels": {}, "samples": [[1792922400, 1, 2]]}]`), "query_results.series.0.samples.0"},
 		{"out of bounds", wrap(`[{"labels": {}, "samples": [[1761386399.9, 1]]}]`), "query_results.series.0.samples.0.0"},
 		{"not increasing", wrap(`[{"labels": {}, "samples": [[1792922460, 1], [1792922460, 0]]}]`), "query_results.series.0.samples.1.0"},
@@ -286,4 +297,24 @@ func matcherView(t *testing.T, record content.Record) prometheus.AlertsMatcher {
 	view, err := content.ItemView[prometheus.AlertsMatcher](record)
 	testutil.NoErr(t, err)
 	return view.ContentValue
+}
+
+// TestSampleJSONDecoding checks strict compact sample decoding: null stays
+// distinct from zero, malformed pairs are rejected rather than coerced, and
+// decoding into a reused sample replaces its previous value.
+func TestSampleJSONDecoding(t *testing.T) {
+	sample := prometheus.Sample{Timestamp: 1, Value: prometheus.Value(5)}
+	testutil.NoErr(t, json.Unmarshal([]byte(`[2.5, null]`), &sample))
+	if sample.Timestamp != 2.5 || sample.Value != nil {
+		t.Fatalf("expected a null value replacing the previous one, got %#v", sample)
+	}
+	testutil.NoErr(t, json.Unmarshal([]byte(`[3, 0]`), &sample))
+	if sample.Value == nil || *sample.Value != 0 {
+		t.Fatalf("expected numeric zero, got %#v", sample)
+	}
+	for _, raw := range []string{`null`, `[]`, `[1]`, `[1, 2, 3]`, `[null, 1]`, `[1, "2"]`, `[1, true]`, `["1", 2]`, `{}`} {
+		if err := json.Unmarshal([]byte(raw), &prometheus.Sample{}); err == nil {
+			t.Errorf("expected %s to be rejected", raw)
+		}
+	}
 }
