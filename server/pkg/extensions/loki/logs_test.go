@@ -42,7 +42,8 @@ func TestLogsSnapshots(t *testing.T) {
 	stored := logsView(t, testutil.RoundTripRecord(t, registry, record))
 	want := []loki.Stream{
 		{Labels: map[string]string{"pod": "etcd-1", "node": "n1"}, Entries: []loki.Entry{
-			{Timestamp: "1794567686759710823", Line: `{"msg": "b"}`, StructuredMetadata: map[string]string{"trace_id": "abc"}},
+			{Timestamp: "1794567686759710823", Line: `{"msg": "b"}`, StructuredMetadata: map[string]string{"trace_id": "abc"},
+				Message: "b", Fields: map[string]any{"msg": "b"}},
 			{Timestamp: "1794567420000000000"},
 			{Timestamp: "1794567420000000000"},
 		}},
@@ -105,6 +106,11 @@ func TestLogsSeverity(t *testing.T) {
 			testutil.NoErr(t, err)
 			record := ingest(t, registry, string(data))
 			stored := logsView(t, testutil.RoundTripRecord(t, registry, record))
+			for i := range stored.QueryResults.Streams[0].Entries {
+				// Derived message/fields are covered by TestLogsMessages.
+				stored.QueryResults.Streams[0].Entries[i].Message = ""
+				stored.QueryResults.Streams[0].Entries[i].Fields = nil
+			}
 			entry.Severity = tc.want
 			// All evidence and duplicates survive; only Severity is normalized.
 			logs.QueryResults.Streams[0].Entries = []loki.Entry{entry, entry}
@@ -118,6 +124,54 @@ func TestLogsSeverity(t *testing.T) {
 	testutil.NoErr(t, err)
 	logs := loki.Logs{Query: query, QueryResults: &loki.LogsResults{Streams: []loki.Stream{{Labels: map[string]string{}, Entries: []loki.Entry{{Timestamp: "1794567686759710823", Severity: "WARNING"}}}}}}
 	expectField(t, registry.ValidateRecord(content.NewItem(ct, time.Now(), logs)), "query_results.streams.0.entries.0.severity")
+}
+
+// TestLogsMessages checks message/fields derivation at the JSON boundary
+// shared by ingestion and older stored snapshots: submitted values are
+// ignored, the original line is untouched, and imprecise numbers become
+// strings.
+func TestLogsMessages(t *testing.T) {
+	registry, err := content.NewRegistry(loki.ContentTypes())
+	testutil.NoErr(t, err)
+	type messageCase struct {
+		name, line, message string
+		fields              string // expected fields as JSON; "" means none
+	}
+	cases := []messageCase{
+		{name: "msg wins", line: `{"msg":" a ","message":"b","level":"warn"}`, message: " a ", fields: `{"level":"warn","message":"b","msg":" a "}`},
+		{name: "blank msg falls through", line: `{"msg":"  ","message":"b"}`, message: "b", fields: `{"message":"b","msg":"  "}`},
+		{name: "nonstring msg falls through", line: `{"msg":1,"message":"b"}`, message: "b", fields: `{"message":"b","msg":1}`},
+		{name: "no message", line: `{"err":null,"ok":true}`, fields: `{"err":null,"ok":true}`},
+		{name: "nested and precision", line: `{"msg":"m","n":{"big":1794567686759710823,"safe":9007199254740993e0,"f":0.1,"e":1E3,"pi":3.14159265358979323846,"huge":1e400},"a":[1,-12345678901234567890,"x"]}`,
+			message: "m", fields: `{"a":[1,"-12345678901234567890","x"],"msg":"m","n":{"big":"1794567686759710823","e":1E3,"f":0.1,"huge":"1e400","pi":"3.14159265358979323846","safe":"9007199254740993e0"}}`},
+		{name: "plain text", line: "msg=plain"},
+		{name: "malformed", line: `{"msg":"x"`},
+		{name: "trailing data", line: `{"msg":"x"} {}`},
+		{name: "array", line: `[{"msg":"x"}]`},
+		{name: "scalar", line: `"msg"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			line, err := json.Marshal(tc.line)
+			testutil.NoErr(t, err)
+			// Bogus submitted overrides are recomputed from line.
+			record := ingest(t, registry, `{`+logsQuery+`, "query_results": {"streams": [{"labels": {}, "entries": [
+				{"timestamp": "1794567686759710823", "line": `+string(line)+`, "message": "bogus", "fields": {"x": 1}}]}]}}`)
+			entry := logsView(t, testutil.RoundTripRecord(t, registry, record)).QueryResults.Streams[0].Entries[0]
+			if entry.Line != tc.line || entry.Message != tc.message {
+				t.Fatalf("unexpected line/message: %q %q", entry.Line, entry.Message)
+			}
+			got := ""
+			if entry.Fields != nil {
+				data, err := json.Marshal(entry.Fields)
+				testutil.NoErr(t, err)
+				got = string(data)
+			}
+			if got != tc.fields {
+				t.Fatalf("unexpected fields:\n got %s\nwant %s", got, tc.fields)
+			}
+		})
+	}
 }
 
 // TestLogsValidation checks schema and semantic rejection with field paths

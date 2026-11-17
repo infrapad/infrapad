@@ -12,7 +12,7 @@ import { AngleDownIcon, AngleRightIcon } from "@patternfly/react-icons";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { LogRow, LokiLogsContent, LokiLogsQuery } from "./lokiLogsData.js";
-import { chronologicalRows, formatNsMillis, sortedPairs } from "./lokiLogsData.js";
+import { chronologicalRows, formatLogFields, formatNsMillis, sortedPairs } from "./lokiLogsData.js";
 import { formatUtcTimestamp } from "./timeSeriesChartData.js";
 
 /**
@@ -56,6 +56,7 @@ function LogRowItem({ row }: { row: LogRow }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [overflows, setOverflows] = useState(false);
+  const [originalOpen, setOriginalOpen] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
 
   // Offer Show more only when the clamped preview actually hides content.
@@ -67,11 +68,12 @@ function LogRowItem({ row }: { row: LogRow }) {
     const ro = new ResizeObserver(check);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [messageOpen, row.line]);
+  }, [messageOpen, row.message]);
 
   const shortTime = formatNsMillis(row.ns);
   const labels = sortedPairs(row.labels);
   const metadata = sortedPairs(row.structuredMetadata);
+  const fieldsYaml = useMemo(() => (row.fields ? formatLogFields(row.fields) : undefined), [row.fields]);
 
   return (
     <li
@@ -83,7 +85,7 @@ function LogRowItem({ row }: { row: LogRow }) {
         if (event.defaultPrevented || event.button !== 0 || event.detail > 1 ||
             event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         if (event.target instanceof Element &&
-            event.target.closest("button, a, input, textarea, select, [role='button']")) return;
+            event.target.closest("button, a, input, textarea, select, [role='button'], .infrapad-logs-details")) return;
         if (window.getSelection()?.isCollapsed === false) return;
         setDetailsOpen((v) => !v);
       }}
@@ -114,7 +116,7 @@ function LogRowItem({ row }: { row: LogRow }) {
             ref={messageRef}
             className={`infrapad-logs-message${messageOpen ? "" : " infrapad-logs-message-clamped"}`}
           >
-            {row.line}
+            {row.message}
           </div>
           {(overflows || messageOpen) && (
             <Button
@@ -139,6 +141,14 @@ function LogRowItem({ row }: { row: LogRow }) {
                 <DescriptionListDescription>{row.severity}</DescriptionListDescription>
               </DescriptionListGroup>
             )}
+            {fieldsYaml !== undefined && (
+              <DescriptionListGroup>
+                <DescriptionListTerm>Log fields</DescriptionListTerm>
+                <DescriptionListDescription>
+                  <pre className="infrapad-logs-yaml">{fieldsYaml}</pre>
+                </DescriptionListDescription>
+              </DescriptionListGroup>
+            )}
             <DescriptionListGroup>
               <DescriptionListTerm>Stream labels</DescriptionListTerm>
               <DescriptionListDescription>
@@ -154,6 +164,16 @@ function LogRowItem({ row }: { row: LogRow }) {
               </DescriptionListGroup>
             )}
           </DescriptionList>
+          {row.fields && (
+            <ExpandableSection
+              toggleText="Original line"
+              isExpanded={originalOpen}
+              onToggle={(_e, v) => setOriginalOpen(v)}
+              className="infrapad-logs-original"
+            >
+              <pre className="infrapad-logs-yaml">{row.line}</pre>
+            </ExpandableSection>
+          )}
         </div>
       )}
     </li>

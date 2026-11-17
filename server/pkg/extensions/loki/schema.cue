@@ -126,6 +126,19 @@ import "time"
 	structured_metadata?: {
 		[string]: string
 	} @go(StructuredMetadata,map[string]string)
+
+	// Message is the conventional display message derived on decoding from
+	// a JSON-object Line: the first nonblank string of top-level "msg", then
+	// "message". Omitted otherwise; submitted values are ignored.
+	message?: string @go(Message)
+
+	// Fields is the complete parsed JSON object of Line, derived on
+	// decoding (submitted values are ignored). Numbers that a JavaScript
+	// client could not represent exactly become decimal strings; Line keeps
+	// the exact original spelling. Omitted unless Line is a JSON object.
+	fields?: {
+		...
+	} @go(Fields,map[string]any)
 }
 
 // logsMdHeader is the structured Markdown header of Loki/Logs: the query

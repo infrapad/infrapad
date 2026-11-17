@@ -1,3 +1,5 @@
+import jsYaml from "js-yaml";
+
 // Network-independent types and helpers for rendering stored Loki/Logs
 // snapshots. Timestamps are decimal Unix-nanosecond strings and are handled
 // with BigInt so no precision is lost.
@@ -27,6 +29,13 @@ export interface LokiLogsEntry {
   line: string;
   severity?: LogSeverity;
   structured_metadata?: Record<string, string>;
+  /** Server-derived conventional message (`msg`, then `message`). */
+  message?: string;
+  /**
+   * Server-derived complete JSON object of `line`; numbers JavaScript cannot
+   * represent exactly arrive as decimal strings.
+   */
+  fields?: Record<string, unknown>;
 }
 
 export interface LokiLogsStream {
@@ -54,6 +63,10 @@ export interface LogRow {
   ns: bigint;
   timestamp: string;
   line: string;
+  /** Display text: the server-derived message, otherwise `line`. */
+  message: string;
+  /** Server-derived structured fields of `line`, when it is a JSON object. */
+  fields?: Record<string, unknown>;
   /** Canonical severity supplied by the server. */
   severity?: LogSeverity;
   labels: Record<string, string>;
@@ -78,6 +91,8 @@ export function chronologicalRows(results: LokiLogsResults | null | undefined): 
         ns: BigInt(entry.timestamp),
         timestamp: entry.timestamp,
         line: entry.line,
+        message: entry.message ?? entry.line,
+        fields: entry.fields,
         severity: entry.severity,
         labels: stream.labels ?? {},
         structuredMetadata: entry.structured_metadata,
@@ -117,4 +132,9 @@ export function sortedPairs(map: Record<string, string> | undefined): [string, s
   return Object.keys(map ?? {})
     .sort()
     .map((k) => [k, map![k]]);
+}
+
+/** Readable YAML of server-derived log fields (strings stay strings). */
+export function formatLogFields(fields: Record<string, unknown>): string {
+  return jsYaml.dump(fields, { lineWidth: -1, sortKeys: true }).trimEnd();
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LokiLogsResults } from "../lokiLogsData.js";
-import { chronologicalRows, formatNsExact, formatNsMillis } from "../lokiLogsData.js";
+import { chronologicalRows, formatLogFields, formatNsExact, formatNsMillis } from "../lokiLogsData.js";
 
 describe("chronologicalRows", () => {
   it("orders across streams by exact nanoseconds, keeping ties stable and duplicates", () => {
@@ -49,6 +49,22 @@ describe("per-entry severity", () => {
     expect(rows.map((r) => r.severity)).toEqual(["warn", undefined, "unknown"]);
     expect(rows[0].line).toBe(' { "level": "debug" } ');
     expect(JSON.stringify(results)).toBe(before);
+  });
+});
+
+describe("structured messages", () => {
+  it("displays the server message, falling back to the line, and formats fields as YAML", () => {
+    const fields = { msg: "applied", nested: { big: "1794567686759710823", ok: true }, a: [1, "x"] };
+    const rows = chronologicalRows({ streams: [{ labels: {}, entries: [
+      { timestamp: "0", line: '{"msg":"applied"}', message: "applied", fields },
+      { timestamp: "1", line: "plain <b>text</b>" },
+    ] }] });
+    expect(rows.map((r) => r.message)).toEqual(["applied", "plain <b>text</b>"]);
+    expect(rows[0].line).toBe('{"msg":"applied"}');
+    expect(rows[1].fields).toBeUndefined();
+    expect(formatLogFields(fields)).toBe(
+      ["a:", "  - 1", "  - x", "msg: applied", "nested:", "  big: '1794567686759710823'", "  ok: true"].join("\n"),
+    );
   });
 });
 

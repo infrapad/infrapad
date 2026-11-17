@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -107,6 +108,15 @@ type Entry struct {
 	Severity Severity `json:"severity,omitempty"`
 	// StructuredMetadata is optional per-entry structured metadata.
 	StructuredMetadata map[string]string `json:"structured_metadata,omitempty"`
+	// Message is the conventional display message derived on decoding from
+	// a JSON-object Line: the first nonblank string of top-level "msg", then
+	// "message". Omitted otherwise; submitted values are ignored.
+	Message string `json:"message,omitempty"`
+	// Fields is the complete parsed JSON object of Line, derived on
+	// decoding (submitted values are ignored). Numbers that a JavaScript
+	// client could not represent exactly become decimal strings; Line keeps
+	// the exact original spelling. Omitted unless Line is a JSON object.
+	Fields map[string]any `json:"fields,omitempty"`
 }
 
 // LogsType implements Loki/Logs. It renders an empty Markdown body; the
@@ -142,7 +152,14 @@ func (*LogsType) DecodeJSON(data json.RawMessage) (content.Content, error) {
 			stream := &logs.QueryResults.Streams[i]
 			for j := range stream.Entries {
 				entry := &stream.Entries[j]
-				entry.Severity = entrySeverity(*entry, stream.Labels)
+				// Parse once; reuse for severity, message, and fields.
+				object := parseLineObject(entry.Line)
+				entry.Severity = entrySeverity(*entry, object, stream.Labels)
+				entry.Message = conventionalMessage(object)
+				entry.Fields = nil
+				if object != nil {
+					entry.Fields = jsSafeObject(object)
+				}
 			}
 		}
 	}
@@ -250,24 +267,18 @@ func (l Logs) Validate() []content.FieldError {
 
 // entrySeverity runs at the JSON boundary, including decoding older stored
 // snapshots that lack Severity. It never modifies original evidence fields.
-func entrySeverity(entry Entry, labels map[string]string) Severity {
+// object is the parsed JSON-object Line (nil when Line is not one).
+func entrySeverity(entry Entry, object map[string]any, labels map[string]string) Severity {
 	if severity := normalizeSeverity(string(entry.Severity)); severity != "" {
 		return severity
 	}
 	if severity := mapSeverity(entry.StructuredMetadata); severity != "" {
 		return severity
 	}
-	// Inspect JSON only for severity; do not rewrite or pretty-print Line.
-	if strings.HasPrefix(strings.TrimSpace(entry.Line), "{") {
-		var fields map[string]json.RawMessage
-		if json.Unmarshal([]byte(entry.Line), &fields) == nil {
-			for _, key := range severityFields {
-				var raw string
-				if json.Unmarshal(fields[key], &raw) == nil {
-					if severity := normalizeSeverity(raw); severity != "" {
-						return severity
-					}
-				}
+	for _, key := range severityFields {
+		if raw, ok := object[key].(string); ok {
+			if severity := normalizeSeverity(raw); severity != "" {
+				return severity
 			}
 		}
 	}
@@ -309,6 +320,111 @@ func normalizeSeverity(raw string) Severity {
 	default:
 		return SeverityUnknown
 	}
+}
+
+// messageFields are the top-level keys holding the conventional message,
+// in precedence order.
+var messageFields = []string{"msg", "message"}
+
+// conventionalMessage returns the first nonblank string of messageFields,
+// with its original whitespace, or "" when none qualifies.
+func conventionalMessage(object map[string]any) string {
+	for _, key := range messageFields {
+		if raw, ok := object[key].(string); ok && strings.TrimSpace(raw) != "" {
+			return raw
+		}
+	}
+	return ""
+}
+
+// parseLineObject parses line as one top-level JSON object, keeping numbers
+// as json.Number. Plain text, malformed JSON, arrays, and scalars yield nil.
+func parseLineObject(line string) map[string]any {
+	if !strings.HasPrefix(strings.TrimSpace(line), "{") {
+		return nil
+	}
+	dec := json.NewDecoder(strings.NewReader(line))
+	dec.UseNumber()
+	var object map[string]any
+	if dec.Decode(&object) != nil || object == nil {
+		return nil
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil // trailing data
+	}
+	return object
+}
+
+// jsSafeObject returns a copy of object in which numbers that would lose
+// precision as JavaScript (float64) numbers are replaced by their original
+// decimal strings; other numbers keep their original spelling.
+func jsSafeObject(object map[string]any) map[string]any {
+	out := make(map[string]any, len(object))
+	for k, v := range object {
+		out[k] = jsSafeValue(v)
+	}
+	return out
+}
+
+func jsSafeValue(v any) any {
+	switch v := v.(type) {
+	case map[string]any:
+		return jsSafeObject(v)
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = jsSafeValue(item)
+		}
+		return out
+	case json.Number:
+		if exactFloat64(string(v)) {
+			return v
+		}
+		return string(v)
+	default:
+		return v
+	}
+}
+
+// exactFloat64 reports whether the JSON number s denotes exactly the value
+// a JavaScript client displays after parsing it, i.e. the shortest
+// round-trip decimal of its float64 equals s numerically.
+func exactFloat64(s string) bool {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return false // out of range
+	}
+	digits, exp := decimalParts(s)
+	gotDigits, gotExp := decimalParts(strconv.FormatFloat(f, 'e', -1, 64))
+	return digits == gotDigits && (digits == "" || exp == gotExp)
+}
+
+// decimalParts splits a decimal number into significant digits (no leading
+// or trailing zeros) and the power of ten of the last digit. Zero yields
+// ("", 0). The sign is ignored: callers compare a number with its own
+// float64 rendering, which keeps the sign.
+func decimalParts(s string) (string, int) {
+	mantissa, exp := s, 0
+	if i := strings.IndexAny(s, "eE"); i >= 0 {
+		mantissa = s[:i]
+		e, err := strconv.Atoi(strings.TrimPrefix(s[i+1:], "+"))
+		if err != nil {
+			return s, 0 // absurd exponent: never treated as exact
+		}
+		exp = e
+	}
+	mantissa = strings.TrimLeft(mantissa, "-")
+	if i := strings.IndexByte(mantissa, '.'); i >= 0 {
+		exp -= len(mantissa) - i - 1
+		mantissa = mantissa[:i] + mantissa[i+1:]
+	}
+	mantissa = strings.TrimLeft(mantissa, "0")
+	trimmed := strings.TrimRight(mantissa, "0")
+	exp += len(mantissa) - len(trimmed)
+	if trimmed == "" {
+		return "", 0
+	}
+	return trimmed, exp
 }
 
 func isHTTPURL(raw string) bool {

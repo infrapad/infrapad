@@ -412,6 +412,17 @@
     margin: var(--pf-t--global--spacer--xs) 0 var(--pf-t--global--spacer--sm) var(--pf-t--global--spacer--lg);
 }
 
+.infrapad-logs-yaml {
+    margin: 0;
+    font-family: var(--pf-t--global--font--family--mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.infrapad-logs-original {
+    margin-top: var(--pf-t--global--spacer--xs);
+}
+
 .infrapad-logs-kv {
     margin: 0;
 }
