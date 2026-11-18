@@ -7,7 +7,7 @@ built-in extensions as examples:
 | Package | Types | Shows |
 |---------|-------|-------|
 | `server/pkg/extensions/core` | `Core/Markdown` | Ordinary editable block: body and header editing. |
-| `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher`, `Prometheus/TimeSeriesChart` | Structured header-only blocks with an empty body. AlertsMatcher is an expander without children that stores submitted `query_results` in the primary record only. TimeSeriesChart stores a query with an optional results snapshot uploaded through ordinary block writes, with semantic validation (`ContentValidator`) and in-place result refreshes (`RevisionPolicy`). |
+| `server/pkg/extensions/prometheus` | `Prometheus/AlertsMatcher`, `Prometheus/TimeSeriesChart` | AlertsMatcher is a structured header-only block with an empty body and an expander without children that stores submitted `query_results` in the primary record only. TimeSeriesChart (like `Loki/Logs`) stores a query with an optional results snapshot uploaded through ordinary block writes, with an editable Markdown `text` description body (`MarkdownUpdater`), semantic validation (`ContentValidator`) and in-place result refreshes (`RevisionPolicy`). |
 | `server/pkg/extensions/aiagent` | `AIAgent/Message` | Shared type emitted by other extensions, presentation, companion schema constraints. |
 | `server/pkg/extensions/slack` | `Slack/Thread`, `Slack/Conversation` | Expandable primary with a transient payload, a groupable type, and output of another extension's type. |
 | `server/pkg/extensions/pagerduty` | `PagerDuty/Incident`, `PagerDuty/Timeline` | Read-only generated Markdown `text` body, header reference locked after enrichment, open JSON inside a strict payload; emits the registered `Prometheus/AlertsMatcher` type (injected via `ContentTypes(matcherType)`). |
@@ -84,7 +84,7 @@ checks for them with type assertions.
 | Interface | Purpose | Example |
 |-----------|---------|---------|
 | `content.MarkdownHeader` | Project selected fields into the `yaml infrapad` header, and apply edited header fields. | `Core/Markdown`, `Prometheus/AlertsMatcher`, `Slack/Thread`… |
-| `content.MarkdownUpdater` | Apply an edited Markdown body (`UpdateMarkdown(existing, body)`). | `Core/Markdown`, `AIAgent/Message` |
+| `content.MarkdownUpdater` | Apply an edited Markdown body (`UpdateMarkdown(existing, body)`). | `Core/Markdown`, `AIAgent/Message`, `Prometheus/TimeSeriesChart`, `Loki/Logs` |
 | `content.Presenter` | Fixed UI cards: title, Markdown, labeled fields, labeled links. | `AIAgent/Message`, `Slack/Trhead`… |
 | `content.Expander` | Turn a transient payload into the complete desired generated output and/or updated primary state. | `Slack/Thread`, `Prometheus/AlertsMatcher` |
 | `content.GroupableContentType` | Store multiple keyed items in one block that the host groups. | `Slack/Conversation` |

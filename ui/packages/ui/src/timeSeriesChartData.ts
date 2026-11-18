@@ -10,6 +10,8 @@ export interface TimeSeriesQuery {
   expression: string;
   /** Optional Prometheus base URL, stored for external tooling only. */
   source_url?: string;
+  /** Optional opaque producer-owned datasource identifier. */
+  datasource?: string;
   /** RFC3339 query start. */
   start: string;
   /** RFC3339 query end. */
@@ -26,6 +28,8 @@ export interface TimeSeriesResults {
 export interface TimeSeriesChartContent {
   query: TimeSeriesQuery;
   title?: string;
+  /** Optional Markdown description. */
+  text?: string;
   unit?: string;
   /** Absent/null when no snapshot was submitted (or it was cleared). */
   query_results?: TimeSeriesResults | null;

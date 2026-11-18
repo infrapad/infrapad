@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { isoToUnix } from "./alertsData.js";
 import { AXIS_STYLE, GRID_STYLE, SERIES_COLORS, TEXT_STYLE } from "./chartTheme.js";
+import { QueryExpression, SnapshotDescription } from "./snapshotBlockParts.js";
 import type { TimeSeriesChartContent, TimeSeriesQuery } from "./timeSeriesChartData.js";
 import {
   fitYDomain,
@@ -91,7 +92,9 @@ export default function TimeSeriesChart({ content }: { content: TimeSeriesChartC
           {title}
         </Title>
       )}
+      <QueryExpression expression={query.expression} />
       {body}
+      <SnapshotDescription text={content.text} />
       <QueryDetails query={query} />
     </div>
   );
@@ -234,18 +237,12 @@ function QueryDetails({ query }: { query: TimeSeriesQuery }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <ExpandableSection
-      toggleText="Query details"
+      toggleText="Details"
       isExpanded={expanded}
       onToggle={(_e, v) => setExpanded(v)}
       className="infrapad-timeseries-query"
     >
       <DescriptionList isHorizontal isCompact>
-        <DescriptionListGroup>
-          <DescriptionListTerm>Expression</DescriptionListTerm>
-          <DescriptionListDescription>
-            <code className="infrapad-timeseries-expression">{query.expression}</code>
-          </DescriptionListDescription>
-        </DescriptionListGroup>
         <DescriptionListGroup>
           <DescriptionListTerm>Window</DescriptionListTerm>
           <DescriptionListDescription>
@@ -262,6 +259,14 @@ function QueryDetails({ query }: { query: TimeSeriesQuery }) {
           <DescriptionListGroup>
             <DescriptionListTerm>Source</DescriptionListTerm>
             <DescriptionListDescription>{query.source_url}</DescriptionListDescription>
+          </DescriptionListGroup>
+        )}
+        {query.datasource && (
+          <DescriptionListGroup>
+            <DescriptionListTerm>Datasource</DescriptionListTerm>
+            <DescriptionListDescription>
+              <code>{query.datasource}</code>
+            </DescriptionListDescription>
           </DescriptionListGroup>
         )}
       </DescriptionList>

@@ -38,6 +38,10 @@ type Logs struct {
 	Timestamp *time.Time `json:"timestamp,omitempty"`
 	// Title is an optional free-form display title.
 	Title string `json:"title,omitempty"`
+	// Text is the optional Markdown description of the block (what the
+	// query shows and how it relates to the investigation). It is the
+	// editable Markdown body; empty means no description.
+	Text string `json:"text,omitempty"`
 	// Query is the log query the stored results belong to.
 	Query LogsQuery `json:"query"`
 	// QueryResults is the stored snapshot of the query's results; omitted
@@ -62,10 +66,10 @@ type LogsQuery struct {
 	// SourceURL is the optional absolute HTTP(S) URL of the source, stored
 	// for provenance only (never contacted).
 	SourceURL string `json:"source_url,omitempty"`
-	// DatasourceUID is the optional Grafana datasource UID.
-	DatasourceUID string `json:"datasource_uid,omitempty"`
-	// DatasourceName is the optional Grafana datasource name.
-	DatasourceName string `json:"datasource_name,omitempty"`
+	// Datasource is an optional opaque datasource identifier owned by the
+	// producer (e.g. for mapping back to its source); InfraPad neither
+	// interprets nor resolves it.
+	Datasource string `json:"datasource,omitempty"`
 }
 
 // LogsResults is a stored snapshot of query results. An explicit empty
@@ -123,9 +127,9 @@ type Entry struct {
 	Fields map[string]any `json:"fields,omitempty"`
 }
 
-// LogsType implements Loki/Logs. It renders an empty Markdown body; the
-// query, title and optional timestamp form the structured Markdown header,
-// while results stay hidden. Metadata changes create revisions; results-only
+// LogsType implements Loki/Logs. Its Markdown body is the editable Text
+// description; the query, title and optional timestamp form the structured
+// Markdown header, while results stay hidden. Metadata changes create revisions; results-only
 // changes with unchanged event time refresh in place (content.RevisionPolicy).
 type LogsType struct {
 	content.TypedMarkdownRenderer[content.Item[Logs]]
@@ -135,7 +139,7 @@ type LogsType struct {
 // NewLogsType constructs the Loki/Logs implementation.
 func NewLogsType() *LogsType {
 	return &LogsType{
-		TypedMarkdownRenderer:   content.ItemMarkdown(func(content.Item[Logs]) (string, error) { return "", nil }),
+		TypedMarkdownRenderer:   content.ItemMarkdown(func(item content.Item[Logs]) (string, error) { return item.ContentValue.Text, nil }),
 		TypedItemMarkdownHeader: content.ItemMarkdownHeader(projectLogsMdHeader, replaceLogsMdHeader),
 	}
 }
@@ -170,6 +174,18 @@ func (*LogsType) DecodeJSON(data json.RawMessage) (content.Content, error) {
 	return logs, nil
 }
 
+// UpdateMarkdown implements content.MarkdownUpdater: the body replaces
+// Text; the query, results and record metadata are preserved.
+func (*LogsType) UpdateMarkdown(existing content.Record, body string) (content.Record, error) {
+	item, err := content.ItemView[Logs](existing)
+	if err != nil {
+		return nil, err
+	}
+	logs := item.ContentValue
+	logs.Text = body
+	return content.WithContent(existing, logs)
+}
+
 // ValidateContent implements content.ContentValidator (see Validate).
 func (*LogsType) ValidateContent(value content.Content) []content.FieldError {
 	logs, err := content.ContentValue[Logs](value)
@@ -180,7 +196,7 @@ func (*LogsType) ValidateContent(value content.Content) []content.FieldError {
 }
 
 // ShouldCreateRevision implements content.RevisionPolicy: changes of the
-// query, title or explicit timestamp create a revision; results-only changes
+// query, title, text or explicit timestamp create a revision; results-only changes
 // are stored in place unless the host detects a changed event timestamp.
 func (*LogsType) ShouldCreateRevision(previous, next content.Record) (bool, error) {
 	before, err := content.ItemView[Logs](previous)
@@ -214,19 +230,19 @@ func (l Logs) EventTimestamp() time.Time {
 }
 
 // SameMetadata reports whether l and other have the same revision-worthy
-// metadata: query, title, and explicit timestamp (compared as an instant).
+// metadata: query, title, text, and explicit timestamp (compared as an
+// instant).
 func (l Logs) SameMetadata(other Logs) bool {
 	sameTimestamp := l.Timestamp == nil && other.Timestamp == nil ||
 		l.Timestamp != nil && other.Timestamp != nil && l.Timestamp.Equal(*other.Timestamp)
-	return l.Query.Same(other.Query) && l.Title == other.Title && sameTimestamp
+	return l.Query.Same(other.Query) && l.Title == other.Title && l.Text == other.Text && sameTimestamp
 }
 
 // Same reports whether q and other define the same query: strings equal as
 // supplied (no normalization), bounds equal as instants, and equal limits.
 func (q LogsQuery) Same(other LogsQuery) bool {
 	return q.Expression == other.Expression && q.Start.Equal(other.Start) && q.End.Equal(other.End) &&
-		q.Limit == other.Limit && q.SourceURL == other.SourceURL &&
-		q.DatasourceUID == other.DatasourceUID && q.DatasourceName == other.DatasourceName
+		q.Limit == other.Limit && q.SourceURL == other.SourceURL && q.Datasource == other.Datasource
 }
 
 // decimalInteger matches a base-10 integer without a plus sign or spaces.
@@ -461,7 +477,7 @@ func isHTTPURL(raw string) bool {
 }
 
 // logsMdHeader is the structured Markdown header of Loki/Logs: the query,
-// title and optional timestamp (the body is empty; results are not exposed).
+// title and optional timestamp (Text is the body; results are not exposed).
 type logsMdHeader struct {
 	Timestamp *time.Time `json:"timestamp,omitempty"`
 	Title     string     `json:"title,omitempty"`
@@ -474,9 +490,10 @@ func projectLogsMdHeader(l Logs) logsMdHeader {
 
 // replaceLogsMdHeader applies the header, preserving the stored results
 // only when the query is unchanged (title/timestamp edits keep them; any
-// query change, including provenance, clears them).
+// query change, including provenance or datasource, clears them). The
+// body-owned Text is always preserved.
 func replaceLogsMdHeader(existing Logs, h logsMdHeader) Logs {
-	l := Logs{Timestamp: h.Timestamp, Title: h.Title, Query: h.Query}
+	l := Logs{Timestamp: h.Timestamp, Title: h.Title, Text: existing.Text, Query: h.Query}
 	if existing.Query.Same(h.Query) {
 		l.QueryResults = existing.QueryResults
 	}

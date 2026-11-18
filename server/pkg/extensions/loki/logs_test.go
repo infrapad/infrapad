@@ -13,7 +13,7 @@ import (
 )
 
 const logsQuery = `"query": {"expression": "{app=\"etcd\"}", "start": "2026-11-13T10:57:00Z",
-	"end": "2026-11-13T11:03:00Z", "limit": 50, "datasource_uid": "P19E", "datasource_name": "production-logs"}`
+	"end": "2026-11-13T11:03:00Z", "limit": 50, "datasource": "P19E"}`
 
 // TestLogsSnapshots checks host-style ingestion of absent, empty, and
 // populated snapshots and a lossless stored-record round trip.
@@ -22,7 +22,7 @@ func TestLogsSnapshots(t *testing.T) {
 	testutil.NoErr(t, err)
 
 	absent := logsView(t, ingest(t, registry, `{`+logsQuery+`, "title": "etcd"}`))
-	if absent.QueryResults != nil || absent.Title != "etcd" || absent.Query.Limit != 50 || absent.Query.DatasourceUID != "P19E" {
+	if absent.QueryResults != nil || absent.Title != "etcd" || absent.Query.Limit != 50 || absent.Query.Datasource != "P19E" {
 		t.Fatalf("unexpected logs without snapshot: %#v", absent)
 	}
 	if cleared := logsView(t, ingest(t, registry, `{`+logsQuery+`, "query_results": null}`)); cleared.QueryResults != nil {
@@ -230,16 +230,22 @@ func TestLogsValidation(t *testing.T) {
 func TestLogsMarkdownAndRevisions(t *testing.T) {
 	registry, err := content.NewRegistry(loki.ContentTypes())
 	testutil.NoErr(t, err)
-	record := ingest(t, registry, `{`+logsQuery+`, "title": "etcd", "query_results": {"streams": [
+	record := ingest(t, registry, `{`+logsQuery+`, "title": "etcd", "text": "Leader *changes*", "query_results": {"streams": [
 		{"labels": {}, "entries": [{"timestamp": "1794567686759710823", "line": "x"}]}]}}`)
 	logsType := record.ContentType()
 	header := logsType.(content.MarkdownHeader)
 	policy := logsType.(content.RevisionPolicy)
-	if _, ok := logsType.(content.MarkdownUpdater); ok {
-		t.Fatal("Loki/Logs must not support Markdown body edits")
+	if body, err := logsType.RenderMarkdown(record); err != nil || body != "Leader *changes*" {
+		t.Fatalf("expected the text as body, got %q (%v)", body, err)
 	}
-	if body, err := logsType.RenderMarkdown(record); err != nil || body != "" {
-		t.Fatalf("expected an empty body, got %q (%v)", body, err)
+	bodyEdited, err := logsType.(content.MarkdownUpdater).UpdateMarkdown(record, "New **text**")
+	testutil.NoErr(t, err)
+	testutil.NoErr(t, registry.ValidateRecord(bodyEdited))
+	if l := logsView(t, bodyEdited); l.Text != "New **text**" || l.QueryResults == nil || l.Title != "etcd" {
+		t.Fatalf("body edit lost content: %#v", l)
+	}
+	if create, err := policy.ShouldCreateRevision(record, bodyEdited); err != nil || !create {
+		t.Fatalf("text edit must create a revision (%v)", err)
 	}
 
 	fields, err := header.MarkdownHeader(record)
@@ -256,8 +262,8 @@ func TestLogsMarkdownAndRevisions(t *testing.T) {
 		testutil.NoErr(t, registry.ValidateRecord(updated))
 		return logsView(t, updated)
 	}
-	if edit(func(map[string]any, map[string]any) {}).QueryResults == nil {
-		t.Fatal("unchanged header dropped the snapshot")
+	if l := edit(func(map[string]any, map[string]any) {}); l.QueryResults == nil || l.Text != "Leader *changes*" {
+		t.Fatalf("unchanged header dropped the snapshot or text: %#v", l)
 	}
 	if l := edit(func(f, _ map[string]any) { f["title"] = "Renamed" }); l.QueryResults == nil || l.Title != "Renamed" {
 		t.Fatalf("title edit dropped the snapshot: %#v", l)
@@ -265,25 +271,25 @@ func TestLogsMarkdownAndRevisions(t *testing.T) {
 	if edit(func(_, q map[string]any) { q["start"] = "2026-11-13T11:57:00+01:00" }).QueryResults == nil {
 		t.Fatal("equivalent start instant dropped the snapshot")
 	}
-	if l := edit(func(_, q map[string]any) { q["datasource_name"] = "other" }); l.QueryResults != nil {
-		t.Fatalf("provenance edit kept the stale snapshot: %#v", l)
+	if l := edit(func(_, q map[string]any) { q["datasource"] = "other" }); l.QueryResults != nil || l.Text == "" {
+		t.Fatalf("datasource edit kept the stale snapshot: %#v", l)
 	}
 	if l := edit(func(_, q map[string]any) { q["limit"] = 100 }); l.QueryResults != nil || l.Query.Limit != 100 {
 		t.Fatalf("limit edit kept the stale snapshot: %#v", l)
 	}
 
 	const otherQuery = `"query": {"expression": "{app=\"etcd\"}", "start": "2026-11-13T11:57:00+01:00",
-		"end": "2026-11-13T11:03:00Z", "limit": 50, "datasource_uid": "P19E", "datasource_name": "production-logs"`
+		"end": "2026-11-13T11:03:00Z", "limit": 50, "datasource": "P19E"`
 	cases := []struct {
 		name, next string
 		revision   bool
 	}{
-		{"results refresh", `{` + logsQuery + `, "title": "etcd", "query_results": {"streams": []}}`, false},
-		{"results cleared", `{` + logsQuery + `, "title": "etcd"}`, false},
-		{"equivalent bounds", `{` + otherQuery + `}, "title": "etcd"}`, false},
+		{"results refresh", `{` + logsQuery + `, "title": "etcd", "text": "Leader *changes*", "query_results": {"streams": []}}`, false},
+		{"results cleared", `{` + logsQuery + `, "title": "etcd", "text": "Leader *changes*"}`, false},
+		{"equivalent bounds", `{` + otherQuery + `}, "title": "etcd", "text": "Leader *changes*"}`, false},
 		{"title change", `{` + logsQuery + `, "title": "other"}`, true},
 		{"provenance change", `{"query": {"expression": "{app=\"etcd\"}", "start": "2026-11-13T10:57:00Z",
-			"end": "2026-11-13T11:03:00Z", "limit": 50, "datasource_uid": "P19E"}, "title": "etcd"}`, true},
+			"end": "2026-11-13T11:03:00Z", "limit": 50}, "title": "etcd", "text": "Leader *changes*"}`, true},
 	}
 	for _, tc := range cases {
 		create, err := policy.ShouldCreateRevision(record, ingest(t, registry, tc.next))

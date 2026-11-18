@@ -13,6 +13,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { LogRow, LokiLogsContent, LokiLogsQuery } from "./lokiLogsData.js";
 import { chronologicalRows, formatLogFields, formatNsMillis, sortedPairs } from "./lokiLogsData.js";
+import { QueryExpression, SnapshotDescription } from "./snapshotBlockParts.js";
 import { formatUtcTimestamp } from "./timeSeriesChartData.js";
 
 /**
@@ -46,7 +47,9 @@ export default function LokiLogs({ content }: { content: LokiLogsContent }) {
           {title}
         </Title>
       )}
+      <QueryExpression expression={query.expression} />
       {body}
+      <SnapshotDescription text={content.text} />
       <QueryDetails query={query} />
     </div>
   );
@@ -199,18 +202,12 @@ function QueryDetails({ query }: { query: LokiLogsQuery }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <ExpandableSection
-      toggleText="Query details"
+      toggleText="Details"
       isExpanded={expanded}
       onToggle={(_e, v) => setExpanded(v)}
       className="infrapad-logs-query"
     >
       <DescriptionList isHorizontal isCompact>
-        <DescriptionListGroup>
-          <DescriptionListTerm>Expression</DescriptionListTerm>
-          <DescriptionListDescription>
-            <code className="infrapad-timeseries-expression">{query.expression}</code>
-          </DescriptionListDescription>
-        </DescriptionListGroup>
         <DescriptionListGroup>
           <DescriptionListTerm>Window</DescriptionListTerm>
           <DescriptionListDescription>
@@ -229,17 +226,11 @@ function QueryDetails({ query }: { query: LokiLogsQuery }) {
             <DescriptionListDescription>{query.source_url}</DescriptionListDescription>
           </DescriptionListGroup>
         )}
-        {query.datasource_name && (
+        {query.datasource && (
           <DescriptionListGroup>
-            <DescriptionListTerm>Grafana datasource</DescriptionListTerm>
-            <DescriptionListDescription>{query.datasource_name}</DescriptionListDescription>
-          </DescriptionListGroup>
-        )}
-        {query.datasource_uid && (
-          <DescriptionListGroup>
-            <DescriptionListTerm>Datasource UID</DescriptionListTerm>
+            <DescriptionListTerm>Datasource</DescriptionListTerm>
             <DescriptionListDescription>
-              <code>{query.datasource_uid}</code>
+              <code>{query.datasource}</code>
             </DescriptionListDescription>
           </DescriptionListGroup>
         )}

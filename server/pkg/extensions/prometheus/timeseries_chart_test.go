@@ -85,16 +85,21 @@ func TestTimeSeriesChartValidation(t *testing.T) {
 func TestTimeSeriesChartMarkdownAndRevisions(t *testing.T) {
 	registry, err := content.NewRegistry(prometheus.ContentTypes())
 	testutil.NoErr(t, err)
-	record := ingestChart(t, registry, `{`+chartQuery+`, "title": "Rate", "query_results": {"series": [
+	record := ingestChart(t, registry, `{`+chartQuery+`, "title": "Rate", "text": "Desc", "query_results": {"series": [
 		{"labels": {}, "samples": [[1792922400, 1]]}]}}`)
 	chartType := record.ContentType()
 	header := chartType.(content.MarkdownHeader)
 	policy := chartType.(content.RevisionPolicy)
-	if _, ok := chartType.(content.MarkdownUpdater); ok {
-		t.Fatal("Prometheus/TimeSeriesChart must not support Markdown body edits")
+	if body, err := chartType.RenderMarkdown(record); err != nil || body != "Desc" {
+		t.Fatalf("expected the text as body, got %q (%v)", body, err)
 	}
-	if body, err := chartType.RenderMarkdown(record); err != nil || body != "" {
-		t.Fatalf("expected an empty body, got %q (%v)", body, err)
+	bodyEdited, err := chartType.(content.MarkdownUpdater).UpdateMarkdown(record, "Other")
+	testutil.NoErr(t, err)
+	if c := chartView(t, bodyEdited); c.Text != "Other" || c.QueryResults == nil || c.Title != "Rate" {
+		t.Fatalf("body edit lost content: %#v", c)
+	}
+	if create, err := policy.ShouldCreateRevision(record, bodyEdited); err != nil || !create {
+		t.Fatalf("text edit must create a revision (%v)", err)
 	}
 
 	fields, err := header.MarkdownHeader(record)
@@ -111,14 +116,17 @@ func TestTimeSeriesChartMarkdownAndRevisions(t *testing.T) {
 		testutil.NoErr(t, registry.ValidateRecord(updated))
 		return chartView(t, updated)
 	}
-	if edit(func(map[string]any, map[string]any) {}).QueryResults == nil {
-		t.Fatal("unchanged header dropped the snapshot")
+	if c := edit(func(map[string]any, map[string]any) {}); c.QueryResults == nil || c.Text != "Desc" {
+		t.Fatalf("unchanged header dropped the snapshot or text: %#v", c)
 	}
 	if c := edit(func(f, _ map[string]any) { f["title"] = "Renamed"; f["unit"] = "req/s" }); c.QueryResults == nil || c.Unit != "req/s" {
 		t.Fatalf("title/unit edit dropped the snapshot: %#v", c)
 	}
 	if edit(func(_, q map[string]any) { q["start"] = "2026-10-25T12:00:00+02:00" }).QueryResults == nil {
 		t.Fatal("equivalent start instant dropped the snapshot")
+	}
+	if c := edit(func(_, q map[string]any) { q["datasource"] = "prom-1" }); c.QueryResults != nil || c.Text != "Desc" {
+		t.Fatalf("datasource edit kept the stale snapshot or lost text: %#v", c)
 	}
 	if c := edit(func(_, q map[string]any) { q["step_seconds"] = 30 }); c.QueryResults != nil || c.Query.StepSeconds != 30 {
 		t.Fatalf("query edit kept the stale snapshot: %#v", c)
@@ -134,14 +142,14 @@ func TestTimeSeriesChartMarkdownAndRevisions(t *testing.T) {
 		name, next string
 		revision   bool
 	}{
-		{"results refresh", `{` + chartQuery + `, "title": "Rate", "query_results": {"series": []}}`, false},
-		{"results cleared", `{` + chartQuery + `, "title": "Rate"}`, false},
-		{"title change", `{` + chartQuery + `, "title": "Other"}`, true},
-		{"unit added", `{` + chartQuery + `, "title": "Rate", "unit": "s"}`, true},
+		{"results refresh", `{` + chartQuery + `, "title": "Rate", "text": "Desc", "query_results": {"series": []}}`, false},
+		{"results cleared", `{` + chartQuery + `, "title": "Rate", "text": "Desc"}`, false},
+		{"title change", `{` + chartQuery + `, "title": "Other", "text": "Desc"}`, true},
+		{"unit added", `{` + chartQuery + `, "title": "Rate", "text": "Desc", "unit": "s"}`, true},
 		{"expression change", `{"query": {"expression": "up", "source_url": "https://prom.example.com",
-			"start": "2026-10-25T10:00:00Z", "end": "2026-10-25T10:10:00Z", "step_seconds": 60}, "title": "Rate"}`, true},
+			"start": "2026-10-25T10:00:00Z", "end": "2026-10-25T10:10:00Z", "step_seconds": 60}, "title": "Rate", "text": "Desc"}`, true},
 		{"equivalent bounds", `{"query": {"expression": "rate(x[5m])", "source_url": "https://prom.example.com",
-			"start": "2026-10-25T12:00:00+02:00", "end": "2026-10-25T10:10:00Z", "step_seconds": 60}, "title": "Rate"}`, false},
+			"start": "2026-10-25T12:00:00+02:00", "end": "2026-10-25T10:10:00Z", "step_seconds": 60}, "title": "Rate", "text": "Desc"}`, false},
 	}
 	for _, tc := range cases {
 		if got := decide(tc.next); got != tc.revision {

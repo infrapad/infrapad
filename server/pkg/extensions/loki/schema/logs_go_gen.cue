@@ -23,6 +23,11 @@ import "time"
 	// Title is an optional free-form display title.
 	title?: string @go(Title)
 
+	// Text is the optional Markdown description of the block (what the
+	// query shows and how it relates to the investigation). It is the
+	// editable Markdown body; empty means no description.
+	text?: string @go(Text)
+
 	// Query is the log query the stored results belong to.
 	query: #LogsQuery @go(Query)
 
@@ -53,11 +58,10 @@ import "time"
 	// for provenance only (never contacted).
 	source_url?: string @go(SourceURL)
 
-	// DatasourceUID is the optional Grafana datasource UID.
-	datasource_uid?: string @go(DatasourceUID)
-
-	// DatasourceName is the optional Grafana datasource name.
-	datasource_name?: string @go(DatasourceName)
+	// Datasource is an optional opaque datasource identifier owned by the
+	// producer (e.g. for mapping back to its source); InfraPad neither
+	// interprets nor resolves it.
+	datasource?: string @go(Datasource)
 }
 
 // LogsResults is a stored snapshot of query results. An explicit empty
@@ -130,7 +134,7 @@ import "time"
 }
 
 // logsMdHeader is the structured Markdown header of Loki/Logs: the query,
-// title and optional timestamp (the body is empty; results are not exposed).
+// title and optional timestamp (Text is the body; results are not exposed).
 _#logsMdHeader: {
 	timestamp?: null | time.Time @go(Timestamp,*time.Time)
 	title?:     string           @go(Title)

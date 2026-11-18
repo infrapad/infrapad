@@ -24,6 +24,11 @@ import "time"
 	// Title is an optional free-form display title.
 	title?: string @go(Title)
 
+	// Text is the optional Markdown description of the block (what the
+	// query shows and how it relates to the investigation). It is the
+	// editable Markdown body; empty means no description.
+	text?: string @go(Text)
+
 	// Unit is an optional free-form Y-axis display label (not a conversion
 	// instruction).
 	unit?: string @go(Unit)
@@ -43,6 +48,11 @@ import "time"
 	// SourceURL is the optional absolute HTTP(S) URL of the Prometheus
 	// server, stored for external tooling only (never contacted).
 	source_url?: string @go(SourceURL)
+
+	// Datasource is an optional opaque datasource identifier owned by the
+	// producer (e.g. for mapping back to its source); InfraPad neither
+	// interprets nor resolves it.
+	datasource?: string @go(Datasource)
 
 	// Start is the inclusive query start.
 	start: time.Time @go(Start)
@@ -65,7 +75,7 @@ import "time"
 
 // timeSeriesChartMdHeader is the structured Markdown header of
 // Prometheus/TimeSeriesChart: query metadata, title, unit and optional
-// timestamp (the body is empty; results are not exposed).
+// timestamp (Text is the body; results are not exposed).
 _#timeSeriesChartMdHeader: {
 	timestamp?: null | time.Time @go(Timestamp,*time.Time)
 	query:      #TimeSeriesQuery @go(Query)

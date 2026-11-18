@@ -16,8 +16,8 @@ export interface LokiLogsQuery {
   /** Requested entry limit; not a completeness guarantee. */
   limit: number;
   source_url?: string;
-  datasource_uid?: string;
-  datasource_name?: string;
+  /** Optional opaque producer-owned datasource identifier. */
+  datasource?: string;
 }
 
 /** Canonical server-normalized values; keep in sync with loki.Severity. */
@@ -51,6 +51,8 @@ export interface LokiLogsResults {
 /** Content of a Loki/Logs block. */
 export interface LokiLogsContent {
   title?: string;
+  /** Optional Markdown description. */
+  text?: string;
   query: LokiLogsQuery;
   /** Absent/null when no snapshot was submitted (or it was cleared). */
   query_results?: LokiLogsResults | null;

@@ -25,6 +25,10 @@ type TimeSeriesChart struct {
 	Query TimeSeriesQuery `json:"query"`
 	// Title is an optional free-form display title.
 	Title string `json:"title,omitempty"`
+	// Text is the optional Markdown description of the block (what the
+	// query shows and how it relates to the investigation). It is the
+	// editable Markdown body; empty means no description.
+	Text string `json:"text,omitempty"`
 	// Unit is an optional free-form Y-axis display label (not a conversion
 	// instruction).
 	Unit string `json:"unit,omitempty"`
@@ -42,6 +46,10 @@ type TimeSeriesQuery struct {
 	// SourceURL is the optional absolute HTTP(S) URL of the Prometheus
 	// server, stored for external tooling only (never contacted).
 	SourceURL string `json:"source_url,omitempty"`
+	// Datasource is an optional opaque datasource identifier owned by the
+	// producer (e.g. for mapping back to its source); InfraPad neither
+	// interprets nor resolves it.
+	Datasource string `json:"datasource,omitempty"`
 	// Start is the inclusive query start.
 	Start time.Time `json:"start"`
 	// End is the inclusive query end; it must be after Start.
@@ -59,8 +67,8 @@ type TimeSeriesResults struct {
 	Series []Series `json:"series"`
 }
 
-// TimeSeriesChartType implements Prometheus/TimeSeriesChart. It renders
-// an empty Markdown body; the query metadata, title, unit and optional
+// TimeSeriesChartType implements Prometheus/TimeSeriesChart. Its Markdown
+// body is the editable Text description; the query metadata, title, unit and optional
 // timestamp form the structured Markdown header, while results stay hidden.
 // Metadata changes create revisions; results-only changes with unchanged
 // event time refresh in place (content.RevisionPolicy).
@@ -73,7 +81,7 @@ type TimeSeriesChartType struct {
 // implementation.
 func NewTimeSeriesChartType() *TimeSeriesChartType {
 	return &TimeSeriesChartType{
-		TypedMarkdownRenderer:   content.ItemMarkdown(func(content.Item[TimeSeriesChart]) (string, error) { return "", nil }),
+		TypedMarkdownRenderer:   content.ItemMarkdown(func(item content.Item[TimeSeriesChart]) (string, error) { return item.ContentValue.Text, nil }),
 		TypedItemMarkdownHeader: content.ItemMarkdownHeader(projectTimeSeriesChartMdHeader, replaceTimeSeriesChartMdHeader),
 	}
 }
@@ -88,6 +96,18 @@ func (*TimeSeriesChartType) DecodeJSON(data json.RawMessage) (content.Content, e
 	return content.DecodeContent[TimeSeriesChart](data)
 }
 
+// UpdateMarkdown implements content.MarkdownUpdater: the body replaces
+// Text; the query, results and record metadata are preserved.
+func (*TimeSeriesChartType) UpdateMarkdown(existing content.Record, body string) (content.Record, error) {
+	item, err := content.ItemView[TimeSeriesChart](existing)
+	if err != nil {
+		return nil, err
+	}
+	chart := item.ContentValue
+	chart.Text = body
+	return content.WithContent(existing, chart)
+}
+
 // ValidateContent implements content.ContentValidator (see Validate).
 func (*TimeSeriesChartType) ValidateContent(value content.Content) []content.FieldError {
 	chart, err := content.ContentValue[TimeSeriesChart](value)
@@ -98,7 +118,7 @@ func (*TimeSeriesChartType) ValidateContent(value content.Content) []content.Fie
 }
 
 // ShouldCreateRevision implements content.RevisionPolicy: changes of the
-// query, title, unit or explicit timestamp create a revision; results-only
+// query, title, text, unit or explicit timestamp create a revision; results-only
 // changes are stored in place unless the host detects a changed event time.
 func (*TimeSeriesChartType) ShouldCreateRevision(previous, next content.Record) (bool, error) {
 	before, err := content.ItemView[TimeSeriesChart](previous)
@@ -133,18 +153,18 @@ func (c TimeSeriesChart) EventTimestamp() time.Time {
 
 // SameMetadata reports whether c and other have the same revision-worthy
 // metadata: query (bounds compared by instant, strings as supplied),
-// title, unit, and explicit timestamp (compared as an instant).
+// title, text, unit, and explicit timestamp (compared as an instant).
 func (c TimeSeriesChart) SameMetadata(other TimeSeriesChart) bool {
 	sameTimestamp := c.Timestamp == nil && other.Timestamp == nil ||
 		c.Timestamp != nil && other.Timestamp != nil && c.Timestamp.Equal(*other.Timestamp)
-	return c.Query.Same(other.Query) && c.Title == other.Title && c.Unit == other.Unit && sameTimestamp
+	return c.Query.Same(other.Query) && c.Title == other.Title && c.Text == other.Text && c.Unit == other.Unit && sameTimestamp
 }
 
 // Same reports whether q and other define the same query: equal strings as
 // supplied (no URL or PromQL normalization), bounds equal as instants, and
 // equal steps.
 func (q TimeSeriesQuery) Same(other TimeSeriesQuery) bool {
-	return q.Expression == other.Expression && q.SourceURL == other.SourceURL &&
+	return q.Expression == other.Expression && q.SourceURL == other.SourceURL && q.Datasource == other.Datasource &&
 		q.Start.Equal(other.Start) && q.End.Equal(other.End) && q.StepSeconds == other.StepSeconds
 }
 
@@ -187,7 +207,7 @@ func isHTTPURL(raw string) bool {
 
 // timeSeriesChartMdHeader is the structured Markdown header of
 // Prometheus/TimeSeriesChart: query metadata, title, unit and optional
-// timestamp (the body is empty; results are not exposed).
+// timestamp (Text is the body; results are not exposed).
 type timeSeriesChartMdHeader struct {
 	Timestamp *time.Time      `json:"timestamp,omitempty"`
 	Query     TimeSeriesQuery `json:"query"`
@@ -201,9 +221,10 @@ func projectTimeSeriesChartMdHeader(c TimeSeriesChart) timeSeriesChartMdHeader {
 
 // replaceTimeSeriesChartMdHeader applies the header, preserving the stored
 // results only when the query is unchanged (title/unit/timestamp edits
-// keep them; any query change clears them).
+// keep them; any query change, including datasource, clears them). The
+// body-owned Text is always preserved.
 func replaceTimeSeriesChartMdHeader(existing TimeSeriesChart, h timeSeriesChartMdHeader) TimeSeriesChart {
-	c := TimeSeriesChart{Timestamp: h.Timestamp, Query: h.Query, Title: h.Title, Unit: h.Unit}
+	c := TimeSeriesChart{Timestamp: h.Timestamp, Query: h.Query, Title: h.Title, Text: existing.Text, Unit: h.Unit}
 	if existing.Query.Same(h.Query) {
 		c.QueryResults = existing.QueryResults
 	}

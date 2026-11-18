@@ -2,7 +2,8 @@ package e2e
 
 // Lifecycle of Prometheus/TimeSeriesChart: results refreshes stay in the
 // latest revision, query edits through Markdown create a revision and clear
-// the snapshot, and earlier revisions keep their last dataset. Generic
+// the snapshot, description (body) edits create a revision keeping the
+// snapshot, and earlier revisions keep their last dataset. Generic
 // revision-policy paths are covered by controller and integration tests.
 
 import (
@@ -38,6 +39,7 @@ func TestTimeSeriesChartLifecycle(t *testing.T) {
 	}
 	chart := func(value float64) map[string]any {
 		return map[string]any{"query": query, "title": "HTTP request rate", "unit": "requests/s",
+			"text": "Initial description",
 			"query_results": map[string]any{"series": []any{map[string]any{
 				"labels": map[string]any{"instance": "app-1"}, "samples": []any{[]any{1794564000, value}, []any{1794564060, nil}},
 			}}}}
@@ -106,6 +108,25 @@ func TestTimeSeriesChartLifecycle(t *testing.T) {
 	// Revision 1 keeps its last dataset.
 	if first := getChart(t, client, docName, number, 1); firstValue(t, first) != 2 {
 		t.Fatalf("revision 1 lost its last dataset: %v", recordContent(first))
+	}
+
+	// The description is the Markdown body: editing it creates revision 3
+	// and keeps the snapshot.
+	exported, err = client.ExportDocumentMarkdown(ctx, &pb.ExportDocumentMarkdownRequest{Name: docName})
+	if err != nil {
+		t.Fatalf("ExportDocumentMarkdown: %v", err)
+	}
+	md = exported.GetMarkdown()
+	if !strings.Contains(md, "\nInitial description\n") {
+		t.Fatalf("expected the description as body:\n%s", md)
+	}
+	if _, err := client.PushDocumentMarkdown(ctx, &pb.PushDocumentMarkdownRequest{Name: docName,
+		Markdown: strings.Replace(md, "Initial description", "Updated **description**", 1)}); err != nil {
+		t.Fatalf("PushDocumentMarkdown: %v", err)
+	}
+	described := getChart(t, client, docName, number, 0)
+	if described.GetRevisionNumber() != 3 || recordContent(described)["text"] != "Updated **description**" || firstValue(t, described) != 3 {
+		t.Fatalf("expected revision 3 with the new text and kept results, got rev %d: %v", described.GetRevisionNumber(), recordContent(described))
 	}
 }
 
