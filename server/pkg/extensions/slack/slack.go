@@ -33,15 +33,34 @@ type Message struct {
 	// Author is the resolved author name, falling back to the Slack user
 	// ID or an explicit unknown-author label.
 	Author string `json:"author"`
-	// Text is the normalized Markdown body, with readable attachment
-	// previews appended.
-	Text string `json:"text"`
+	// Body is the canonical normalized Markdown body of the message,
+	// without its structured attachments. It is empty (and omitted) only
+	// for attachment-only messages. Stored legacy records carry the body
+	// (including any rendered previews) in "text"; it is read as Body
+	// verbatim (see ConversationType.DecodeJSON).
+	Body string `json:"body,omitempty"`
+	// Attachments are the message's link attachments (unfurls and Work
+	// Object previews) in source order.
+	Attachments []Attachment `json:"attachments,omitempty"`
 	// URL is the optional absolute HTTP(S) permalink of the message.
 	// It is omitted when unavailable; an empty value is never valid.
 	URL string `json:"url,omitempty"`
 	// Extras carries additional metadata not anticipated by the schema,
 	// such as source-system identifiers.
 	Extras map[string]any `json:"extras,omitempty"`
+}
+
+// Attachment is one structured link attachment of a Message.
+type Attachment struct {
+	// Key is the message-scoped attachment identity derived from the
+	// source URL (see AttachmentKey). Attachments of one message with the
+	// same source URL deliberately share a key.
+	Key string `json:"key"`
+	// Link is the canonical Markdown link to the attachment source.
+	Link string `json:"link"`
+	// Details is canonical Markdown retaining the remaining preview
+	// evidence (product, text, fields, update time).
+	Details string `json:"details,omitempty"`
 }
 
 // Payload is the transient input of a Slack/Thread expansion: the complete

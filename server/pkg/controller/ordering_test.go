@@ -93,7 +93,7 @@ func conversationAt(t *testing.T, f *fixture, members ...member) content.Record 
 	t.Helper()
 	items := make([]content.KeyedRecord, len(members))
 	for n, m := range members {
-		items[n] = content.NewKeyedItem(f.conversationType, m.key, m.ts, slack.Message{Author: "author", Text: m.key})
+		items[n] = content.NewKeyedItem(f.conversationType, m.key, m.ts, slack.Message{Author: "author", Body: m.key})
 	}
 	collection, err := f.conversationType.NewCollection(items)
 	testutil.NoErr(t, err)

@@ -54,7 +54,7 @@ func TestGeneratedIdentityPersistenceRoundTrip(t *testing.T) {
 	// Desired direct output of the thread: a conversation of three
 	// messages and one keyed standalone agent reference.
 	message := func(id, author string, minute int) content.KeyedRecord {
-		return content.NewKeyedItem(conversationType, slack.MessageKey(id), identityAt(minute), slack.Message{Author: author, Text: "message " + id})
+		return content.NewKeyedItem(conversationType, slack.MessageKey(id), identityAt(minute), slack.Message{Author: author, Body: "message " + id})
 	}
 	conversation, err := conversationType.NewCollection([]content.KeyedRecord{
 		message("1", "Alice", 0), message("2", "Bob", 1), message("4", "Alice", 3),
@@ -104,7 +104,7 @@ func TestGeneratedIdentityPersistenceRoundTrip(t *testing.T) {
 	} {
 		item := view.Items[n]
 		if item.Key() != want.key || item.ContentValue.Author != want.author ||
-			item.ContentValue.Text != "message "+want.key[len("slack-message:"):] ||
+			item.ContentValue.Body != "message "+want.key[len("slack-message:"):] ||
 			!item.Timestamp().Equal(identityAt(want.minute)) {
 			t.Fatalf("member %d not preserved: %#v", n, item)
 		}

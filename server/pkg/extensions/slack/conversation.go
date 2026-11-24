@@ -25,8 +25,25 @@ func (*ConversationType) ContentSchema() content.Schema {
 	return content.Schema{Source: schemaCUE, Definition: "#Message"}
 }
 
+// DecodeJSON reads legacy messages, which stored the body with appended
+// attachment previews in "text", as Body verbatim without extracting
+// attachments; a later payload refresh produces the structured form.
 func (*ConversationType) DecodeJSON(data json.RawMessage) (content.Content, error) {
-	return content.DecodeContent[Message](data)
+	var stored struct {
+		Message
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return nil, err
+	}
+	message := stored.Message
+	if stored.Text != "" {
+		if message.Body != "" || len(message.Attachments) > 0 {
+			return nil, fmt.Errorf("legacy text cannot be combined with body or attachments")
+		}
+		message.Body = stored.Text
+	}
+	return message, nil
 }
 
 func (t *ConversationType) NewCollection(items []content.KeyedRecord) (content.GroupableRecord, error) {
@@ -57,8 +74,9 @@ func renderConversation(collection content.GroupableCollection[Message]) (string
 	return renderConversationMarkdown(collection, false)
 }
 
-// renderConversationMarkdown groups consecutive authors and simplifies
-// attachment previews for display only. Exports retain the full message text.
+// renderConversationMarkdown groups consecutive authors and shows only
+// attachment links for display. Exports retain the complete attachment
+// details.
 func renderConversationMarkdown(collection content.GroupableCollection[Message], forPresentation bool) (string, error) {
 	var out strings.Builder
 	for i, item := range collection.Items {
@@ -74,9 +92,9 @@ func renderConversationMarkdown(collection content.GroupableCollection[Message],
 			// A soft newline is collapsed into a space by Markdown renderers.
 			out.WriteString("  \n")
 		}
-		body := message.Text
+		body := messageMarkdown(message.Body, message.Attachments)
 		if forPresentation {
-			body = presentMessageBody(body)
+			body = presentMessage(message)
 		}
 		for _, line := range strings.Split(body, "\n") {
 			if line != "" {
@@ -87,6 +105,23 @@ func renderConversationMarkdown(collection content.GroupableCollection[Message],
 		}
 	}
 	return out.String(), nil
+}
+
+// presentMessage composes the canonical body with a compact list of
+// attachment links, omitting attachment details.
+func presentMessage(message Message) string {
+	var parts []string
+	if message.Body != "" {
+		parts = append(parts, message.Body)
+	}
+	if len(message.Attachments) > 0 {
+		links := make([]string, len(message.Attachments))
+		for i, attachment := range message.Attachments {
+			links[i] = "- " + attachment.Link
+		}
+		parts = append(parts, strings.Join(links, "\n"))
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // Prefer Slack identity over display names so users with the same name are

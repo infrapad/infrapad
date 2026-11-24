@@ -8,17 +8,18 @@ import (
 
 	"github.com/infrapad/infrapad/server/internal/testutil"
 	"github.com/infrapad/infrapad/server/pkg/content"
+	"github.com/infrapad/infrapad/server/pkg/extensions/aiagent"
 	"github.com/infrapad/infrapad/server/pkg/extensions/slack"
 )
 
 func TestConversationPresentationGroupsConsecutiveAuthors(t *testing.T) {
 	conversation := slack.NewConversationType()
 	messages := []slack.Message{
-		{Author: "Alice", Text: "First line\nSecond line", URL: threadURL},
-		{Author: "Alice", Text: "Follow-up\n\n- A detail"},
-		{Author: "Alice", Text: "Another follow-up"},
-		{Author: "Bob", Text: "Reply"},
-		{Author: "Alice", Text: "Back again"},
+		{Author: "Alice", Body: "First line\nSecond line", URL: threadURL},
+		{Author: "Alice", Body: "Follow-up\n\n- A detail"},
+		{Author: "Alice", Body: "Another follow-up"},
+		{Author: "Bob", Body: "Reply"},
+		{Author: "Alice", Body: "Back again"},
 	}
 	items := make([]content.KeyedRecord, len(messages))
 	for i, message := range messages {
@@ -57,7 +58,7 @@ func TestConversationPresentationGroupsConsecutiveAuthors(t *testing.T) {
 
 func TestConversationPresentationAuthorIdentity(t *testing.T) {
 	withID := func(author, id string) slack.Message {
-		return slack.Message{Author: author, Text: "Message", Extras: map[string]any{"slack_user_id": id}}
+		return slack.Message{Author: author, Body: "Message", Extras: map[string]any{"slack_user_id": id}}
 	}
 	for _, tc := range []struct {
 		name     string
@@ -67,10 +68,10 @@ func TestConversationPresentationAuthorIdentity(t *testing.T) {
 	}{
 		{"same ID", withID("Alice", "U1"), withID("Alice renamed", "U1"), 1},
 		{"different IDs, same name", withID("Alice", "U1"), withID("Alice", "U2"), 2},
-		{"missing ID", withID("Alice", "U1"), slack.Message{Author: "Alice", Text: "Message"}, 2},
-		{"names only", slack.Message{Author: "Alice", Text: "Message"}, slack.Message{Author: "Alice", Text: "Message"}, 1},
-		{"unknown authors", slack.Message{Author: "Unknown author", Text: "Message"}, slack.Message{Author: "Unknown author", Text: "Message"}, 2},
-		{"empty authors", slack.Message{Text: "Message"}, slack.Message{Text: "Message"}, 2},
+		{"missing ID", withID("Alice", "U1"), slack.Message{Author: "Alice", Body: "Message"}, 2},
+		{"names only", slack.Message{Author: "Alice", Body: "Message"}, slack.Message{Author: "Alice", Body: "Message"}, 1},
+		{"unknown authors", slack.Message{Author: "Unknown author", Body: "Message"}, slack.Message{Author: "Unknown author", Body: "Message"}, 2},
+		{"empty authors", slack.Message{Body: "Message"}, slack.Message{Body: "Message"}, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			conversation := slack.NewConversationType()
@@ -86,4 +87,110 @@ func TestConversationPresentationAuthorIdentity(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestConversationAttachments covers the canonical body/attachment shape:
+// URL-derived keys that are stable across preview detail and order changes
+// and intentionally shared by duplicate URLs, compact presentation versus
+// complete export evidence, and verbatim legacy "text" decoding.
+func TestConversationAttachments(t *testing.T) {
+	agent := aiagent.NewMessageType()
+	registry, err := content.NewRegistry([]content.ContentType{agent}, slack.ContentTypes(agent))
+	testutil.NoErr(t, err)
+	thread, err := registry.Lookup(slack.ThreadTypeName)
+	testutil.NoErr(t, err)
+	root := content.NewItem(thread, at("10:00"), slack.ThreadReference{URL: threadURL})
+
+	// Attachments shaped after the PagerDuty incident unfurl of data/4.json.
+	const incidentURL = "https://redhat.pagerduty.com/incidents/Q388WQASEWQZYC"
+	incident := slack.AttachmentPreview{
+		Title: "[#3255254] API SLO Burn", TitleLink: incidentURL, URL: incidentURL, ProductName: "PagerDuty",
+		Text: "Incident in PagerDuty", Fields: []slack.PreviewField{{Label: "Status", Value: "Triggered"}},
+	}
+	docs := slack.AttachmentPreview{Title: "Troubleshooting", TitleLink: "https://docs.example.com/troubleshooting"}
+	expandMessage := func(previews ...slack.AttachmentPreview) slack.Message {
+		t.Helper()
+		payload, err := json.Marshal(slack.Payload{Messages: []slack.SourceMessage{
+			{Ts: "1794576255.355919", Text: "Related PD Alert - <" + incidentURL + ">", Previews: previews},
+		}})
+		testutil.NoErr(t, err)
+		members, err := expand(registry, root, payload)
+		testutil.NoErr(t, err)
+		view, err := content.KeyedItemView[slack.Message](members[0])
+		testutil.NoErr(t, err)
+		return view.ContentValue
+	}
+
+	first := expandMessage(incident, docs)
+	if first.Body != "Related PD Alert - <"+incidentURL+">" || len(first.Attachments) != 2 {
+		t.Fatalf("unexpected canonical message: %#v", first)
+	}
+	wantIncident := slack.Attachment{
+		Key:     slack.AttachmentKey(incidentURL),
+		Link:    "[\\[#3255254\\] API SLO Burn](" + incidentURL + ")",
+		Details: "**Product:** PagerDuty\n\nIncident in PagerDuty\n\n**Status:** Triggered",
+	}
+	if first.Attachments[0] != wantIncident {
+		t.Fatalf("incident attachment = %#v, want %#v", first.Attachments[0], wantIncident)
+	}
+
+	// Refreshed details and reordering keep keys; duplicate URLs share one.
+	resolved := incident
+	resolved.Fields = []slack.PreviewField{{Label: "Status", Value: "Resolved"}}
+	second := expandMessage(docs, resolved, incident)
+	if second.Attachments[0].Key != first.Attachments[1].Key ||
+		second.Attachments[1].Key != wantIncident.Key || second.Attachments[2].Key != wantIncident.Key ||
+		second.Attachments[1].Details == second.Attachments[2].Details {
+		t.Fatalf("unstable attachment keys: %#v vs %#v", first.Attachments, second.Attachments)
+	}
+
+	// Presentation shows only links; exports keep complete details.
+	conversation := slack.NewConversationType()
+	collection, err := conversation.NewCollection([]content.KeyedRecord{
+		content.NewKeyedItem(conversation, "m", at("10:00"), first),
+	})
+	testutil.NoErr(t, err)
+	reloaded := testutil.RoundTripRecord(t, registry, collection)
+	presentation, err := reloaded.ContentType().(content.Presenter).Present(reloaded)
+	testutil.NoErr(t, err)
+	wantBody := "  Related PD Alert - <" + incidentURL + ">\n\n"
+	if got := presentation.Cards[0].Markdown; !strings.HasSuffix(got, wantBody+
+		"  - "+wantIncident.Link+"\n  - [Troubleshooting](https://docs.example.com/troubleshooting)\n") {
+		t.Fatalf("unexpected presentation: %q", got)
+	}
+	markdown, err := reloaded.ContentType().RenderMarkdown(reloaded)
+	testutil.NoErr(t, err)
+	if !strings.HasSuffix(markdown, wantBody+
+		"  > Attachment: "+wantIncident.Link+"\n  >\n  > **Product:** PagerDuty\n  >\n  > Incident in PagerDuty\n  >\n  > **Status:** Triggered\n\n"+
+		"  > Attachment: [Troubleshooting](https://docs.example.com/troubleshooting)\n") {
+		t.Fatalf("export lost attachment evidence: %q", markdown)
+	}
+
+	// Legacy "text" is read verbatim as the body, without extracting
+	// previews, and is re-encoded in the new shape.
+	legacyText := "Investigating\n\n> Attachment: **[Incident](" + incidentURL + ")** · PagerDuty\n> **Status:** Resolved"
+	legacy, err := registry.DecodeRecord(slack.ConversationTypeName, json.RawMessage(
+		`{"items":[{"key":"slack-message:1","timestamp":"2026-11-13T13:24:15Z","content":{"author":"A","text":`+
+			string(must(json.Marshal(legacyText)))+`}}]}`))
+	testutil.NoErr(t, err)
+	legacyView, err := content.CollectionView[slack.Message](legacy)
+	testutil.NoErr(t, err)
+	if message := legacyView.Items[0].ContentValue; message.Body != legacyText || len(message.Attachments) != 0 {
+		t.Fatalf("legacy message not read verbatim: %#v", message)
+	}
+	if encoded := string(must(json.Marshal(legacy))); strings.Contains(encoded, `"text"`) || !strings.Contains(encoded, `"body"`) {
+		t.Fatalf("legacy message re-encoded in old shape: %s", encoded)
+	}
+	_, err = registry.DecodeRecord(slack.ConversationTypeName, json.RawMessage(
+		`{"items":[{"key":"k","timestamp":"2026-11-13T13:24:15Z","content":{"author":"A","text":"x","body":"y"}}]}`))
+	if err == nil {
+		t.Fatal("expected legacy text combined with body to be rejected")
+	}
+}
+
+func must[T any](value T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return value
 }

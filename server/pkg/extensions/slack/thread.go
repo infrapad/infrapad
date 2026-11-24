@@ -116,7 +116,7 @@ func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payloa
 			return content.ExpansionResult{}, err
 		}
 		key := MessageKey(message.Ts)
-		body := messageBody(message)
+		body, attachments := messageContent(message)
 		permalink := location.permalink(message.Ts)
 		extras := map[string]any{"slack_ts": message.Ts}
 		if message.User != "" {
@@ -126,7 +126,7 @@ func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payloa
 			result.Blocks = append(result.Blocks, content.EmittedBlock{
 				Record: content.NewKeyedItem(t.agentType, key, times[i], aiagent.Message{
 					Agent:  agent,
-					Text:   body,
+					Text:   messageMarkdown(body, attachments),
 					URL:    permalink,
 					Extras: extras,
 				}),
@@ -134,10 +134,11 @@ func (t *ThreadType) Expand(ctx context.Context, existing content.Record, payloa
 			continue
 		}
 		conversation = append(conversation, content.NewKeyedItem(t.conversationType, key, times[i], Message{
-			Author: messageAuthor(message),
-			Text:   body,
-			URL:    permalink,
-			Extras: extras,
+			Author:      messageAuthor(message),
+			Body:        body,
+			Attachments: attachments,
+			URL:         permalink,
+			Extras:      extras,
 		}))
 	}
 	if len(conversation) > 0 {

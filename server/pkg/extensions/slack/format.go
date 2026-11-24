@@ -1,6 +1,8 @@
 package slack
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -10,7 +12,7 @@ import (
 
 // This file holds the lightweight Slack-to-Markdown conversions used by
 // the expander: precise timestamp parsing, permalink handling, text
-// normalization, and readable attachment preview rendering.
+// normalization, and structured attachment conversion.
 // They are deliberately partial; this is not a complete Slack formatter.
 
 // parseSlackTimestamp parses a Slack message timestamp ("1788873542.372739")
@@ -139,10 +141,14 @@ func messageAuthor(message SourceMessage) string {
 	}
 }
 
-// messageBody assembles the normalized Markdown body of a source message:
-// the readable text (falling back to the raw text) with readable attachment
-// previews appended. Entirely unreadable messages get a visible placeholder.
-func messageBody(message SourceMessage) string {
+// messageContent assembles the canonical content of a source message: the
+// normalized Markdown body (readable text, falling back to the raw text)
+// and the structured attachments derived from its typed previews.
+// Previews without an HTTP(S) source URL have no stable attachment identity;
+// their readable rendering is appended to the body instead, so the evidence
+// is kept without inventing positional or text-derived keys.
+// Entirely unreadable messages get a visible placeholder body.
+func messageContent(message SourceMessage) (string, []Attachment) {
 	text := message.ReadableText
 	if text == "" {
 		text = message.Text
@@ -151,29 +157,81 @@ func messageBody(message SourceMessage) string {
 	if body := normalizeSlackText(text); body != "" {
 		parts = append(parts, body)
 	}
+	var attachments []Attachment
 	for _, preview := range message.Previews {
-		if rendered := renderAttachmentPreview(preview); rendered != "" {
+		if attachment, ok := previewAttachment(preview); ok {
+			attachments = append(attachments, attachment)
+		} else if rendered := renderUnlinkedPreview(preview); rendered != "" {
 			parts = append(parts, rendered)
 		}
 	}
-	if len(parts) == 0 {
-		return noReadableContent
+	if len(parts) == 0 && len(attachments) == 0 {
+		return noReadableContent, nil
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n"), attachments
 }
 
-// renderAttachmentPreview renders one typed readable attachment preview as
-// blockquoted Markdown appended to the message body. It returns an empty
-// string for a preview with no readable piece at all.
-func renderAttachmentPreview(preview AttachmentPreview) string {
+// previewAttachment converts a typed preview with an HTTP(S) source URL
+// into a structured attachment: the URL-derived key, a Markdown link, and
+// the remaining preview evidence as Markdown details.
+func previewAttachment(preview AttachmentPreview) (Attachment, bool) {
+	source := previewSourceURL(preview)
+	if source == "" {
+		return Attachment{}, false
+	}
+	label := escapeMarkdownLabel(preview.Title)
+	if label == "" {
+		label = escapeMarkdownLabel(source)
+	}
+	var details []string
+	if preview.ProductName != "" {
+		details = append(details, "**Product:** "+preview.ProductName)
+	}
+	if preview.TitleLink != "" && preview.TitleLink != source {
+		details = append(details, "**Link:** "+preview.TitleLink)
+	}
+	details = append(details, previewEvidence(preview)...)
+	return Attachment{
+		Key:     AttachmentKey(source),
+		Link:    fmt.Sprintf("[%s](%s)", label, source),
+		Details: strings.Join(details, "\n\n"),
+	}, true
+}
+
+// previewSourceURL returns the identity URL of a preview: the Work Object
+// URL, falling back to the title link. Only HTTP(S) URLs qualify.
+func previewSourceURL(preview AttachmentPreview) string {
+	for _, candidate := range []string{preview.URL, preview.TitleLink} {
+		if httpURLPattern.MatchString(candidate) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+var httpURLPattern = regexp.MustCompile(`^(?i)https?://[^/\s][^\s]*$`)
+
+// previewEvidence renders the preview text, labeled fields, and update time.
+func previewEvidence(preview AttachmentPreview) []string {
+	var lines []string
+	if preview.Text != "" {
+		lines = append(lines, preview.Text)
+	}
+	for _, field := range preview.Fields {
+		lines = append(lines, fmt.Sprintf("**%s:** %s", field.Label, field.Value))
+	}
+	if !preview.UpdatedAt.IsZero() {
+		lines = append(lines, "**Updated:** "+preview.UpdatedAt.UTC().Format(previewTimestampFormat))
+	}
+	return lines
+}
+
+// renderUnlinkedPreview renders a preview without a source URL as a
+// blockquote appended to the message body. It returns an empty string for
+// a preview with no readable piece at all.
+func renderUnlinkedPreview(preview AttachmentPreview) string {
 	var lines []string
 	heading := escapeMarkdownLabel(preview.Title)
-	if heading != "" && preview.TitleLink != "" {
-		heading = fmt.Sprintf("[%s](%s)", heading, preview.TitleLink)
-	}
-	if heading == "" && preview.URL != "" {
-		heading = fmt.Sprintf("[%s](%s)", preview.URL, preview.URL)
-	}
 	if heading == "" {
 		heading = preview.ProductName
 	}
@@ -184,19 +242,62 @@ func renderAttachmentPreview(preview AttachmentPreview) string {
 		}
 		lines = append(lines, line)
 	}
-	if preview.Text != "" {
-		lines = append(lines, preview.Text)
-	}
-	for _, field := range preview.Fields {
-		lines = append(lines, fmt.Sprintf("**%s:** %s", field.Label, field.Value))
-	}
-	if !preview.UpdatedAt.IsZero() {
-		lines = append(lines, "Updated: "+preview.UpdatedAt.UTC().Format(previewTimestampFormat))
-	}
+	lines = append(lines, previewEvidence(preview)...)
 	if len(lines) == 0 {
 		return ""
 	}
-	return "> " + strings.Join(lines, "\n> ")
+	return blockquote(strings.Join(lines, "\n\n"))
+}
+
+// AttachmentKey derives the stable, message-scoped key of an attachment
+// from its source URL. It is deterministic, independent of preview text
+// and attachment order, and uses only the identity-key alphabet
+// [A-Za-z0-9._:-]. Equal URLs deliberately produce equal keys.
+func AttachmentKey(sourceURL string) string {
+	sum := sha256.Sum256([]byte(sourceURL))
+	return attachmentKeyPrefix + hex.EncodeToString(sum[:attachmentKeyBytes])
+}
+
+const (
+	attachmentKeyPrefix = "url:"
+	attachmentKeyBytes  = 12
+)
+
+// messageMarkdown composes the full Markdown evidence of a message: the
+// canonical body followed by each attachment's link and details. It is used
+// for exports and for agent messages, which have no structured attachments.
+func messageMarkdown(body string, attachments []Attachment) string {
+	var parts []string
+	if body != "" {
+		parts = append(parts, body)
+	}
+	for _, attachment := range attachments {
+		parts = append(parts, attachmentMarkdown(attachment))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// attachmentMarkdown renders one attachment as a blockquote headed by its
+// link and followed by its complete details.
+func attachmentMarkdown(attachment Attachment) string {
+	text := "Attachment: " + attachment.Link
+	if attachment.Details != "" {
+		text += "\n\n" + attachment.Details
+	}
+	return blockquote(text)
+}
+
+// blockquote prefixes every line of text with a Markdown quote marker.
+func blockquote(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if line == "" {
+			lines[i] = ">"
+		} else {
+			lines[i] = "> " + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // escapeMarkdownLabel escapes square brackets so labels containing them

@@ -238,7 +238,9 @@ it doesn't convert raw Slack API responses. The producer:
 - resolves user names (`user_name`) and, optionally, mention-resolved text
   (`readable_text`),
 - converts raw attachments and unfurls into typed `previews` (`title`,
-  `title_link`/`url`, `text`, `fields`, `updated_at`, ...),
+  `title_link`/`url`, `text`, `fields`, `updated_at`, ...). Previews with an
+  HTTP(S) `url` or `title_link` become structured message attachments keyed
+  by that URL; previews without one are appended to the message body,
 - decides which Slack users are AI agents (`agents`),
 - decides when to refresh (polling, events, or a final payload).
 

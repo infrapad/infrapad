@@ -140,7 +140,7 @@ func TestGeneratedWriteRejection(t *testing.T) {
 	testutil.NoErr(t, err)
 
 	// Generated children require keyed records.
-	unkeyed := content.NewItem(f.conversationType, identityTS, slack.Message{Author: "a", Text: "b"})
+	unkeyed := content.NewItem(f.conversationType, identityTS, slack.Message{Author: "a", Body: "b"})
 	tx, err := ctrl.BeginHostTx(ctx, doc.Uid)
 	testutil.NoErr(t, err)
 	if _, err := ctrl.CreateChildBlockTx(ctx, tx, doc.Uid, thread.BlockNumber, unkeyed, "host"); err == nil || !controller.IsInvalidInput(err) {
@@ -224,7 +224,7 @@ func conversationRecord(t *testing.T, conversationType *slack.ConversationType, 
 	t.Helper()
 	items := make([]content.KeyedRecord, len(keys))
 	for n, key := range keys {
-		items[n] = content.NewKeyedItem(conversationType, key, at(n), slack.Message{Author: "author-" + key, Text: "message " + key})
+		items[n] = content.NewKeyedItem(conversationType, key, at(n), slack.Message{Author: "author-" + key, Body: "message " + key})
 	}
 	collection, err := conversationType.NewCollection(items)
 	testutil.NoErr(t, err)

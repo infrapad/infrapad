@@ -28,3 +28,17 @@ package slack
 	// values must be nonblank.
 	agents?: {[=~"^\\S+$"]: string & =~ "^\\S+$"}
 }
+
+#Message: {
+	// Legacy stored representation: the body with appended attachment
+	// previews, read as body verbatim. New content never writes it; the
+	// decoder rejects it combined with the structured body or attachments.
+	text?: string
+}
+
+#Attachment: {
+	// Message-scoped identity key using the shared identity-key alphabet.
+	key: string & =~"^[A-Za-z0-9._:-]+$"
+	// Canonical Markdown link; never blank.
+	link: string & =~"\\S"
+}

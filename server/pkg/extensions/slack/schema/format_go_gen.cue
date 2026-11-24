@@ -9,3 +9,6 @@ _#unknownAuthor: "Unknown author"
 _#noReadableContent: "No readable message content"
 
 _#previewTimestampFormat: "2006-01-02 15:04:05 MST"
+
+_#attachmentKeyPrefix: "url:"
+_#attachmentKeyBytes:  12

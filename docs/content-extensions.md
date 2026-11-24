@@ -114,9 +114,11 @@ checks for them with type assertions.
 #### The `text` field, Markdown bodies, and editing
 
 - By convention, a type whose content has a Markdown body stores it in a
-  `text` field (`Core/Markdown`, `AIAgent/Message`, `Slack/Conversation`,
-  `PagerDuty/Incident`). The host doesn't interpret `text`; it's an
-  ordinary content field.
+  `text` field (`Core/Markdown`, `AIAgent/Message`, `PagerDuty/Incident`).
+  The host doesn't interpret `text`; it's an ordinary content field.
+  `Slack/Conversation` messages instead keep a canonical Markdown `body`
+  separate from structured `attachments` (URL-derived `key`, Markdown
+  `link`, and `details`); legacy stored `text` is read as `body`.
 - Keep body text out of the structured header: the header projects only
   structured fields (e.g. PagerDuty's `id`/`url`), the body carries `text`.
 - Rendering still belongs to the extension: `RenderMarkdown` decides what

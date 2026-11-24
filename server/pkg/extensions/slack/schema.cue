@@ -15,6 +15,8 @@ import "time"
 _#conversationTimestampFormat: "2006-01-02 15:04:05 MST"
 _#unknownAuthor:               "Unknown author"
 _#noReadableContent:           "No readable message content"
+_#previewTimestampFormat:      "2006-01-02 15:04:05 MST"
+_#attachmentKeyPrefix:         "url:"
 #ThreadTypeName:               "Slack/Thread"
 #ConversationTypeName:         "Slack/Conversation"
 
@@ -32,13 +34,24 @@ _#noReadableContent:           "No readable message content"
 // Message is the inner content of one Slack/Conversation member:
 // a normalized readable message with attribution and source link.
 #Message: {
+	// Legacy stored representation: the body with appended attachment
+	// previews, read as body verbatim. New content never writes it; the
+	// decoder rejects it combined with the structured body or attachments.
+	text?: string
 	// Author is the resolved author name, falling back to the Slack user
 	// ID or an explicit unknown-author label.
 	author: string @go(Author)
 
-	// Text is the normalized Markdown body, with readable attachment
-	// previews appended.
-	text: string @go(Text)
+	// Body is the canonical normalized Markdown body of the message,
+	// without its structured attachments. It is empty (and omitted) only
+	// for attachment-only messages. Stored legacy records carry the body
+	// (including any rendered previews) in "text"; it is read as Body
+	// verbatim (see ConversationType.DecodeJSON).
+	body?: string @go(Body)
+
+	// Attachments are the message's link attachments (unfurls and Work
+	// Object previews) in source order.
+	attachments?: [...#Attachment] @go(Attachments,[]Attachment)
 	// Optional absolute HTTP(S) source permalink with a host. An empty
 	// value is invalid; omit the field when no URL is available.
 
@@ -111,6 +124,24 @@ _#noReadableContent:           "No readable message content"
 	messages: [...#SourceMessage] @go(Messages,[]SourceMessage)
 }
 
+// Attachment is one structured link attachment of a Message.
+#Attachment: {
+	// Message-scoped identity key using the shared identity-key alphabet.
+
+	// Key is the message-scoped attachment identity derived from the
+	// source URL (see AttachmentKey). Attachments of one message with the
+	// same source URL deliberately share a key.
+	key: =~"^[A-Za-z0-9._:-]+$" @go(Key)
+	// Canonical Markdown link; never blank.
+
+	// Link is the canonical Markdown link to the attachment source.
+	link: =~"\\S" @go(Link)
+
+	// Details is canonical Markdown retaining the remaining preview
+	// evidence (product, text, fields, update time).
+	details?: string @go(Details)
+}
+
 // AttachmentPreview is a typed readable preview of one message attachment
 // (an app unfurl or Work Object preview such as a PagerDuty incident card).
 // It reflects what Slack stored at unfurl time and may be stale; it is not
@@ -141,7 +172,7 @@ _#noReadableContent:           "No readable message content"
 	// Fields are labeled readable fields.
 	fields?: [...#PreviewField] @go(Fields,[]PreviewField)
 }
-_#previewTimestampFormat: "2006-01-02 15:04:05 MST"
+_#attachmentKeyBytes: 12
 
 // PreviewField is one labeled field of an AttachmentPreview.
 #PreviewField: {

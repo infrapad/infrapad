@@ -28,8 +28,11 @@ func TestGeneratedSchemas(t *testing.T) {
 	}{
 		{"thread reference", thread.ContentSchema(), `{"url": "` + threadURL + `"}`, ""},
 		{"thread reference not a permalink", thread.ContentSchema(), `{"url": "https://workspace.example.test/x"}`, "url"},
-		{"message missing text", conversation.ContentSchema(), `{"author": "Alice"}`, "text"},
-		{"message unknown field", conversation.ContentSchema(), `{"author": "Alice", "text": "x", "ts": 1}`, "ts: field not allowed"},
+		{"message missing author", conversation.ContentSchema(), `{"body": "x"}`, "author"},
+		{"message unknown field", conversation.ContentSchema(), `{"author": "Alice", "body": "x", "ts": 1}`, "ts: field not allowed"},
+		{"message attachment", conversation.ContentSchema(), `{"author": "Alice", "attachments": [{"key": "url:0a1B._-", "link": "[a](https://example.com)", "details": "d"}]}`, ""},
+		{"message attachment key alphabet", conversation.ContentSchema(), `{"author": "Alice", "attachments": [{"key": "url/x", "link": "[a](https://example.com)"}]}`, "key"},
+		{"legacy message text", conversation.ContentSchema(), `{"author": "Alice", "text": "x"}`, ""},
 		{"payload", thread.PayloadSchema(), `{"agents": {"U3": "investigation-agent"}, "messages": [{"ts": "1788873542.372739", "user": "U1", "text": "hi", "user_name": "Alice", "readable_text": "hi", "previews": [{"title": "T", "title_link": "https://example.com", "product_name": "P", "updated_at": "2026-09-08T13:19:02Z", "text": "b", "fields": [{"label": "L", "value": "V"}]}]}]}`, ""},
 		{"payload empty messages", thread.PayloadSchema(), `{"messages": []}`, ""},
 		{"payload blank agent name", thread.PayloadSchema(), `{"agents": {"U3": " "}, "messages": []}`, "agents"},

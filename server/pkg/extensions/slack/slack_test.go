@@ -122,15 +122,14 @@ func TestThreadPayloadScenario(t *testing.T) {
 			"  ps aux\n" +
 			"  ```\n" +
 			"  now",
-		"> Attachment: **[\\[#123456\\] Example critical incident (1)]" +
-			"(https://service.example.test/incidents/I0EXAMPLE)** · Example Service",
-		"> **Status:** Resolved",
-		"> **Created:** 2026-09-08 13:03:43 UTC",
-		"> Attachment: **[Classic unfurl](https://example.com/doc)** · Example",
+		"  > Attachment: [\\[#123456\\] Example critical incident (1)]" +
+			"(https://service.example.test/incidents/I0EXAMPLE)\n  >\n  > **Product:** Example Service\n",
+		"  > **Status:** Resolved\n",
+		"  > **Created:** 2026-09-08 13:03:43 UTC\n",
+		"  > Attachment: [Classic unfurl](https://example.com/doc)\n",
 		"- **Example Member** · 2026-09-08 13:20:00 UTC · " +
 			"[source](https://workspace.example.test/archives/C0EXAMPLE/p1788873600000100)",
-		`> Attachment: **Example**
-  > Fallback only preview`,
+		"  done\n\n  > Attachment: **Example**\n  >\n  > Fallback only preview\n",
 	} {
 		if !strings.Contains(first, want) {
 			t.Fatalf("conversation markdown missing %q:\n%s", want, first)
@@ -158,6 +157,22 @@ func TestThreadPayloadScenario(t *testing.T) {
 		agentItem.ContentValue.Extras["slack_user_id"] != "U3" ||
 		agentItem.ContentValue.Extras["slack_ts"] != "1788873700.000200" {
 		t.Fatalf("unexpected agent record: %#v", agentItem)
+	}
+
+	// Human messages keep the canonical body separate from structured,
+	// URL-keyed attachments; previews without a URL stay in the body.
+	firstView, err := content.CollectionView[slack.Message](blocks[0])
+	testutil.NoErr(t, err)
+	human := firstView.Items[0].ContentValue
+	if strings.Contains(human.Body, "Attachment") || len(human.Attachments) != 2 ||
+		human.Attachments[0].Key != slack.AttachmentKey("https://service.example.test/incidents/I0EXAMPLE") ||
+		human.Attachments[1].Link != "[Classic unfurl](https://example.com/doc)" ||
+		human.Attachments[1].Details != "**Product:** Example\n\nA classic link preview\n\n**Kind:** doc" {
+		t.Fatalf("unexpected structured message: %#v", human)
+	}
+	if fallback := firstView.Items[1].ContentValue; len(fallback.Attachments) != 0 ||
+		fallback.Body != "done\n\n> Attachment: **Example**\n>\n> Fallback only preview" {
+		t.Fatalf("unexpected unlinked preview: %#v", fallback)
 	}
 
 	// Regroup the first conversation from stored constituents without the
@@ -188,7 +203,7 @@ func TestThreadPayloadScenario(t *testing.T) {
 			t.Fatalf("presentation missing attachment link %q:\n%s", want, cardMarkdown)
 		}
 	}
-	for _, unwanted := range []string{"Attachment:", "> ", "**Status:**", "**Created:**", "Updated:", "Fallback only preview"} {
+	for _, unwanted := range []string{"Attachment: [", "**Status:**", "**Created:**", "**Updated:**", "**Product:**"} {
 		if strings.Contains(cardMarkdown, unwanted) {
 			t.Fatalf("presentation contains attachment metadata %q:\n%s", unwanted, cardMarkdown)
 		}
@@ -217,10 +232,10 @@ func TestConversationMessageLineBreaks(t *testing.T) {
 	conversation := slack.NewConversationType()
 	collection, err := conversation.NewCollection([]content.KeyedRecord{
 		content.NewKeyedItem(conversation, "first", at("10:00"), slack.Message{
-			Author: "Alice", Text: "First line\nSecond line", URL: threadURL,
+			Author: "Alice", Body: "First line\nSecond line", URL: threadURL,
 		}),
 		content.NewKeyedItem(conversation, "second", at("10:01"), slack.Message{
-			Author: "Bob", Text: "Reply without a source link",
+			Author: "Bob", Body: "Reply without a source link",
 		}),
 	})
 	testutil.NoErr(t, err)
@@ -300,7 +315,7 @@ func TestThreadPayloadEdges(t *testing.T) {
 	}
 	view, err := content.KeyedItemView[slack.Message](members[0])
 	testutil.NoErr(t, err)
-	if view.ContentValue.Author != "Unknown author" || view.ContentValue.Text != "No readable message content" {
+	if view.ContentValue.Author != "Unknown author" || view.ContentValue.Body != "No readable message content" {
 		t.Fatalf("unexpected fallback content: %#v", view.ContentValue)
 	}
 
@@ -337,7 +352,7 @@ func TestThreadValidation(t *testing.T) {
 	// Cross-extension output with the wrong inner value is rejected with
 	// its emitted location.
 	result := content.ExpansionResult{Record: root, Blocks: []content.EmittedBlock{
-		{Record: content.NewKeyedItem(agent, "k", at("10:00"), slack.Message{Author: "a", Text: "b"})},
+		{Record: content.NewKeyedItem(agent, "k", at("10:00"), slack.Message{Author: "a", Body: "b"})},
 	}}
 	err = registry.ValidateExpansion(root, result)
 	validation := expectField(t, err, content.StageContent, "")

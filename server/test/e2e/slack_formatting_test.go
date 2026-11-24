@@ -2,6 +2,9 @@ package e2e
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -64,7 +67,11 @@ func TestSlackFormatting(t *testing.T) {
 		"updated_at": "2026-11-16T12:22:42Z",
 		"text":       "Preview metadata", "fields": []any{map[string]any{"label": "Status", "value": "Resolved"}},
 	}}
-	wantHuman := want + "\n\n> Attachment: **[Incident](https://example.com/incident)** · PagerDuty\n> Preview metadata\n> **Status:** Resolved\n> Updated: 2026-11-16 12:22:42 UTC"
+	wantAttachments := []any{map[string]any{
+		"key":     "url:" + attachmentKeyDigest("https://example.com/incident"),
+		"link":    "[Incident](https://example.com/incident)",
+		"details": "**Product:** PagerDuty\n\nPreview metadata\n\n**Status:** Resolved\n\n**Updated:** 2026-11-16 12:22:42 UTC",
+	}}
 	followup := slackMessage(2, "U1", "Alice", "A follow-up from Alice.")
 	agent := slackMessage(3, "U3", "", "raw fallback")
 	agent["readable_text"] = text
@@ -87,7 +94,7 @@ func TestSlackFormatting(t *testing.T) {
 			}
 		} else {
 			items := block.GetRecord().AsMap()["items"].([]any)
-			if len(items) != 2 || items[1].(map[string]any)["content"].(map[string]any)["text"] != "A follow-up from Alice." {
+			if len(items) != 2 || items[1].(map[string]any)["content"].(map[string]any)["body"] != "A follow-up from Alice." {
 				t.Fatalf("presentation grouping changed stored messages: %v", items)
 			}
 			card := presentationCards(t, block)[0]
@@ -98,9 +105,10 @@ func TestSlackFormatting(t *testing.T) {
 			if strings.Count(block.GetMarkdown(), "- **Alice**") != 2 {
 				t.Fatalf("export lost individual attribution: %s", block.GetMarkdown())
 			}
-			got = items[0].(map[string]any)["content"].(map[string]any)["text"].(string)
-			if got != wantHuman {
-				t.Fatalf("human Markdown = %q, want %q", got, wantHuman)
+			humanContent := items[0].(map[string]any)["content"].(map[string]any)
+			got, _ = humanContent["body"].(string)
+			if got != want || !reflect.DeepEqual(humanContent["attachments"], wantAttachments) {
+				t.Fatalf("human content = %v, want body %q and attachments %v", humanContent, want, wantAttachments)
 			}
 			if !strings.Contains(block.GetMarkdown(), "> **Status:** Resolved") {
 				t.Fatalf("export lost attachment metadata: %s", block.GetMarkdown())
@@ -116,4 +124,11 @@ func TestSlackFormatting(t *testing.T) {
 		}
 	}
 	t.Logf("Verified %s", docName)
+}
+
+// attachmentKeyDigest mirrors the URL-derived Slack attachment key digest
+// independently of the server package.
+func attachmentKeyDigest(url string) string {
+	sum := sha256.Sum256([]byte(url))
+	return hex.EncodeToString(sum[:12])
 }

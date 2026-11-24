@@ -27,9 +27,16 @@ import "time"
 	// ID or an explicit unknown-author label.
 	author: string @go(Author)
 
-	// Text is the normalized Markdown body, with readable attachment
-	// previews appended.
-	text: string @go(Text)
+	// Body is the canonical normalized Markdown body of the message,
+	// without its structured attachments. It is empty (and omitted) only
+	// for attachment-only messages. Stored legacy records carry the body
+	// (including any rendered previews) in "text"; it is read as Body
+	// verbatim (see ConversationType.DecodeJSON).
+	body?: string @go(Body)
+
+	// Attachments are the message's link attachments (unfurls and Work
+	// Object previews) in source order.
+	attachments?: [...#Attachment] @go(Attachments,[]Attachment)
 
 	// URL is the optional absolute HTTP(S) permalink of the message.
 	// It is omitted when unavailable; an empty value is never valid.
@@ -38,6 +45,21 @@ import "time"
 	// Extras carries additional metadata not anticipated by the schema,
 	// such as source-system identifiers.
 	extras?: {...} @go(Extras,map[string]any)
+}
+
+// Attachment is one structured link attachment of a Message.
+#Attachment: {
+	// Key is the message-scoped attachment identity derived from the
+	// source URL (see AttachmentKey). Attachments of one message with the
+	// same source URL deliberately share a key.
+	key: string @go(Key)
+
+	// Link is the canonical Markdown link to the attachment source.
+	link: string @go(Link)
+
+	// Details is canonical Markdown retaining the remaining preview
+	// evidence (product, text, fields, update time).
+	details?: string @go(Details)
 }
 
 // Payload is the transient input of a Slack/Thread expansion: the complete
