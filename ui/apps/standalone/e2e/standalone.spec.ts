@@ -446,14 +446,27 @@ test("time series charts render stored snapshots offline", async ({ page }) => {
   await expect(chartArea.getByText("2026-11-13 10:30:00 UTC")).toBeVisible();
   await expect(chartArea.getByText("0.004 s")).toBeVisible();
 
-  // Query details are collapsed, read-only, and in UTC.
-  await expect(populated.getByText(query.expression)).toBeHidden();
-  await populated.getByRole("button", { name: "Query details" }).click();
-  await expect(populated.getByText(query.expression)).toBeVisible();
-  await expect(populated.getByText("2026-11-13 10:00:00 UTC")).toBeVisible();
-  await expect(populated.getByText("2026-11-13 11:00:00 UTC")).toBeVisible();
-  await expect(populated.getByText("60s")).toBeVisible();
-  await expect(populated.getByText(query.source_url)).toBeVisible();
+  // The expression stays visible; read-only query metadata is collapsed and in UTC.
+  const expression = populated.getByLabel("Query expression");
+  await expect(expression).toHaveText(query.expression);
+  await expect(expression).toBeVisible();
+  const details = populated.getByRole("button", { name: "Details", exact: true });
+  const start = populated.getByText("2026-11-13 10:00:00 UTC");
+  const end = populated.getByText("2026-11-13 11:00:00 UTC");
+  const step = populated.getByText("60s");
+  const source = populated.getByText(query.source_url);
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  for (const field of [start, end, step, source]) await expect(field).toBeHidden();
+
+  await details.click();
+  await expect(details).toHaveAttribute("aria-expanded", "true");
+  await expect(expression).toBeVisible();
+  for (const field of [start, end, step, source]) await expect(field).toBeVisible();
+
+  await details.click();
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  for (const field of [start, end, step, source]) await expect(field).toBeHidden();
+  await expect(expression).toBeVisible();
 
   await expect(cards.nth(1).getByText("No snapshot submitted.")).toBeVisible();
   await expect(cards.nth(2).getByText("No series found for this time range.")).toBeVisible();
